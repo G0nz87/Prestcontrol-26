@@ -1,0 +1,23 @@
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Variables de entorno locales (si en el futuro las usas)
+.env
+.env.local
+
+# Node (si en el futuro agregas dependencias)
+node_modules/
+
+# Backups locales
+*.bak
+
+# Carpeta de staging local (no va al repo)
+para subia a gitbu/

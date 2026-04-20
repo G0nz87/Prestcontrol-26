@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0A0F1F">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Préstamos">
+<title>💰 Préstamos</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="manifest" id="pwa-manifest">
+<link rel="stylesheet" href="css/styles.css">
+<!-- Librerías externas -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Firebase compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-logo">💰</div>
+  <div class="login-title">PrestControl</div>
+  <div class="login-subtitle">Sistema de Gestión de Préstamos</div>
+
+  <!-- TABS -->
+  <div style="display:flex;gap:0;margin-bottom:20px;background:rgba(255,255,255,.06);border-radius:12px;padding:4px;width:100%;max-width:340px">
+    <button id="tab-login" onclick="showLoginTab()" style="flex:1;padding:9px;border:none;border-radius:9px;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s">
+      🔐 Ingresar
+    </button>
+    <button id="tab-register" onclick="showRegisterTab()" style="flex:1;padding:9px;border:none;border-radius:9px;background:transparent;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;transition:all .2s">
+      ✨ Crear cuenta
+    </button>
+  </div>
+
+  <!-- PANEL LOGIN -->
+  <div class="login-box" id="panel-login">
+    <div class="login-err" id="login-err">Email o contraseña incorrectos</div>
+    <div class="login-field">
+      <label class="login-lbl">Email</label>
+      <input class="login-inp" id="login-email" type="email" placeholder="tu@email.com"
+        autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false"
+        onkeydown="if(event.key==='Enter') document.getElementById('login-pass').focus()">
+    </div>
+    <div class="login-field">
+      <label class="login-lbl">Contraseña</label>
+      <div class="pass-wrap">
+        <input class="login-inp" id="login-pass" type="password" placeholder="Tu contraseña" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter') doLogin()">
+        <button class="eye-btn" type="button" onclick="toggleEye('login-pass',this)" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <input type="checkbox" id="remember-me" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;flex-shrink:0">
+      <label for="remember-me" style="font-size:13px;color:var(--muted);cursor:pointer;user-select:none">Recordarme en este dispositivo</label>
+    </div>
+    <button class="btn btn-gold btn-full" onclick="doLogin()">🔐 Ingresar</button>
+    <button class="btn btn-ghost btn-full" id="btn-huella" onclick="loginConHuella()" style="margin-top:8px;display:none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg>
+      Ingresar con huella
+    </button>
+    <div class="login-reset-link">
+      <button onclick="openReset()">¿Olvidaste tu contraseña?</button>
+    </div>
+  </div>
+
+  <!-- PANEL REGISTRO -->
+  <div class="login-box" id="panel-register" style="display:none">
+    <div class="login-err" id="reg-err">Error al crear cuenta</div>
+    <div class="login-field">
+      <label class="login-lbl">Tu nombre <span style="font-weight:400;color:var(--muted)">(se mostrará en la app)</span></label>
+      <input class="login-inp" id="reg-nombre" type="text" placeholder="Ej: Gonzalo o Mi Empresa"
+        onkeydown="if(event.key==='Enter') document.getElementById('reg-email').focus()">
+    </div>
+    <div class="login-field">
+      <label class="login-lbl">Email</label>
+      <input class="login-inp" id="reg-email" type="email" placeholder="tu@email.com"
+        autocomplete="email"
+        onkeydown="if(event.key==='Enter') document.getElementById('reg-pass').focus()">
+    </div>
+    <div class="login-field">
+      <label class="login-lbl">Contraseña <span style="font-weight:400;color:var(--muted)">(mín. 6 caracteres)</span></label>
+      <div class="pass-wrap">
+        <input class="login-inp" id="reg-pass" type="password" placeholder="Elegí una contraseña segura"
+          onkeydown="if(event.key==='Enter') document.getElementById('reg-pass2').focus()">
+        <button class="eye-btn" type="button" onclick="toggleEye('reg-pass',this)" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
+    </div>
+    <div class="login-field">
+      <label class="login-lbl">Repetir contraseña</label>
+      <div class="pass-wrap">
+        <input class="login-inp" id="reg-pass2" type="password" placeholder="Repetí la contraseña"
+          onkeydown="if(event.key==='Enter') doRegistro()">
+        <button class="eye-btn" type="button" onclick="toggleEye('reg-pass2',this)" tabindex="-1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
+    </div>
+    <button class="btn btn-gold btn-full" id="btn-registro" onclick="doRegistro()">✨ Crear mi cuenta</button>
+    <div style="margin-top:12px;font-size:12px;color:var(--muted);text-align:center;line-height:1.5">
+      Si olvidás tu contraseña podés recuperarla por email desde "¿Olvidaste tu contraseña?".
+    </div>
+  </div>
+</div>
+
+<!-- COMPROBANTE SHEET -->
+<div class="overlay" id="overlay-comprobante" onclick="closeSheet()" style="z-index:350"></div>
+<div class="sheet" id="sheet-comprobante" style="z-index:360;max-width:480px;margin:0 auto">
+  <div class="sheet-handle"></div>
+  <div class="sheet-hdr">
+    <div class="sheet-title">🧾 Comprobante</div>
+    <button class="icon-btn" onclick="closeSheet()">✕</button>
+  </div>
+  <div class="sheet-body" id="sheet-comprobante-body"></div>
+</div>
+
+<!-- RESET SCREEN -->
+<div id="reset-screen">
+  <div class="reset-box">
+    <button onclick="closeReset()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;margin-bottom:12px">← Volver</button>
+    <div class="reset-title">📧 Recuperar contraseña</div>
+    <div class="reset-subtitle">Ingresá tu email y te enviamos un link para restablecer tu contraseña</div>
+    <div class="login-err" id="rst-err1">Error</div>
+    <div id="rst-ok" style="display:none;padding:12px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);border-radius:10px;color:#4ade80;font-size:13px;text-align:center;margin-bottom:12px">
+      ✅ Email enviado. Revisá tu bandeja de entrada.
+    </div>
+    <div class="login-field">
+      <label class="login-lbl">Tu email</label>
+      <input class="login-inp" id="rst-email" type="email" placeholder="tu@email.com"
+        onkeydown="if(event.key==='Enter') enviarRecuperacion()">
+    </div>
+    <button class="btn btn-gold btn-full" id="btn-rst-send" onclick="enviarRecuperacion()">📧 Enviar link</button>
+  </div>
+</div>
+
+<!-- LOCK SCREEN (inactividad) -->
+<div id="lock-screen">
+  <div class="lock-box">
+    <div class="lock-ic">🔒</div>
+    <div class="lock-title">Sesión bloqueada</div>
+    <div class="lock-sub">Ingresá tu contraseña para continuar</div>
+    <div class="login-err" id="lock-err">Contraseña incorrecta</div>
+    <div class="login-field" style="text-align:left">
+      <label class="login-lbl">Contraseña</label>
+      <div class="pass-wrap">
+        <input class="login-inp" id="lock-pass" type="password" placeholder="Tu contraseña"
+          onkeydown="if(event.key==='Enter') doUnlock()">
+        <button class="eye-btn" type="button" onclick="toggleEye('lock-pass',this)" tabindex="-1" title="Ver contraseña"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
+    </div>
+    <button class="btn btn-gold btn-full" onclick="doUnlock()">🔓 Desbloquear</button>
+  </div>
+</div>
+
+<!-- INPUT OCULTO: importar Excel -->
+<input type="file" id="imp-excel-file" accept=".xlsx,.xls" style="display:none" onchange="importarExcel(this)">
+
+<!-- DRIVE SYNC INDICATOR -->
+<div id="drive-status"></div>
+<!-- SYNC PENDING BADGE -->
+<div id="sync-pending-badge">⏳ cambios pendientes</div>
+
+<!-- USER MENU DROPDOWN -->
+<div id="user-menu">
+  <div class="um-header">
+    <div class="um-name" id="um-name">—</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px" id="um-sync-info"></div>
+  </div>
+  <button class="um-item" onclick="closeUserMenu();goPage('config')">⚙️ Configuración</button>
+  <button class="um-item" onclick="closeUserMenu();driveGuardarAhora()">☁️ Guardar en Drive ahora</button>
+  <div class="um-sep"></div>
+  <button class="um-item" style="color:var(--red)" onclick="closeUserMenu();cerrarSesion()">🚪 Cerrar sesión</button>
+</div>
+
+<!-- FIRST RUN SCREEN -->
+<div id="firstrun-screen">
+  <div class="firstrun-box">
+    <div class="firstrun-title">👋 Bienvenido</div>
+    <div class="firstrun-sub">Es tu primer ingreso. Por seguridad, definí tu usuario y contraseña personales. No podrás saltear este paso.</div>
+    <div class="login-err" id="fr-err" style="display:none"></div>
+    <div class="login-field">
+      <label class="login-lbl">Nuevo usuario *</label>
+      <input class="login-inp" id="fr-user" type="text" placeholder="Ej: juan o miempresa" autocomplete="off">
+    </div>
+    <div class="login-field">
+      <label class="login-lbl">Nueva contraseña *</label>
+      <div class="pass-wrap">
+        <input class="login-inp" id="fr-pass" type="password" placeholder="Mínimo 6 caracteres">
+        <button class="eye-btn" type="button" onclick="toggleEye('fr-pass',this)" tabindex="-1" title="Ver contraseña"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
+    </div>
+    <div class="login-field">
+      <label class="login-lbl">Repetir contraseña *</label>
+      <div class="pass-wrap">
+        <input class="login-inp" id="fr-pass2" type="password" placeholder="Repetir contraseña"
+          onkeydown="if(event.key==='Enter') completarFirstRun()">
+        <button class="eye-btn" type="button" onclick="toggleEye('fr-pass2',this)" tabindex="-1" title="Ver contraseña"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
+    </div>
+    <button class="btn btn-gold btn-full" onclick="completarFirstRun()">✅ Guardar y entrar</button>
+    <div style="font-size:11px;color:var(--muted);margin-top:12px;text-align:center;line-height:1.5">
+      Si olvidás tu contraseña, podés recuperarla por email desde la pantalla de login.
+    </div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div>
+    <div class="hdr-title" id="hdr-title">💰 Préstamos</div>
+    <div class="hdr-sub" id="hdr-sub"></div>
+  </div>
+  <div class="hdr-actions" style="gap:6px">
+    <span id="usr-badge" onclick="toggleUserMenu()" title="Menú de usuario">👤 —</span>
+    <button class="icon-btn" id="hdr-add-btn" onclick="openFab()" title="Agregar" style="display:none">＋</button>
+    <button class="icon-btn" onclick="refreshApp()" title="Actualizar" id="refresh-btn">🔄</button>
+    <button class="icon-btn" onclick="goBack()" id="back-btn" style="display:none">←</button>
+  </div>
+</div>
+
+<!-- PAGES -->
+<div class="page on" id="pg-dashboard"></div>
+<div class="page" id="pg-hoy"></div>
+<div class="page" id="pg-atrasadas"></div>
+<div class="page" id="pg-clientes"></div>
+<div class="page" id="pg-prestamos"></div>
+<div class="page" id="pg-cuotas"></div>
+<div class="page" id="pg-calendario"></div>
+<div class="page" id="pg-config"></div>
+<div class="page" id="pg-cliente-detail"></div>
+<div class="page" id="pg-prestamo-detail"></div>
+<div class="page" id="pg-bitacora"></div>
+<div class="page" id="pg-historial"></div>
+<div class="page" id="pg-cobros"></div>
+
+<!-- FAB -->
+<button class="fab" id="fab" onclick="openFab()" style="display:none">＋</button>
+
+<!-- MÁS MENU (drawer desde nav) -->
+<div id="mas-menu" style="display:none;position:fixed;bottom:calc(var(--nav));left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);z-index:201;padding:8px 0 4px">
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:0">
+    <button class="nb" id="nb-hoy-m" onclick="closeMasMenu();goPage('hoy')" style="height:56px">
+      <span class="ni" style="font-size:20px">📅</span><span class="nl">Hoy</span>
+      <span class="nbadge" id="bd-hoy-m">0</span>
+    </button>
+    <button class="nb" id="nb-atr-m" onclick="closeMasMenu();goPage('atrasadas')" style="height:56px">
+      <span class="ni" style="font-size:20px">⚠️</span><span class="nl">Atrasos</span>
+      <span class="nbadge" id="bd-atr-m">0</span>
+    </button>
+    <button class="nb" onclick="closeMasMenu();goPage('cuotas')" style="height:56px">
+      <span class="ni" style="font-size:20px">🧾</span><span class="nl">Cuotas</span>
+    </button>
+    <button class="nb" onclick="closeMasMenu();goPage('calendario')" style="height:56px">
+      <span class="ni" style="font-size:20px">🗓️</span><span class="nl">Agenda</span>
+    </button>
+    <button class="nb" onclick="closeMasMenu();goPage('historial')" style="height:56px">
+      <span class="ni" style="font-size:20px">📈</span><span class="nl">Historial</span>
+    </button>
+    <button class="nb" onclick="closeMasMenu();goPage('bitacora')" style="height:56px">
+      <span class="ni" style="font-size:20px">📋</span><span class="nl">Bitácora</span>
+    </button>
+  </div>
+</div>
+
+<!-- BOTTOM NAV — 5 secciones principales -->
+<nav class="nav">
+  <button class="nb on" id="nb-dashboard" onclick="goPage('dashboard')">
+    <span class="ni">🏠</span><span class="nl">Inicio</span>
+  </button>
+  <button class="nb" id="nb-clientes" onclick="goPage('clientes')">
+    <span class="ni">👥</span><span class="nl">Clientes</span>
+  </button>
+  <button class="nb" id="nb-prestamos" onclick="goPage('prestamos')">
+    <span class="ni">📋</span><span class="nl">Préstamos</span>
+  </button>
+  <button class="nb" id="nb-cobros" onclick="goPage('cobros')">
+    <span class="ni">💰</span><span class="nl">Cobros</span>
+    <span class="nbadge" id="bd-hoy">0</span>
+  </button>
+  <button class="nb" id="nb-config" onclick="goPage('config')">
+    <span class="ni">⚙️</span><span class="nl">Config</span>
+  </button>
+  <button class="nb" id="nb-mas" onclick="toggleMasMenu()">
+    <span class="ni">⋯</span><span class="nl">Más</span>
+  </button>
+</nav>
+
+<!-- OVERLAY -->
+<div class="overlay" id="overlay" onclick="closeSheet()"></div>
+
+<!-- SHEET: ADD CLIENT -->
+<div class="sheet" id="sh-cliente">
+  <div class="sheet-handle"></div>
+  <div class="sheet-hdr">
+    <div class="sheet-title" id="sh-cli-title">👤 Nuevo Cliente</div>
+    <button class="icon-btn" onclick="closeSheet()">✕</button>
+  </div>
+  <div class="sheet-body">
+    <input type="hidden" id="cli-edit-id">
+    <div class="field">
+      <label class="lbl">Nombre completo *</label>
+      <input class="inp" id="cli-nombre" placeholder="Ej: Juan Pérez" autocomplete="off">
+    </div>
+    <div class="inp-row">
+      <div class="field">
+        <label class="lbl">DNI</label>
+        <input class="inp" id="cli-dni" type="text" inputmode="numeric" placeholder="12345678">
+      </div>
+      <div class="field">
+        <label class="lbl">Teléfono</label>
+        <input class="inp" id="cli-tel" type="tel" placeholder="3834…">
+      </div>
+    </div>
+    <div class="inp-row">
+      <div class="field">
+        <label class="lbl">Riesgo</label>
+        <select class="inp" id="cli-riesgo">
+          <option value="Bajo">🟢 Bajo</option>
+          <option value="Medio">🟡 Medio</option>
+          <option value="Alto">🔴 Alto</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="lbl">Dirección</label>
+        <input class="inp" id="cli-dir" placeholder="Calle y número">
+      </div>
+    </div>
+    <div class="field">
+      <label class="lbl">Notas</label>
+      <input class="inp" id="cli-notas" placeholder="Observaciones (opcional)">
+    </div>
+    <button class="btn btn-gold btn-full" style="margin-top:8px" onclick="saveCliente()">💾 Guardar Cliente</button>
+  </div>
+</div>
+
+<!-- SHEET: ADD LOAN -->
+<div class="sheet" id="sh-prestamo">
+  <div class="sheet-handle"></div>
+  <div class="sheet-hdr">
+    <div class="sheet-title">💵 Nuevo Préstamo</div>
+    <button class="icon-btn" onclick="closeSheet()">✕</button>
+  </div>
+  <div class="sheet-body">
+    <div class="field">
+      <label class="lbl">Cliente *</label>
+      <input type="hidden" id="pre-cliente">
+      <div class="ac-wrap">
+        <input class="inp" id="pre-cliente-search" placeholder="Buscar cliente por nombre…" autocomplete="off"
+          oninput="filtrarClientesAC(this.value)" onfocus="filtrarClientesAC(this.value)">
+        <div class="ac-drop" id="pre-cliente-drop"></div>
+      </div>
+      <div class="ac-sel-tag" id="pre-cliente-tag">
+        <span id="pre-cliente-tag-txt"></span>
+        <button class="ac-clear" onclick="limpiarClienteAC()" title="Cambiar">✕</button>
+      </div>
+    </div>
+    <div class="inp-row">
+      <div class="field">
+        <label class="lbl">Monto prestado ($) *</label>
+        <input class="inp" id="pre-monto" type="number" placeholder="10000" min="1" oninput="calcPreview()">
+      </div>
+      <div class="field">
+        <label class="lbl" id="pre-interes-lbl">Interés por cuota (%) *</label>
+        <input class="inp" id="pre-interes" type="number" placeholder="8" min="0" max="100" step="0.1"
+          oninput="calcPreview()">
+        <div style="font-size:11px;color:var(--muted);margin-top:5px" id="pre-interes-hint">
+          Ej: 8% × 4 cuotas = 32% total
+        </div>
+      </div>
+    </div>
+    <div class="inp-row">
+      <div class="field">
+        <label class="lbl">N° de cuotas *</label>
+        <input class="inp" id="pre-ncuotas" type="number" placeholder="4" min="1" max="360"
+          oninput="calcPreview()">
+      </div>
+      <div class="field">
+        <label class="lbl">Tipo de cuota</label>
+        <select class="inp" id="pre-tipo" onchange="calcPreview()">
+          <option value="Mensual">📅 Mensual</option>
+          <option value="Semanal">7️⃣ Semanal</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label class="lbl">Fecha de inicio</label>
+      <input class="inp" id="pre-fecha" type="date">
+    </div>
+    <div class="field">
+      <label class="lbl">Prenda / Garantía</label>
+      <input class="inp" id="pre-prenda" placeholder="Ej: Celular Samsung, Moto 110, TV 32'">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Objeto recibido como garantía del préstamo (opcional)</div>
+    </div>
+    <div class="field">
+      <label class="lbl">Notas</label>
+      <input class="inp" id="pre-notas" placeholder="Opcional">
+    </div>
+    <!-- PREVIEW MEJORADO -->
+    <div id="pre-preview" style="display:none;background:var(--goldBg);border:1px solid rgba(59,130,246,.15);border-radius:12px;padding:14px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;margin-bottom:8px">📊 Resumen</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;margin-bottom:10px">
+        <div><div style="font-size:10px;color:var(--muted)">Total a cobrar</div><div style="font-size:16px;font-weight:900;font-family:'DM Mono',monospace;color:var(--gold)" id="pv-total">$0</div></div>
+        <div><div style="font-size:10px;color:var(--muted)">Cuota</div><div style="font-size:16px;font-weight:900;font-family:'DM Mono',monospace;color:var(--grn)" id="pv-cuota">$0</div></div>
+        <div><div style="font-size:10px;color:var(--muted)">Ganancia</div><div style="font-size:16px;font-weight:900;font-family:'DM Mono',monospace;color:var(--yel)" id="pv-gan">$0</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);text-align:center;padding-top:8px;border-top:1px solid var(--border)" id="pv-detalle"></div>
+    </div>
+    <button class="btn btn-gold btn-full" onclick="savePrestamo()">✅ Crear Préstamo + Cuotas</button>
+  </div>
+</div>
+
+<!-- SHEET: PAY METHOD -->
+<div class="sheet" id="sh-pago">
+  <div class="sheet-handle"></div>
+  <div class="sheet-hdr">
+    <div>
+      <div class="sheet-title">✅ Registrar Pago</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:3px" id="sh-pago-info"></div>
+    </div>
+    <button class="icon-btn" onclick="closeSheet()">✕</button>
+  </div>
+  <div class="sheet-body">
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">¿Cómo pagó?</div>
+    <input type="hidden" id="pago-cuota-id">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button class="mbtn" onclick="confirmarPago('Efectivo')">💵<br><span style="font-size:12px">Efectivo</span></button>
+      <button class="mbtn" onclick="confirmarPago('Transferencia')">🏦<br><span style="font-size:12px">Transferencia</span></button>
+      <button class="mbtn" onclick="confirmarPago('MercadoPago')">📱<br><span style="font-size:12px">MercadoPago</span></button>
+      <button class="mbtn" onclick="confirmarPago('Otro')">➕<br><span style="font-size:12px">Otro</span></button>
+    </div>
+    <div class="field" style="margin-top:14px">
+      <label class="lbl">Fecha de pago</label>
+      <input class="inp" id="pago-fecha" type="date">
+    </div>
+  </div>
+</div>
+
+<!-- SHEET: DELETE CONFIRM (clientes) -->
+<div class="sheet" id="sh-delete">
+  <div class="sheet-handle"></div>
+  <div class="sheet-body" style="text-align:center;padding-top:20px">
+    <div style="font-size:52px;margin-bottom:12px">🗑️</div>
+    <div style="font-size:18px;font-weight:800;margin-bottom:8px" id="del-title">¿Eliminar?</div>
+    <div style="font-size:14px;color:var(--muted);margin-bottom:24px" id="del-msg"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button class="btn btn-ghost" onclick="closeSheet()">Cancelar</button>
+      <button class="btn btn-red" id="del-confirm-btn">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHEET: DELETE PRÉSTAMO (con motivo + contraseña) -->
+<div class="sheet" id="sh-delete-prestamo">
+  <div class="sheet-handle"></div>
+  <div class="sheet-hdr">
+    <div class="sheet-title">🗑️ Eliminar Préstamo</div>
+    <button class="icon-btn" onclick="closeSheet()">✕</button>
+  </div>
+  <div class="sheet-body">
+    <div style="font-size:14px;color:var(--muted);margin-bottom:16px" id="dp-info"></div>
+
+    <div class="field">
+      <label class="lbl">Motivo de eliminación *</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <button class="mbtn" id="dp-mot-pago"    onclick="selMotivo('pago')"    style="font-size:13px">✅ Se pagó completo</button>
+        <button class="mbtn" id="dp-mot-perdon"  onclick="selMotivo('perdon')"  style="font-size:13px">🏷️ Se ejecutó la prenda</button>
+        <button class="mbtn" id="dp-mot-error"   onclick="selMotivo('error')"   style="font-size:13px">✏️ Error de carga</button>
+        <button class="mbtn" id="dp-mot-otro"    onclick="selMotivo('otro')"    style="font-size:13px">📝 Otro motivo</button>
+      </div>
+      <input class="inp" id="dp-mot-texto" placeholder="Describí el motivo (opcional)" style="margin-top:4px">
+    </div>
+
+    <div class="field">
+      <label class="lbl">Confirmá tu contraseña *</label>
+      <div class="pass-wrap">
+        <input class="login-inp inp" id="dp-pass" type="password" placeholder="Tu contraseña para confirmar"
+          onkeydown="if(event.key==='Enter') confirmarBorrarPrestamoFinal()">
+        <button class="eye-btn" type="button" onclick="toggleEye('dp-pass',this)" tabindex="-1" title="Ver contraseña"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
+    </div>
+    <div class="login-err" id="dp-err" style="margin-bottom:12px">Contraseña incorrecta</div>
+
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      Las cuotas ya pagadas se conservan en el historial y balance.<br>
+      Las cuotas pendientes se marcarán como eliminadas.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button class="btn btn-ghost" onclick="closeSheet()">Cancelar</button>
+      <button class="btn btn-red" onclick="confirmarBorrarPrestamoFinal()">🗑️ Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHEET: RESET APP -->
+<div class="sheet" id="sh-reset-app">
+  <div class="sheet-handle"></div>
+  <div class="sheet-hdr">
+    <div class="sheet-title" style="color:var(--red)">⚠️ Resetear aplicación</div>
+    <button class="icon-btn" onclick="closeSheet()">✕</button>
+  </div>
+  <div class="sheet-body">
+    <div style="background:var(--redBg);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:14px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:6px">⚠️ Vas a borrar TODO</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.6">
+        Se eliminarán permanentemente todos los clientes, préstamos, cuotas y registros de bitácora.<br>
+        <b style="color:var(--red)">Esta acción no se puede deshacer.</b>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Antes de continuar, te recomendamos hacer un backup:</div>
+    <button class="btn btn-ghost btn-full" style="margin-bottom:16px" onclick="exportarBackup()">📤 Descargar backup ahora</button>
+
+    <div class="field">
+      <label class="lbl">Tu contraseña *</label>
+      <div class="pass-wrap">
+        <input class="inp" id="reset-master-pass" type="password" placeholder="Tu contraseña de ingreso">
+        <button class="eye-btn" type="button" onclick="toggleEye('reset-master-pass',this)" tabindex="-1" title="Ver"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
+    </div>
+    <div class="login-err" id="reset-app-err" style="margin-bottom:12px">Contraseña incorrecta</div>
+
+    <div class="field">
+      <label class="lbl">Escribí <b style="color:var(--red)">BORRAR TODO</b> para confirmar *</label>
+      <input class="inp" id="reset-confirm-txt" placeholder="BORRAR TODO" autocomplete="off">
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+      <button class="btn btn-ghost" onclick="closeSheet()">Cancelar</button>
+      <button class="btn btn-red" onclick="ejecutarResetApp()">🗑️ Borrar todo</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHEET: BORRAR SOLO PRESTAMOS Y CUOTAS (conserva clientes) -->
+<div class="sheet" id="sh-borrar-prestamos">
+  <div class="sheet-handle"></div>
+  <div class="sheet-hdr">
+    <div class="sheet-title" style="color:var(--yel)">📋 Borrar préstamos y cuotas</div>
+    <button class="icon-btn" onclick="closeSheet()">✕</button>
+  </div>
+  <div class="sheet-body">
+    <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:14px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:800;color:var(--yel);margin-bottom:6px">⚠️ Vas a borrar préstamos y cuotas</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.6">
+        Se eliminarán <b>todos los préstamos y cuotas</b> (locales y en Firebase).<br>
+        <b style="color:var(--grn)">✅ Los clientes se conservan.</b><br>
+        <b style="color:var(--yel)">Esta acción no se puede deshacer.</b>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Antes de continuar, te recomendamos hacer un backup:</div>
+    <button class="btn btn-ghost btn-full" style="margin-bottom:16px" onclick="exportarBackup()">📤 Descargar backup ahora</button>
+
+    <div class="field">
+      <label class="lbl">Tu contraseña *</label>
+      <div class="pass-wrap">
+        <input class="inp" id="bp-pass" type="password" placeholder="Tu contraseña de ingreso">
+        <button class="eye-btn" type="button" onclick="toggleEye('bp-pass',this)" tabindex="-1" title="Ver"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
+    </div>
+    <div class="login-err" id="bp-err" style="margin-bottom:12px">Contraseña incorrecta</div>
+
+    <div class="field">
+      <label class="lbl">Escribí <b style="color:var(--yel)">BORRAR PRESTAMOS</b> para confirmar *</label>
+      <input class="inp" id="bp-confirm-txt" placeholder="BORRAR PRESTAMOS" autocomplete="off">
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+      <button class="btn btn-ghost" onclick="closeSheet()">Cancelar</button>
+      <button class="btn btn-ghost" style="border-color:rgba(245,158,11,.4);color:var(--yel)" onclick="ejecutarBorrarPrestamos()">📋 Borrar préstamos</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ============================================================
+     JAVASCRIPT — cargado en orden de dependencias
+     ============================================================ -->
+<!-- 1. Variables globales -->
+<script src="js/globals.js"></script>
+<!-- 2. Base de datos local (IndexedDB) -->
+<script src="js/db/database.js"></script>
+<script src="js/db/admin.js"></script>
+<!-- 3. Autenticación y usuarios -->
+<script src="js/auth/user-menu.js"></script>
+<script src="js/auth/first-run.js"></script>
+<script src="js/auth/webauthn.js"></script>
+<script src="js/auth/auth.js"></script>
+<!-- 4. Utilidades y núcleo -->
+<script src="js/core/utils.js"></script>
+<script src="js/core/bloqueo.js"></script>
+<script src="js/core/pwa.js"></script>
+<!-- 5. Interfaz de usuario -->
+<script src="js/ui/navigation.js"></script>
+<script src="js/ui/render.js"></script>
+<script src="js/ui/badges.js"></script>
+<!-- 6. Módulos de negocio -->
+<script src="js/modules/clientes.js"></script>
+<script src="js/modules/prestamos.js"></script>
+<script src="js/modules/graficos.js"></script>
+<script src="js/modules/calendario.js"></script>
+<script src="js/modules/notificaciones.js"></script>
+<script src="js/modules/pdf.js"></script>
+<script src="js/modules/whatsapp.js"></script>
+<script src="js/modules/backup.js"></script>
+<script src="js/modules/excel.js"></script>
+<script src="js/modules/bitacora.js"></script>
+<script src="js/modules/historial.js"></script>
+<!-- 7. Firebase (sincronización en la nube) -->
+<script src="js/firebase/firebase.js"></script>
+<!-- 8. Inicialización -->
+<script src="js/core/init.js"></script>
+</body>
+</html>
