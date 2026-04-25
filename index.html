@@ -1838,6 +1838,7 @@ async function loginConHuella() {
     document.getElementById('login-screen').classList.add('hidden');
     appDesbloqueada = true;
     resetInactividad();
+    initNotificaciones();
     driveAutoSync();
     await renderPage('dashboard');
     toast('👆 Bienvenido, ' + username);
@@ -4248,6 +4249,7 @@ async function selCalDay(key) {
 ===================================================== */
 async function initNotificaciones() {
   if (!('Notification' in window)) return;
+  if (!DB) return;
   const perm = await getConfig('notifPerm');
   if (perm !== 'granted' && Notification.permission !== 'granted') return;
   scheduleNotificaciones();
@@ -4802,6 +4804,7 @@ async function _entrarALaApp(username, password, usuarioObj) {
   document.getElementById('login-screen').classList.add('hidden');
   appDesbloqueada = true;
   resetInactividad();
+  initNotificaciones();
 
   // Sync inicial en segundo plano (no bloquea la UI)
   setTimeout(async () => {
