@@ -28,6 +28,12 @@ function _initFirebase() {
     _fbAuth = firebase.auth();
     _fbDb   = firebase.firestore();
     _fbDb.enablePersistence().catch(() => {});
+
+    // Mantener _fbUser siempre actualizado (incluso tras recargar la página)
+    _fbAuth.onAuthStateChanged(user => {
+      _fbUser = user || null;
+    });
+
     return true;
   } catch(e) {
     console.warn('Firebase init error:', e);

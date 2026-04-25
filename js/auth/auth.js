@@ -206,13 +206,6 @@ async function _entrarALaApp(username, password, usuarioObj) {
   _loginIntentos = 0;
   currentUser = username;
 
-  // Recordarme
-  if (document.getElementById('remember-me')?.checked) {
-    localStorage.setItem('rememberedEmail', inputEmail);
-  } else {
-    localStorage.removeItem('rememberedEmail');
-  }
-
   // Abrir DB específica del usuario
   await initDB(username);
   await autoUpdateEstados();
@@ -318,10 +311,11 @@ async function guardarNuevasCred() { closeReset(); }
 
 async function guardarSeguridad() {
   const passActual = document.getElementById('sec-pass-actual').value;
-  const newUser    = document.getElementById('sec-user').value.trim().toLowerCase();
+  const newUser    = document.getElementById('sec-user').value.trim();
   const newPass    = document.getElementById('sec-pass').value;
   const newPass2   = document.getElementById('sec-pass2').value;
   const errEl      = document.getElementById('sec-err');
+  const btn        = document.querySelector('#cfg-seguridad button, [onclick="guardarSeguridad()"]');
   errEl.classList.remove('on');
 
   if (!passActual) {
@@ -329,13 +323,26 @@ async function guardarSeguridad() {
     errEl.classList.add('on'); return;
   }
 
-  // Verificar contraseña actual
-  const cred = await authGetCred();
-  if (passActual !== cred.pass) {
-    errEl.textContent = 'Contraseña actual incorrecta';
-    errEl.classList.add('on');
-    document.getElementById('sec-pass-actual').value = '';
-    return;
+  // Verificar contraseña actual via Firebase (reautenticación)
+  if (_fbUser && _fbAuth) {
+    try {
+      const credential = firebase.auth.EmailAuthProvider.credential(_fbUser.email, passActual);
+      await _fbUser.reauthenticateWithCredential(credential);
+    } catch(e) {
+      errEl.textContent = 'Contraseña actual incorrecta';
+      errEl.classList.add('on');
+      document.getElementById('sec-pass-actual').value = '';
+      return;
+    }
+  } else {
+    // Fallback offline: comparar contra cache local
+    const cred = await authGetCred();
+    if (passActual !== cred.pass) {
+      errEl.textContent = 'Contraseña actual incorrecta';
+      errEl.classList.add('on');
+      document.getElementById('sec-pass-actual').value = '';
+      return;
+    }
   }
 
   if (!newUser) {
@@ -351,17 +358,40 @@ async function guardarSeguridad() {
     errEl.classList.add('on'); return;
   }
 
-  const existing = await getUsuario(currentUser) || { username: currentUser };
-  await setUsuario({ ...existing, username: newUser, pass: newPass || existing.pass });
-  if (newUser !== currentUser) {
-    currentUser = newUser;
-    const badge = document.getElementById('usr-badge');
-    if (badge) badge.textContent = '👤 ' + newUser;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Guardando...'; }
+  try {
+    // Actualizar contraseña en Firebase si se ingresó una nueva
+    if (newPass && _fbUser) {
+      await _fbUser.updatePassword(newPass);
+    }
+    // Actualizar displayName en Firebase si cambió el usuario
+    if (newUser !== currentUser && _fbUser) {
+      await _fbUser.updateProfile({ displayName: newUser });
+      if (_fbDb) {
+        await _fbDb.collection('users').doc(_fbUser.uid).set({ nombre: newUser }, { merge: true });
+      }
+    }
+
+    const existing = await getUsuario(currentUser) || { username: currentUser };
+    await setUsuario({ ...existing, username: newUser, pass: newPass || existing.pass });
+    if (newUser !== currentUser) {
+      currentUser = newUser;
+      showUserBadge(newUser);
+    }
+    document.getElementById('sec-pass-actual').value = '';
+    document.getElementById('sec-pass').value = '';
+    document.getElementById('sec-pass2').value = '';
+    toast('✅ Credenciales guardadas correctamente');
+  } catch(e) {
+    const msgs = {
+      'auth/requires-recent-login': 'Cerrá sesión e ingresá de nuevo antes de cambiar la contraseña.',
+      'auth/weak-password':         'La contraseña es muy débil (mínimo 6 caracteres).',
+    };
+    errEl.textContent = msgs[e.code] || ('Error: ' + e.message);
+    errEl.classList.add('on');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar Credenciales'; }
   }
-  document.getElementById('sec-pass-actual').value = '';
-  document.getElementById('sec-pass').value = '';
-  document.getElementById('sec-pass2').value = '';
-  toast('✅ Credenciales guardadas correctamente');
 }
 
 // Legacy: contraseña maestra eliminada. Stub conservado por compatibilidad.
