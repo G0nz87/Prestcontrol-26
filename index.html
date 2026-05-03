@@ -3328,18 +3328,28 @@ async function editarCliente(id) {
 }
 
 async function saveCliente() {
-  const nombre = document.getElementById('cli-nombre').value.trim();
-  if (!nombre) { toast('⚠️ El nombre es obligatorio'); return; }
+  const nombre   = document.getElementById('cli-nombre').value.trim();
+  const dni      = document.getElementById('cli-dni').value.trim();
+  const telefono = document.getElementById('cli-tel').value.trim();
+  const editId   = document.getElementById('cli-edit-id').value;
 
-  const editId = document.getElementById('cli-edit-id').value;
-  const todos  = await dbAll('clientes');
-  const id     = editId || nextId('CL', todos);
+  // Validacion delegada al service (nombre obligatorio, DNI formato + duplicado, telefono formato)
+  try {
+    await window.clienteService.validarDatosCliente({
+      id: editId || null, nombre, dni, telefono
+    });
+  } catch (e) {
+    return toast('⚠️ ' + e.message);
+  }
+
+  const todos = await dbAll('clientes');
+  const id    = editId || nextId('CL', todos);
 
   const cli = {
     id,
     nombre,
-    dni      : document.getElementById('cli-dni').value.trim(),
-    telefono : document.getElementById('cli-tel').value.trim(),
+    dni,
+    telefono,
     direccion: document.getElementById('cli-dir').value.trim(),
     riesgo   : document.getElementById('cli-riesgo').value,
     notas    : document.getElementById('cli-notas').value.trim(),
@@ -6493,7 +6503,7 @@ function instalarPWA() {
   // Registrar Service Worker inline (solo si no estamos en file://)
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     const swCode = `
-const CACHE = 'prestcontrol-v10';
+const CACHE = 'prestcontrol-v11';
 const ASSETS = ['./', './index.html', './core/firebase.js', './repositories/index.js', './repositories/Repository.js', './repositories/ClienteRepository.js', './repositories/PrestamoRepository.js', './services/index.js', './services/ClienteService.js', './services/PrestamoService.js', './services/AuthService.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(()=>{})); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k))))); self.clients.claim(); });
