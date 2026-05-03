@@ -1662,53 +1662,21 @@ async function completarFirstRun() {
    SCORING AUTOMÁTICO DE CLIENTES
 ===================================================== */
 function calcularScoring(cuotas) {
-  const pagadas = cuotas.filter(c => c.estado === 'Pagado');
-  const atrasadas = cuotas.filter(c => c.estado === 'Atrasado');
-  const hoy = today();
-
-  if (!cuotas.length) {
-    return { label:'Sin historial', icono:'⚪', color:'linear-gradient(135deg,#64748B,#475569)', autoRiesgo:null, detalle:'Nuevo cliente sin historial de pagos' };
+  // Logica de evaluacion en el service; mapeo a label/icono/color/detalle aca (UI).
+  const r = window.prestamoService.evaluarRiesgo(cuotas);
+  switch (r.nivel) {
+    case 'sin_historial':
+      return { label:'Sin historial', icono:'⚪', color:'linear-gradient(135deg,#64748B,#475569)', autoRiesgo:null,    detalle:'Nuevo cliente sin historial de pagos' };
+    case 'alto':
+      return { label:'Alto riesgo',   icono:'🔴', color:'linear-gradient(135deg,#EF4444,#B91C1C)', autoRiesgo:'Alto',  detalle:`${r.cuotasAtrasadas} cuotas atrasadas actualmente` };
+    case 'medio':
+      return { label:'Riesgo medio',  icono:'🟡', color:'linear-gradient(135deg,#FBBF24,#D97706)', autoRiesgo:'Medio', detalle:`Promedio de atraso: ${Math.round(r.diasPromedio)} días` };
+    case 'excelente':
+      return { label:'Excelente',     icono:'⭐', color:'linear-gradient(135deg,#22C55E,#15803D)', autoRiesgo:'Bajo',  detalle:`${r.cuotasPagadas} cuotas pagadas · ${r.pctCumplimiento}% de cumplimiento` };
+    case 'bajo':
+    default:
+      return { label:'Buen cliente',  icono:'🟢', color:'linear-gradient(135deg,#3B82F6,#2563EB)', autoRiesgo:'Bajo',  detalle:`${r.pctCumplimiento}% de cuotas al día` };
   }
-
-  // Calcular promedio de días de atraso en pagos realizados
-  let diasAtrasoTotal = 0;
-  let conAtraso = 0;
-  pagadas.forEach(c => {
-    if (c.fechaPago && c.fechaVenc) {
-      const dias = Math.floor((new Date(c.fechaPago) - new Date(c.fechaVenc)) / 86400000);
-      if (dias > 0) { diasAtrasoTotal += dias; conAtraso++; }
-    }
-  });
-  const promAtraso = conAtraso > 0 ? diasAtrasoTotal / conAtraso : 0;
-  const tieneAtrasadas = atrasadas.length > 0;
-  const pctCumplimiento = cuotas.length ? Math.round(pagadas.length / cuotas.length * 100) : 0;
-
-  if (tieneAtrasadas && atrasadas.length >= 2) {
-    return {
-      label:'Alto riesgo', icono:'🔴', color:'linear-gradient(135deg,#EF4444,#B91C1C)',
-      autoRiesgo:'Alto',
-      detalle:`${atrasadas.length} cuotas atrasadas actualmente`
-    };
-  }
-  if (promAtraso > 14 || tieneAtrasadas) {
-    return {
-      label:'Riesgo medio', icono:'🟡', color:'linear-gradient(135deg,#FBBF24,#D97706)',
-      autoRiesgo:'Medio',
-      detalle:`Promedio de atraso: ${Math.round(promAtraso)} días`
-    };
-  }
-  if (pctCumplimiento === 100 && pagadas.length >= 3) {
-    return {
-      label:'Excelente', icono:'⭐', color:'linear-gradient(135deg,#22C55E,#15803D)',
-      autoRiesgo:'Bajo',
-      detalle:`${pagadas.length} cuotas pagadas · ${pctCumplimiento}% de cumplimiento`
-    };
-  }
-  return {
-    label:'Buen cliente', icono:'🟢', color:'linear-gradient(135deg,#3B82F6,#2563EB)',
-    autoRiesgo:'Bajo',
-    detalle:`${pctCumplimiento}% de cuotas al día`
-  };
 }
 
 /* =====================================================
@@ -3569,26 +3537,26 @@ async function savePrestamo() {
   const tipo      = document.getElementById('pre-tipo').value;
   const fechaRaw  = document.getElementById('pre-fecha').value;
 
-  if (!clienteId) return toast('⚠️ Seleccioná un cliente');
-  const monto    = parseFloat(montoRaw);
+  const monto       = parseFloat(montoRaw);
   const intPorCuota = parseFloat(interesRaw); // % POR cuota (por semana o por mes)
-  const nCuotas  = parseInt(ncuotasRaw);
-  if (!monto || monto <= 0)          return toast('⚠️ Ingresá el monto');
-  if (isNaN(intPorCuota) || intPorCuota < 0) return toast('⚠️ Ingresá el interés por cuota');
-  if (!nCuotas || nCuotas <= 0)      return toast('⚠️ Ingresá el número de cuotas');
-  if (!fechaRaw)                     return toast('⚠️ Ingresá la fecha');
+  const nCuotas     = parseInt(ncuotasRaw);
+
+  // Validacion delegada al service
+  try {
+    window.prestamoService.validarDatosPrestamo({
+      clienteId, monto, tasaPorCuota: intPorCuota, nCuotas, fecha: fechaRaw
+    });
+  } catch (e) {
+    return toast('⚠️ ' + e.message);
+  }
 
   const cliente = await dbGet('clientes', clienteId);
   if (!cliente) return toast('⚠️ Cliente no encontrado');
 
-  // NUEVA LÓGICA: tasa total = tasa_por_cuota × número de cuotas
-  const interesTotal = intPorCuota / 100 * nCuotas; // ej: 8% × 4 = 0.32
-  const total        = round2(monto * (1 + interesTotal));
-  const cuota        = round2(total / nCuotas);
-  const ganancia     = round2(total - monto);
-  const fecha        = new Date(fechaRaw + 'T12:00:00');
-  // Guardamos intPorCuota para referencia, e interesTotal como el porcentaje total
-  const interes      = interesTotal; // compatibilidad con código existente (muestra %)
+  // Calculo financiero delegado al service
+  const { interesTotal, total, cuotaMonto, ganancia } =
+    window.prestamoService.calcularPlanPagos(monto, intPorCuota, nCuotas);
+  const fecha = new Date(fechaRaw + 'T12:00:00');
 
   const todos = await dbAll('prestamos');
   const preId = nextId('PR', todos);
@@ -3597,10 +3565,11 @@ async function savePrestamo() {
   const prestamo = {
     id: preId, clienteId, clienteNombre: cliente.nombre,
     fecha: fecha.toISOString(), monto,
-    interes,           // tasa total acumulada (para compatibilidad y display)
-    interesPorCuota: intPorCuota, // tasa por período (la que el usuario ingresó)
+    interes: interesTotal,            // tasa total acumulada (para compatibilidad y display)
+    interesPorCuota: intPorCuota,     // tasa por período (la que el usuario ingresó)
     tipo, nCuotas,
-    total, cuota, ganancia, estado: 'Activo',
+    total, cuota: cuotaMonto, ganancia,
+    estado: 'Activo',
     notas: document.getElementById('pre-notas').value.trim(),
     prenda: document.getElementById('pre-prenda').value.trim(),
     creadoEn: nowISO,
@@ -3609,7 +3578,7 @@ async function savePrestamo() {
 
   await dbPut('prestamos', prestamo);
 
-  // Generar cuotas
+  // Generacion de cuotas delegada al service (id base se calcula leyendo IndexedDB local)
   const todasCuotas = await dbAll('cuotas');
   let maxN = 0;
   todasCuotas.forEach(c => {
@@ -3617,25 +3586,17 @@ async function savePrestamo() {
     if (m) maxN = Math.max(maxN, parseInt(m[1]));
   });
 
-  const cuotasArr = [];
-  for (let i = 1; i <= nCuotas; i++) {
-    const fvenc = calcVenc(fecha, tipo, i);
-    cuotasArr.push({
-      id         : `C-${String(maxN+i).padStart(3,'0')}`,
-      prestamoId : preId,
-      clienteId,
-      clienteNombre: cliente.nombre,
-      nro        : i,
-      fechaVenc  : fvenc.toISOString(),
-      monto      : cuota,
-      estado     : 'Pendiente',
-      fechaPago  : null,
-      metodo     : null,
-      notas      : '',
-      creadoEn   : nowISO,
-      updatedAt  : nowISO
-    });
-  }
+  const cuotasArr = window.prestamoService.generarCuotas({
+    prestamoId    : preId,
+    clienteId,
+    clienteNombre : cliente.nombre,
+    fechaInicio   : fecha,
+    tipo,
+    nCuotas,
+    cuotaMonto,
+    primerNumeroId: maxN + 1,
+    nowISO
+  });
 
   for (const c of cuotasArr) await dbPut('cuotas', c);
 
@@ -3820,16 +3781,10 @@ async function syncEstadoPrestamo(prestamoId) {
   const misCuotas = cuotas.filter(c => c.prestamoId === prestamoId && !c._deleted);
   if (!misCuotas.length) return;
 
-  let nuevo;
-  if (misCuotas.every(c => c.estado === 'Pagado')) {
-    nuevo = 'Pagado';
-  } else if (misCuotas.some(c => c.estado === 'Atrasado')) {
-    nuevo = 'Atrasado';
-  } else {
-    nuevo = 'Activo';
-  }
+  // Transicion de estado delegada al service (logica pura)
+  const nuevo = window.prestamoService.calcularEstado(misCuotas);
 
-  if (prestamo.estado !== nuevo && prestamo.estado !== 'Cancelado') {
+  if (nuevo && prestamo.estado !== nuevo && prestamo.estado !== 'Cancelado') {
     prestamo.estado    = nuevo;
     prestamo.updatedAt = new Date().toISOString();
     await dbPut('prestamos', prestamo);
@@ -6535,7 +6490,7 @@ function instalarPWA() {
   // Registrar Service Worker inline (solo si no estamos en file://)
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     const swCode = `
-const CACHE = 'prestcontrol-v8';
+const CACHE = 'prestcontrol-v9';
 const ASSETS = ['./', './index.html', './core/firebase.js', './repositories/index.js', './repositories/Repository.js', './repositories/ClienteRepository.js', './repositories/PrestamoRepository.js', './services/index.js', './services/ClienteService.js', './services/PrestamoService.js', './services/AuthService.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(()=>{})); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k))))); self.clients.claim(); });
