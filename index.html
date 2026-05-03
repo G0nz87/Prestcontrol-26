@@ -2155,7 +2155,7 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
   setBadge('atr', atrasadas);
 
   // Métricas históricas: incluyen préstamos reales (no los eliminados por error)
-  const prestamosValidos = prestamos.filter(p => !p._deleted && p.estado !== 'Cancelado');
+  const prestamosValidos = prestamos.filter(p => !p._deleted && p.estado !== 'Cancelado' && p.estado !== 'Ejecutado');
   const totalPrestado  = prestamosValidos.reduce((s,p)=>s+Number(p.monto||0),0);
   const gananciaEsp    = prestamosValidos.reduce((s,p)=>s+Number(p.ganancia||0),0);
   // Total pendiente de cobro (solo activos)
@@ -2551,7 +2551,7 @@ async function renderPrestamos() {
 
   // Por defecto NO mostramos Pagados ni Cancelados en la vista principal
   // (se ven en el Historial). Pero quedan contabilizados en los badges.
-  const lista = listaCompleta.filter(p => p.estado !== 'Pagado' && p.estado !== 'Cancelado');
+  const lista = listaCompleta.filter(p => p.estado !== 'Pagado' && p.estado !== 'Cancelado' && p.estado !== 'Ejecutado');
 
   const activos    = listaCompleta.filter(p=>p.estado==='Activo').length;
   const atrasados  = listaCompleta.filter(p=>p.estado==='Atrasado').length;
@@ -2607,9 +2607,9 @@ function filtrarPrestamos(filtro, btn) {
   const lista = (el._data||[]);
   const cuotas = (el._cuotas||[]);
   let filtrada;
-  if (filtro === 'activos') filtrada = lista.filter(p => p.estado !== 'Pagado' && p.estado !== 'Cancelado');
+  if (filtro === 'activos') filtrada = lista.filter(p => p.estado !== 'Pagado' && p.estado !== 'Cancelado' && p.estado !== 'Ejecutado');
   else if (filtro === 'todos') filtrada = lista;
-  else if (filtro === 'Semanal' || filtro === 'Mensual') filtrada = lista.filter(p => p.tipo === filtro && p.estado !== 'Cancelado');
+  else if (filtro === 'Semanal' || filtro === 'Mensual') filtrada = lista.filter(p => p.tipo === filtro && p.estado !== 'Cancelado' && p.estado !== 'Ejecutado');
   else filtrada = lista.filter(p => p.estado === filtro);
   const listEl = document.getElementById('prest-list');
   if (listEl) listEl.innerHTML = filtrada.length
@@ -2742,7 +2742,7 @@ async function renderCuotas() {
 
   // Dropdown filtro por préstamo (solo préstamos activos)
   const prestamosActivos = prestamos
-    .filter(p => p.estado !== 'Pagado' && p.estado !== 'Cancelado')
+    .filter(p => p.estado !== 'Pagado' && p.estado !== 'Cancelado' && p.estado !== 'Ejecutado')
     .sort((a,b) => (a.clienteNombre||'').localeCompare(b.clienteNombre||''));
   const prestamoFiltroHTML = prestamosActivos.length ? `
     <div style="margin:10px 0 12px">
@@ -3784,7 +3784,10 @@ async function syncEstadoPrestamo(prestamoId) {
   // Transicion de estado delegada al service (logica pura)
   const nuevo = window.prestamoService.calcularEstado(misCuotas);
 
-  if (nuevo && prestamo.estado !== nuevo && prestamo.estado !== 'Cancelado') {
+  if (nuevo && prestamo.estado !== nuevo
+      && prestamo.estado !== 'Cancelado'
+      && prestamo.estado !== 'Pagado'
+      && prestamo.estado !== 'Ejecutado') {
     prestamo.estado    = nuevo;
     prestamo.updatedAt = new Date().toISOString();
     await dbPut('prestamos', prestamo);
@@ -6490,7 +6493,7 @@ function instalarPWA() {
   // Registrar Service Worker inline (solo si no estamos en file://)
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     const swCode = `
-const CACHE = 'prestcontrol-v9';
+const CACHE = 'prestcontrol-v10';
 const ASSETS = ['./', './index.html', './core/firebase.js', './repositories/index.js', './repositories/Repository.js', './repositories/ClienteRepository.js', './repositories/PrestamoRepository.js', './services/index.js', './services/ClienteService.js', './services/PrestamoService.js', './services/AuthService.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(()=>{})); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k))))); self.clients.claim(); });
@@ -6621,7 +6624,7 @@ async function autoUpdateEstados() {
   const cuotas = await dbAll('cuotas');
   const hoy = today();
   for (const c of cuotas) {
-    if (c.estado === 'Pagado') continue;
+    if (c.estado === 'Pagado' || c.estado === 'Ejecutada') continue;
     const v = parseDate(c.fechaVenc); if (!v) continue;
     const diasAtr = Math.floor((hoy - v) / 86400000);
     const nuevoEst = diasAtr > 0 ? 'Atrasado' : 'Pendiente';
