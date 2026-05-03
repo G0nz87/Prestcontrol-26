@@ -23,6 +23,9 @@
 <!-- Firebase config + init (modulo) -->
 <script type="module" src="./core/firebase.js"></script>
 
+<!-- Repositorios (modulos) -->
+<script type="module" src="./repositories/index.js"></script>
+
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html{overscroll-behavior:none}
@@ -5969,8 +5972,18 @@ function driveSetStatus(tipo, msg) {
 }
 
 // ── CRUD Firebase ─────────────────────────────────────
+// Para 'clientes' y 'prestamos' las llamadas dispatchean a sus repositorios (./repositories/).
+// Otras colecciones (cuotas, users) siguen el path generico hasta que migren.
+function _repoFor(colName) {
+  if (colName === 'clientes')  return window.clienteRepository;
+  if (colName === 'prestamos') return window.prestamoRepository;
+  return null;
+}
+
 async function fbGuardar(colName, id, data) {
   if (!_fbUser) return;
+  const repo = _repoFor(colName);
+  if (repo) return repo.save({ ...data, id });
   await _userDoc(colName, id).set(
     { ...data, userId: _fbUser.uid, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
     { merge: true }
@@ -5979,6 +5992,8 @@ async function fbGuardar(colName, id, data) {
 
 async function fbEliminar(colName, id) {
   if (!_fbUser) return;
+  const repo = _repoFor(colName);
+  if (repo) return repo.softDelete(id);
   await _userDoc(colName, id).set(
     { _deleted: true, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
     { merge: true }
@@ -5987,6 +6002,8 @@ async function fbEliminar(colName, id) {
 
 async function fbObtenerTodos(colName) {
   if (!_fbUser) return [];
+  const repo = _repoFor(colName);
+  if (repo) return repo.getAll();
   const snap = await _userCol(colName).get();
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
@@ -6514,8 +6531,8 @@ function instalarPWA() {
   // Registrar Service Worker inline (solo si no estamos en file://)
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     const swCode = `
-const CACHE = 'prestcontrol-v5';
-const ASSETS = ['./', './index.html', './core/firebase.js'];
+const CACHE = 'prestcontrol-v6';
+const ASSETS = ['./', './index.html', './core/firebase.js', './repositories/index.js', './repositories/Repository.js', './repositories/ClienteRepository.js', './repositories/PrestamoRepository.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(()=>{})); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k))))); self.clients.claim(); });
 self.addEventListener('fetch', e => {
