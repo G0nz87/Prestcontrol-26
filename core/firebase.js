@@ -24,9 +24,8 @@ export function initFirebase() {
     window._fbAuth = window.firebase.auth();
     window._fbDb   = window.firebase.firestore();
     window._fbDb.enablePersistence().catch(() => {});
-    window._fbAuth.onAuthStateChanged(user => {
-      window._fbUser = user || null;
-    });
+    // onAuthStateChanged se registra desde AuthService.bootstrap() (services/AuthService.js).
+    // El bootstrap lo dispara init() en index.html justo despues de _initFirebase().
     return true;
   } catch (e) {
     console.warn('Firebase init error:', e);

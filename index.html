@@ -4738,7 +4738,7 @@ async function doLogin() {
   err.classList.remove('on');
 
   try {
-    const cred = await _fbAuth.signInWithEmailAndPassword(inputEmail, inputPass);
+    const cred = await window.authService.login(inputEmail, inputPass);
     _fbUser = cred.user;
     _loginIntentos = 0;
 
@@ -4989,7 +4989,7 @@ function cerrarSesion() {
   drivePendingSync = false;
 
   // Cerrar sesión Firebase
-  if (_fbAuth) _fbAuth.signOut().catch(() => {});
+  window.authService?.logout().catch(() => {});
 
   const badge = document.getElementById('usr-badge');
   if (badge) { badge.style.display = 'none'; }
@@ -6535,8 +6535,8 @@ function instalarPWA() {
   // Registrar Service Worker inline (solo si no estamos en file://)
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     const swCode = `
-const CACHE = 'prestcontrol-v7';
-const ASSETS = ['./', './index.html', './core/firebase.js', './repositories/index.js', './repositories/Repository.js', './repositories/ClienteRepository.js', './repositories/PrestamoRepository.js', './services/index.js', './services/ClienteService.js', './services/PrestamoService.js'];
+const CACHE = 'prestcontrol-v8';
+const ASSETS = ['./', './index.html', './core/firebase.js', './repositories/index.js', './repositories/Repository.js', './repositories/ClienteRepository.js', './repositories/PrestamoRepository.js', './services/index.js', './services/ClienteService.js', './services/PrestamoService.js', './services/AuthService.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(()=>{})); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k))))); self.clients.claim(); });
 self.addEventListener('fetch', e => {
@@ -6606,6 +6606,9 @@ async function init() {
   }, { passive: false });
 
   _initFirebase();
+  // AuthService es duenio del onAuthStateChanged — registra su listener
+  // recien aca, cuando _initFirebase ya seteo window._fbAuth.
+  window.authService?.bootstrap();
   instalarPWA();
   await initGlobalDB();
   updateHdrDate();
