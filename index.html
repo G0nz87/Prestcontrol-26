@@ -20,6 +20,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
+<!-- Firebase config + init (modulo) -->
+<script type="module" src="./core/firebase.js"></script>
+
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html{overscroll-behavior:none}
@@ -5938,42 +5941,11 @@ async function enviarWACuota(cuotaId) {
 }
 
 /* =====================================================
-   FIREBASE — AUTH + FIRESTORE (fuente de verdad)
-   Reemplaza Google Drive y almacenamiento local
+   FIREBASE — config/init en ./core/firebase.js (modulo)
+   El modulo expone window._fbAuth, window._fbDb, window._fbUser
+   y window._initFirebase para que el resto del codigo inline
+   siga accediendo via las mismas variables globales.
 ===================================================== */
-
-const firebaseConfig = {
-  apiKey:            "AIzaSyD2wKWooUfxxiJf-QjhI0X7vZ-NlB9ZKZ4",
-  authDomain:        "prestcontrol-5e965.firebaseapp.com",
-  projectId:         "prestcontrol-5e965",
-  storageBucket:     "prestcontrol-5e965.firebasestorage.app",
-  messagingSenderId: "296362364315",
-  appId:             "1:296362364315:web:a4846f6dc1daf7c173253e"
-};
-
-// Firebase se inicializa cuando los scripts del CDN estén listos
-let _fbAuth = null;
-let _fbDb   = null;
-let _fbUser = null;
-
-function _initFirebase() {
-  if (typeof firebase === 'undefined') {
-    console.warn('Firebase SDK no disponible — modo offline');
-    return false;
-  }
-  try {
-    // Evitar doble init
-    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-    _fbAuth = firebase.auth();
-    _fbDb   = firebase.firestore();
-    _fbDb.enablePersistence().catch(() => {});
-    _fbAuth.onAuthStateChanged(user => { _fbUser = user || null; });
-    return true;
-  } catch(e) {
-    console.warn('Firebase init error:', e);
-    return false;
-  }
-}
 
 // ── Helpers ──────────────────────────────────────────
 function _userCol(name) { return _fbDb.collection('users').doc(_fbUser.uid).collection(name); }
@@ -6542,8 +6514,8 @@ function instalarPWA() {
   // Registrar Service Worker inline (solo si no estamos en file://)
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     const swCode = `
-const CACHE = 'prestcontrol-v3';
-const ASSETS = ['./', './index.html'];
+const CACHE = 'prestcontrol-v4';
+const ASSETS = ['./', './index.html', './core/firebase.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(()=>{})); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k))))); self.clients.claim(); });
 self.addEventListener('fetch', e => {
@@ -6687,7 +6659,13 @@ setInterval(() => {
   if (appDesbloqueada && DB) autoUpdateEstados();
 }, 60000);
 
-init();
+// init() depende de window._initFirebase (modulo ./core/firebase.js, defer).
+// DOMContentLoaded se dispara despues de que los modulos hayan cargado.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
 </script>
 </body>
 </html>
