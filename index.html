@@ -3314,7 +3314,7 @@ function cuotaDetailItemHTML(c) {
 /* =====================================================
    ADD PRÉSTAMO
 ===================================================== */
-let _acClientes = []; // lista completa para el autocomplete
+var _acClientes = []; // var (no let) — modulos UI escriben/leen via window._acClientes
 
 function openSheetPrestamo() {
   ['pre-monto','pre-interes','pre-ncuotas','pre-notas','pre-prenda'].forEach(id => document.getElementById(id).value = '');
@@ -3703,8 +3703,8 @@ async function syncEstadoPrestamo(prestamoId) {
 /* =====================================================
    DELETE PRÉSTAMO
 ===================================================== */
-let _deletePrestamoId = null;
-let _deletePrestamoMotivo = null;
+var _deletePrestamoId = null;     // var — accesible desde modulos UI via window
+var _deletePrestamoMotivo = null;
 
 async function confirmarBorrarPrestamo(id) {
   const p = await dbGet('prestamos', id);
