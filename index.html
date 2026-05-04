@@ -29,6 +29,9 @@
 <!-- Services (modulos) -->
 <script type="module" src="./services/index.js"></script>
 
+<!-- UI handlers (modulos) -->
+<script type="module" src="./ui/index.js"></script>
+
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html{overscroll-behavior:none}
@@ -3303,117 +3306,10 @@ function cuotaDetailItemHTML(c) {
 }
 
 /* =====================================================
-   ADD / EDIT CLIENTE
+   CLIENTES — handlers UI movidos a ./ui/clientes.js (modulo).
+   El bridge (./ui/index.js) los expone en window para que el HTML
+   los siga llamando via onclick="...".
 ===================================================== */
-function openSheetCliente(editId = null) {
-  document.getElementById('cli-edit-id').value = editId || '';
-  document.getElementById('sh-cli-title').textContent = editId ? '✏️ Editar Cliente' : '👤 Nuevo Cliente';
-  if (!editId) {
-    ['cli-nombre','cli-dni','cli-tel','cli-dir','cli-notas'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('cli-riesgo').value = 'Bajo';
-  }
-  openSheet('sh-cliente');
-}
-
-async function editarCliente(id) {
-  const c = await dbGet('clientes', id);
-  if (!c) return;
-  document.getElementById('cli-nombre').value = c.nombre || '';
-  document.getElementById('cli-dni').value    = c.dni || '';
-  document.getElementById('cli-tel').value    = c.telefono || '';
-  document.getElementById('cli-dir').value    = c.direccion || '';
-  document.getElementById('cli-riesgo').value = c.riesgo || 'Bajo';
-  document.getElementById('cli-notas').value  = c.notas || '';
-  openSheetCliente(id);
-}
-
-async function saveCliente() {
-  const nombre   = document.getElementById('cli-nombre').value.trim();
-  const dni      = document.getElementById('cli-dni').value.trim();
-  const telefono = document.getElementById('cli-tel').value.trim();
-  const editId   = document.getElementById('cli-edit-id').value;
-
-  // Validacion delegada al service (nombre obligatorio, DNI formato + duplicado, telefono formato)
-  try {
-    await window.clienteService.validarDatosCliente({
-      id: editId || null, nombre, dni, telefono
-    });
-  } catch (e) {
-    return toast('⚠️ ' + e.message);
-  }
-
-  const todos = await dbAll('clientes');
-  const id    = editId || nextId('CL', todos);
-
-  const cli = {
-    id,
-    nombre,
-    dni,
-    telefono,
-    direccion: document.getElementById('cli-dir').value.trim(),
-    riesgo   : document.getElementById('cli-riesgo').value,
-    notas    : document.getElementById('cli-notas').value.trim(),
-    estado   : 'Activo',
-    creadoEn : editId ? undefined : new Date().toISOString()
-  };
-
-  if (editId) {
-    const orig = await dbGet('clientes', editId);
-    Object.assign(cli, { estado: orig.estado, creadoEn: orig.creadoEn });
-  }
-
-  // 1. Guardado local inmediato
-  await dbPut('clientes', cli);
-  // 2. Sync queue
-  await addToSyncQueue('clientes', id, cli, 'upsert');
-  // 3. Bitácora
-  await logBitacora(editId ? 'edicion' : 'nuevo_cliente', `Cliente ${editId ? 'editado' : 'creado'}: ${nombre}${cli.dni ? ' · DNI ' + cli.dni : ''}`, id);
-  // 4. Drive diferido
-  scheduleDriveSync();
-
-  closeSheet();
-  toast('✅ Cliente guardado');
-
-  if (editId && curPage === 'cliente-detail') {
-    await openClienteDetail(editId);
-  } else {
-    await renderPage('clientes');
-  }
-}
-
-async function confirmarBorrarCliente(id) {
-  const c = await dbGet('clientes', id);
-  if (!c) return;
-  const prestamos = (await dbAll('prestamos')).filter(p=>p.clienteId===id && ['Activo','Atrasado'].includes(p.estado));
-  if (prestamos.length) {
-    toast(`🚫 Tiene ${prestamos.length} préstamo${prestamos.length>1?'s':''} activo${prestamos.length>1?'s':''}`);
-    return;
-  }
-  document.getElementById('del-title').textContent = '¿Eliminar cliente?';
-  document.getElementById('del-msg').textContent   = `Se eliminará "${c.nombre}". Esta acción no se puede deshacer.`;
-  document.getElementById('del-confirm-btn').onclick = () => borrarCliente(id);
-  openSheet('sh-delete');
-}
-
-async function borrarCliente(id) {
-  closeSheet();
-  const cli = await dbGet('clientes', id);
-  // Borrado lógico — marca como eliminado, no destruye datos
-  await dbSoftDelete('clientes', id);
-  const cuotas = await dbAll('cuotas');
-  const prestamos = await dbAll('prestamos');
-  for (const p of prestamos.filter(p => p.clienteId === id && !p._deleted)) {
-    for (const c of cuotas.filter(c => c.prestamoId === p.id && !c._deleted)) {
-      await dbSoftDelete('cuotas', c.id);
-    }
-    await dbSoftDelete('prestamos', p.id);
-  }
-  await logBitacora('eliminacion', `Cliente eliminado: ${cli?.nombre || id}`, id);
-  addToSyncQueue('clientes', id, { _deleted: true, id });
-  scheduleDriveSync();
-  toast('🗑️ Cliente eliminado');
-  goPage('clientes');
-}
 
 /* =====================================================
    ADD PRÉSTAMO
@@ -6503,8 +6399,8 @@ function instalarPWA() {
   // Registrar Service Worker inline (solo si no estamos en file://)
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     const swCode = `
-const CACHE = 'prestcontrol-v11';
-const ASSETS = ['./', './index.html', './core/firebase.js', './repositories/index.js', './repositories/Repository.js', './repositories/ClienteRepository.js', './repositories/PrestamoRepository.js', './services/index.js', './services/ClienteService.js', './services/PrestamoService.js', './services/AuthService.js'];
+const CACHE = 'prestcontrol-v12';
+const ASSETS = ['./', './index.html', './core/firebase.js', './repositories/index.js', './repositories/Repository.js', './repositories/ClienteRepository.js', './repositories/PrestamoRepository.js', './services/index.js', './services/ClienteService.js', './services/PrestamoService.js', './services/AuthService.js', './ui/index.js', './ui/clientes.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(()=>{})); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k))))); self.clients.claim(); });
 self.addEventListener('fetch', e => {
