@@ -3316,30 +3316,8 @@ function cuotaDetailItemHTML(c) {
 ===================================================== */
 var _acClientes = []; // var (no let) — modulos UI escriben/leen via window._acClientes
 
-function openSheetPrestamo() {
-  ['pre-monto','pre-interes','pre-ncuotas','pre-notas','pre-prenda'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('pre-tipo').value = 'Mensual';
-  document.getElementById('pre-fecha').value = new Date().toISOString().split('T')[0];
-  document.getElementById('pre-preview').style.display = 'none';
-  limpiarClienteAC();
-
-  dbAll('clientes').then(lista => {
-    _acClientes = lista.filter(c => c.estado === 'Activo');
-    if (!_acClientes.length) {
-      document.getElementById('pre-cliente-search').placeholder = 'Sin clientes activos';
-      document.getElementById('pre-cliente-search').disabled = true;
-    } else {
-      document.getElementById('pre-cliente-search').placeholder = 'Buscar cliente por nombre…';
-      document.getElementById('pre-cliente-search').disabled = false;
-    }
-  });
-
-  ['pre-monto','pre-interes','pre-ncuotas'].forEach(id => {
-    document.getElementById(id).oninput = calcPreview;
-  });
-
-  openSheet('sh-prestamo');
-}
+// openSheetPrestamo movida a ./ui/prestamos.js (modulo).
+// Bridge en ./ui/index.js → window.openSheetPrestamo.
 
 function filtrarClientesAC(q) {
   const drop = document.getElementById('pre-cliente-drop');
@@ -3435,91 +3413,8 @@ function calcPreview() {
   }
 }
 
-async function savePrestamo() {
-  const clienteId = document.getElementById('pre-cliente').value;
-  const montoRaw  = document.getElementById('pre-monto').value;
-  const interesRaw= document.getElementById('pre-interes').value;
-  const ncuotasRaw= document.getElementById('pre-ncuotas').value;
-  const tipo      = document.getElementById('pre-tipo').value;
-  const fechaRaw  = document.getElementById('pre-fecha').value;
-
-  const monto       = parseFloat(montoRaw);
-  const intPorCuota = parseFloat(interesRaw); // % POR cuota (por semana o por mes)
-  const nCuotas     = parseInt(ncuotasRaw);
-
-  // Validacion delegada al service
-  try {
-    window.prestamoService.validarDatosPrestamo({
-      clienteId, monto, tasaPorCuota: intPorCuota, nCuotas, fecha: fechaRaw
-    });
-  } catch (e) {
-    return toast('⚠️ ' + e.message);
-  }
-
-  const cliente = await dbGet('clientes', clienteId);
-  if (!cliente) return toast('⚠️ Cliente no encontrado');
-
-  // Calculo financiero delegado al service
-  const { interesTotal, total, cuotaMonto, ganancia } =
-    window.prestamoService.calcularPlanPagos(monto, intPorCuota, nCuotas);
-  const fecha = new Date(fechaRaw + 'T12:00:00');
-
-  const todos = await dbAll('prestamos');
-  const preId = nextId('PR', todos);
-
-  const nowISO = new Date().toISOString();
-  const prestamo = {
-    id: preId, clienteId, clienteNombre: cliente.nombre,
-    fecha: fecha.toISOString(), monto,
-    interes: interesTotal,            // tasa total acumulada (para compatibilidad y display)
-    interesPorCuota: intPorCuota,     // tasa por período (la que el usuario ingresó)
-    tipo, nCuotas,
-    total, cuota: cuotaMonto, ganancia,
-    estado: 'Activo',
-    notas: document.getElementById('pre-notas').value.trim(),
-    prenda: document.getElementById('pre-prenda').value.trim(),
-    creadoEn: nowISO,
-    updatedAt: nowISO
-  };
-
-  await dbPut('prestamos', prestamo);
-
-  // Generacion de cuotas delegada al service (id base se calcula leyendo IndexedDB local)
-  const todasCuotas = await dbAll('cuotas');
-  let maxN = 0;
-  todasCuotas.forEach(c => {
-    const m = String(c.id||'').match(/^C-(\d+)$/);
-    if (m) maxN = Math.max(maxN, parseInt(m[1]));
-  });
-
-  const cuotasArr = window.prestamoService.generarCuotas({
-    prestamoId    : preId,
-    clienteId,
-    clienteNombre : cliente.nombre,
-    fechaInicio   : fecha,
-    tipo,
-    nCuotas,
-    cuotaMonto,
-    primerNumeroId: maxN + 1,
-    nowISO
-  });
-
-  for (const c of cuotasArr) await dbPut('cuotas', c);
-
-  // Sync queue — préstamo y cuotas
-  await addToSyncQueue('prestamos', preId, prestamo, 'upsert');
-  for (const c of cuotasArr) await addToSyncQueue('cuotas', c.id, c, 'upsert');
-
-  await logBitacora('nuevo_prestamo', `Préstamo creado: ${cliente.nombre} · ${fmtMoney(monto)} · ${nCuotas} cuotas ${tipo}`, clienteId);
-
-  closeSheet();
-  toast(`✅ Préstamo creado · ${nCuotas} cuotas generadas`);
-  pushInmediato(); // Push inmediato a Firebase
-  // Auto-actualizar estados inmediatamente (cuotas atrasadas se detectan al instante)
-  await autoUpdateEstados();
-  await updateBadges();
-  await renderPage('prestamos');
-}
+// savePrestamo movida a ./ui/prestamos.js (modulo).
+// Bridge en ./ui/index.js → window.savePrestamo.
 
 /* =====================================================
    PAGO DE CUOTA
@@ -3706,195 +3601,8 @@ async function syncEstadoPrestamo(prestamoId) {
 var _deletePrestamoId = null;     // var — accesible desde modulos UI via window
 var _deletePrestamoMotivo = null;
 
-async function confirmarBorrarPrestamo(id) {
-  const p = await dbGet('prestamos', id);
-  if (!p) return;
-  _deletePrestamoId = id;
-  _deletePrestamoMotivo = null;
-
-  const cuotas = (await dbAll('cuotas')).filter(c => c.prestamoId === id);
-  const pagadas = cuotas.filter(c => c.estado === 'Pagado').length;
-  const pendientes = cuotas.filter(c => c.estado !== 'Pagado').length;
-
-  document.getElementById('dp-info').innerHTML =
-    `<b>${p.clienteNombre}</b> · ${fmtMoney(p.monto)} · ${p.nCuotas} cuotas ${p.tipo}<br>
-     <span style="color:var(--grn)">✅ ${pagadas} pagadas</span> &nbsp;
-     <span style="color:var(--yel)">⏳ ${pendientes} pendientes</span>`;
-
-  // Reset form
-  document.getElementById('dp-pass').value = '';
-  document.getElementById('dp-mot-texto').value = '';
-  document.getElementById('dp-err').classList.remove('on');
-  ['pago','perdon','error','otro'].forEach(m => {
-    const btn = document.getElementById('dp-mot-' + m);
-    if (btn) { btn.style.borderColor = ''; btn.style.color = ''; btn.style.background = ''; }
-  });
-
-  openSheet('sh-delete-prestamo');
-}
-
-function selMotivo(motivo) {
-  _deletePrestamoMotivo = motivo;
-  ['pago','perdon','error','otro'].forEach(m => {
-    const btn = document.getElementById('dp-mot-' + m);
-    if (!btn) return;
-    if (m === motivo) {
-      btn.style.borderColor = 'var(--gold)';
-      btn.style.color       = 'var(--gold)';
-      btn.style.background  = 'var(--goldBg)';
-    } else {
-      btn.style.borderColor = '';
-      btn.style.color       = '';
-      btn.style.background  = '';
-    }
-  });
-}
-
-async function confirmarBorrarPrestamoFinal() {
-  const id       = _deletePrestamoId;
-  const motivo   = _deletePrestamoMotivo;
-  const pass     = document.getElementById('dp-pass').value;
-  const motTexto = document.getElementById('dp-mot-texto').value.trim();
-  const errEl    = document.getElementById('dp-err');
-
-  if (!motivo) { toast('⚠️ Seleccioná un motivo'); return; }
-  if (!pass)   { errEl.textContent = 'Ingresá tu contraseña para confirmar'; errEl.classList.add('on'); return; }
-
-  // Verificar contraseña contra Firebase Auth (la misma que usás para ingresar)
-  let passValida = false;
-  if (_fbUser && _fbAuth) {
-    try {
-      const credential = firebase.auth.EmailAuthProvider.credential(_fbUser.email, pass);
-      await _fbUser.reauthenticateWithCredential(credential);
-      passValida = true;
-    } catch(e) {
-      console.warn('confirmarBorrarPrestamoFinal reauth:', e.code);
-    }
-  } else {
-    // Fallback offline: validar contra local
-    const cred = await authGetCred();
-    if (pass === cred.pass) passValida = true;
-  }
-
-  if (!passValida) {
-    errEl.textContent = 'Contraseña incorrecta';
-    errEl.classList.add('on');
-    document.getElementById('dp-pass').value = '';
-    return;
-  }
-  errEl.classList.remove('on');
-
-  const pre = await dbGet('prestamos', id);
-  const cuotas = await dbAll('cuotas');
-  const motivoLabel = { pago:'Se pagó completo', perdon:'Se ejecutó la prenda', error:'Error de carga', otro:'Otro motivo' }[motivo] || motivo;
-  const motivoFinal = motTexto ? `${motivoLabel}: ${motTexto}` : motivoLabel;
-  const nowISO = new Date().toISOString();
-  const fechaPago = nowISO.split('T')[0] + 'T12:00:00.000Z';
-
-  // Cuotas del préstamo que no están ni borradas ni ya pagadas
-  const cuotasPendientes = cuotas.filter(c => c.prestamoId === id && !c._deleted && c.estado !== 'Pagado');
-
-  if (motivo === 'pago') {
-    // ── SE PAGÓ COMPLETO ──
-    // Las cuotas pendientes se marcan como PAGADAS (cuentan en cobrado/ganancia)
-    // El préstamo pasa a estado "Pagado" (no Cancelado)
-    for (const c of cuotasPendientes) {
-      const cPagada = {
-        ...c,
-        estado:     'Pagado',
-        fechaPago:  fechaPago,
-        metodo:     'Cancelación total',
-        notas:      (c.notas || '') + (motTexto ? ` · ${motTexto}` : ''),
-        updatedAt:  nowISO
-      };
-      await dbPut('cuotas', cPagada);
-      await addToSyncQueue('cuotas', c.id, cPagada, 'upsert');
-    }
-    if (pre) {
-      const preActualizado = {
-        ...pre,
-        estado: 'Pagado',
-        motivoCancelacion: motivoFinal,
-        canceladoEn: nowISO,
-        updatedAt: nowISO
-      };
-      await dbPut('prestamos', preActualizado);
-      await addToSyncQueue('prestamos', id, preActualizado, 'upsert');
-    }
-    await logBitacora('pago_completo',
-      `Préstamo cancelado por pago total: ${pre?.clienteNombre || id} · ${pre ? fmtMoney(pre.total) : ''} · ${cuotasPendientes.length} cuota${cuotasPendientes.length!==1?'s':''} cerrada${cuotasPendientes.length!==1?'s':''}`,
-      pre?.clienteId
-    );
-    pushInmediato();
-    closeSheet();
-    toast(`✅ Préstamo cerrado como pagado · ${cuotasPendientes.length} cuota${cuotasPendientes.length!==1?'s':''} cancelada${cuotasPendientes.length!==1?'s':''}`);
-    goPage('prestamos');
-    return;
-  }
-
-  if (motivo === 'perdon') {
-    // ── SE EJECUTÓ LA PRENDA ──
-    // Las cuotas YA PAGADAS quedan como están (cuentan en cobrado)
-    // Las cuotas pendientes se marcan como "Ejecutada" (no cuentan ni como deuda ni como cobrado)
-    // El préstamo pasa a estado "Ejecutado"
-    for (const c of cuotasPendientes) {
-      const cEjec = {
-        ...c,
-        estado:    'Ejecutada',
-        fechaPago: fechaPago,
-        metodo:    'Prenda ejecutada',
-        notas:     (c.notas || '') + (motTexto ? ` · ${motTexto}` : ''),
-        updatedAt: nowISO
-      };
-      await dbPut('cuotas', cEjec);
-      await addToSyncQueue('cuotas', c.id, cEjec, 'upsert');
-    }
-    if (pre) {
-      const preActualizado = {
-        ...pre,
-        estado: 'Ejecutado',
-        motivoCancelacion: motivoFinal,
-        canceladoEn: nowISO,
-        updatedAt: nowISO
-      };
-      await dbPut('prestamos', preActualizado);
-      await addToSyncQueue('prestamos', id, preActualizado, 'upsert');
-    }
-    const yaPagadas = cuotas.filter(c => c.prestamoId === id && !c._deleted && c.estado === 'Pagado').length;
-    await logBitacora('prenda_ejecutada',
-      `Préstamo cerrado por ejecución de prenda: ${pre?.clienteNombre || id} · ${yaPagadas} cuota${yaPagadas!==1?'s':''} cobrada${yaPagadas!==1?'s':''} previamente · ${cuotasPendientes.length} cuota${cuotasPendientes.length!==1?'s':''} ejecutada${cuotasPendientes.length!==1?'s':''}`,
-      pre?.clienteId
-    );
-    pushInmediato();
-    closeSheet();
-    toast(`🔒 Préstamo cerrado por prenda · ${cuotasPendientes.length} cuota${cuotasPendientes.length!==1?'s':''} ejecutada${cuotasPendientes.length!==1?'s':''}`);
-    goPage('prestamos');
-    return;
-  }
-
-  // ── ERROR DE CARGA / OTRO MOTIVO ──
-  // Borrado lógico total (como antes) - para eliminar errores sin afectar balance
-  if (pre) {
-    await dbPut('prestamos', { ...pre, estado: 'Cancelado', motivoCancelacion: motivoFinal, canceladoEn: nowISO, updatedAt: nowISO });
-  }
-  for (const c of cuotasPendientes) {
-    await dbSoftDelete('cuotas', c.id);
-    addToSyncQueue('cuotas', c.id, { _deleted: true, id: c.id });
-  }
-  await dbSoftDelete('prestamos', id);
-  addToSyncQueue('prestamos', id, { _deleted: true, id });
-
-  await logBitacora('eliminacion',
-    `Préstamo eliminado [${motivoFinal}]: ${pre?.clienteNombre || id} · ${pre ? fmtMoney(pre.monto) : ''}`,
-    pre?.clienteId
-  );
-  pushInmediato();
-
-  closeSheet();
-  toast(`🗑️ Préstamo eliminado · ${motivoLabel}`);
-  goPage('prestamos');
-}
-
+// confirmarBorrarPrestamo / selMotivo / confirmarBorrarPrestamoFinal
+// movidos a ./ui/prestamos.js (modulo). Bridge en ./ui/index.js → window.X.
 /* =====================================================
    GRÁFICOS
 ===================================================== */
@@ -6399,8 +6107,8 @@ function instalarPWA() {
   // Registrar Service Worker inline (solo si no estamos en file://)
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     const swCode = `
-const CACHE = 'prestcontrol-v12';
-const ASSETS = ['./', './index.html', './core/firebase.js', './repositories/index.js', './repositories/Repository.js', './repositories/ClienteRepository.js', './repositories/PrestamoRepository.js', './services/index.js', './services/ClienteService.js', './services/PrestamoService.js', './services/AuthService.js', './ui/index.js', './ui/clientes.js'];
+const CACHE = 'prestcontrol-v13';
+const ASSETS = ['./', './index.html', './core/firebase.js', './repositories/index.js', './repositories/Repository.js', './repositories/ClienteRepository.js', './repositories/PrestamoRepository.js', './services/index.js', './services/ClienteService.js', './services/PrestamoService.js', './services/AuthService.js', './ui/index.js', './ui/clientes.js', './ui/prestamos.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(()=>{})); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k))))); self.clients.claim(); });
 self.addEventListener('fetch', e => {
