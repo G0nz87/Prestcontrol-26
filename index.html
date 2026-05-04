@@ -1965,7 +1965,7 @@ function emptyHTML(ic, t, s='') {
 ===================================================== */
 const PAGES = ['dashboard','hoy','atrasadas','clientes','prestamos','cuotas','calendario','config','bitacora','historial','cobros'];
 const NAV_PAGES = PAGES;
-let curPage = 'dashboard';
+var curPage = 'dashboard'; // var (no let) — se lee desde modulos UI via window.curPage
 let pageStack = [];
 
 function goPage(id) {
