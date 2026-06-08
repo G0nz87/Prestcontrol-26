@@ -52,6 +52,8 @@ export async function saveCliente() {
     riesgo   : document.getElementById('cli-riesgo').value,
     notas    : document.getElementById('cli-notas').value.trim(),
     estado   : 'Activo',
+    _deleted : false,
+    deletedAt: null,
     creadoEn : editId ? undefined : new Date().toISOString()
   };
 
