@@ -1170,6 +1170,37 @@ async function getSyncQueuePending() {
   } catch(e) { return []; }
 }
 
+function syncQueueRecordKey(store, recordId) {
+  return `${store}::${String(recordId || '')}`;
+}
+
+async function getSyncQueuePendingRecordKeys() {
+  const pending = await getSyncQueuePending();
+  const keys = new Set();
+  pending.forEach(op => {
+    if (op?.store && op?.recordId) {
+      keys.add(syncQueueRecordKey(op.store, op.recordId));
+    }
+  });
+  return keys;
+}
+
+function hasPendingSyncOperation(pendingKeys, store, recordId) {
+  return pendingKeys.has(syncQueueRecordKey(store, recordId));
+}
+
+function normalizarRegistroActivoParaSync(store, data, operation) {
+  const storesActivas = new Set(['clientes', 'prestamos', 'cuotas']);
+  if (operation !== 'upsert' || !storesActivas.has(store) || data?._deleted === true) {
+    return data;
+  }
+  return {
+    ...data,
+    _deleted: false,
+    deletedAt: null
+  };
+}
+
 async function markSyncOpDone(opId) {
   if (!DB) return;
   try {
@@ -5822,6 +5853,18 @@ function driveSetStatus(tipo, msg) {
   if (tipo !== 'syncing') setTimeout(() => el.classList.remove('on'), 4000);
 }
 
+function firebaseErrorMessage(error) {
+  const code = String(error?.code || '').replace(/^firestore\//, '');
+  const detail = error?.message ? ` (${error.message})` : '';
+  const messages = {
+    'permission-denied': 'Firebase rechazó la operación por reglas de seguridad.',
+    unauthenticated: 'No hay usuario autenticado para sincronizar con Firebase.',
+    unavailable: 'Firebase no está disponible temporalmente. Reintentá en unos minutos.',
+    'resource-exhausted': 'Firebase alcanzó un límite de uso. Reintentá más tarde.'
+  };
+  return messages[code] || `Error de Firebase${detail}`;
+}
+
 // ── CRUD Firebase ─────────────────────────────────────
 // Para 'clientes' y 'prestamos' las llamadas dispatchean a sus services (./services/),
 // que internamente delegan en sus repositories. La UI nunca habla con repositories directo.
@@ -5901,6 +5944,8 @@ async function _pushToFirebase() {
           }
         }
 
+        data = normalizarRegistroActivoParaSync(op.store, data, op.operation);
+
         const ref = _userDoc(op.store, op.recordId);
         batch.set(ref, {
           ...data,
@@ -5922,7 +5967,7 @@ async function _pushToFirebase() {
         }
       } catch(e) {
         console.warn('Error procesando op:', op, e);
-        await markSyncOpError(op.opId, e.message || 'error desconocido');
+        await markSyncOpError(op.opId, firebaseErrorMessage(e));
       }
     }
 
@@ -5938,7 +5983,7 @@ async function _pushToFirebase() {
     driveSetStatus('ok', 'Guardado ✓');
   } catch(e) {
     console.warn('pushToFirebase error:', e);
-    driveSetStatus('err', 'Error al guardar');
+    driveSetStatus('err', firebaseErrorMessage(e));
   }
 }
 
@@ -5999,8 +6044,10 @@ async function _pullFromFirebase() {
     ]);
 
     let changed = false;
+    const pendingLocalKeys = await getSyncQueuePendingRecordKeys();
     const merge = async (store, rows) => {
       for (const r of rows) {
+        if (hasPendingSyncOperation(pendingLocalKeys, store, r.id)) continue;
         const local = await dbGet(store, r.id).catch(() => null);
         if (!local) { await dbPut(store, r); changed = true; }
         else {
@@ -6026,7 +6073,7 @@ async function _pullFromFirebase() {
     return true;
   } catch(e) {
     console.warn('pullFromFirebase error:', e);
-    driveSetStatus('err', 'Error de sync');
+    driveSetStatus('err', firebaseErrorMessage(e));
     return false;
   }
 }
@@ -6251,9 +6298,11 @@ function iniciarSyncRealtime() {
         .collection('users').doc(uid).collection(colName)
         .onSnapshot({ includeMetadataChanges: false }, async (snapshot) => {
           let changed = false;
+          const pendingLocalKeys = await getSyncQueuePendingRecordKeys();
           for (const change of snapshot.docChanges()) {
             if (change.type === 'added' || change.type === 'modified') {
               const data = { id: change.doc.id, ...change.doc.data() };
+              if (hasPendingSyncOperation(pendingLocalKeys, store, data.id)) continue;
               // Normalizar updatedAt de Firestore a ISO para consistencia
               if (data.updatedAt?.toMillis) {
                 data.updatedAt = new Date(data.updatedAt.toMillis()).toISOString();
@@ -6272,7 +6321,10 @@ function iniciarSyncRealtime() {
             _stoChangedStores.add(store);
             actualizarUI();
           }
-        }, err => console.warn('onSnapshot error:', err));
+        }, err => {
+          console.warn('onSnapshot error:', err);
+          driveSetStatus('err', firebaseErrorMessage(err));
+        });
       _realtimeUnsub.push(unsub);
     } catch(e) { console.warn('listenCol error:', e); }
   };
