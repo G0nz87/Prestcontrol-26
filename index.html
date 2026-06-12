@@ -2478,7 +2478,12 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
         clientesActivos: clientes.filter(c=>!c._deleted && c.estado==='Activo').length,
         prestamosActivos: prestamos.filter(p=>!p._deleted && (p.estado==='Activo'||p.estado==='Atrasado')).length,
         interesCobrado: Math.max(0, mCob - (legacyTotalPrestado - legacyTotalACobrar)),
-        porcentajeRecuperado: legacyTotalPrestado > 0 ? Math.round(mCob / (legacyTotalPrestado + legacyGananciaEsp) * 100) : 0
+        porcentajeRecuperado: legacyTotalPrestado > 0 ? Math.round(mCob / (legacyTotalPrestado + legacyGananciaEsp) * 100) : 0,
+        capitalRecuperado: Math.max(0, legacyTotalPrestado - legacyTotalACobrar),
+        capitalPendiente: legacyTotalACobrar,
+        moraReal: mPend > 0 ? Math.round((mAtr / mPend) * 100) : 0,
+        cashflow7: 0,
+        cashflow30: 0
       };
   const totalPrestado   = metricas.capitalPrestado;
   const gananciaEsp     = metricas.interesProyectado;
@@ -2488,6 +2493,11 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
   const prestActivos    = metricas.prestamosActivos;
   const gananciaReal    = metricas.interesCobrado;
   const pctCobrado      = metricas.porcentajeRecuperado;
+  const capitalRecuperado = metricas.capitalRecuperado;
+  const capitalPendiente  = metricas.capitalPendiente;
+  const moraReal          = metricas.moraReal;
+  const cashflow7         = metricas.cashflow7;
+  const cashflow30        = metricas.cashflow30;
 
   let urgente = '';
   if (cobrarHoy>0) urgente+=`<div class="abanner ay"><div class="abanner-ic">📢</div><div style="flex:1"><div class="abanner-t">${cobrarHoy} cobro${cobrarHoy>1?'s':''} para hoy</div><div class="abanner-s">Total: ${fmtMoney(mHoy)}</div><button class="btn btn-sm" style="background:var(--yel);color:#0A0F1F;margin-top:8px" onclick="goPage('hoy')">Ver →</button></div></div>`;
@@ -2546,6 +2556,31 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
           <div style="font-size:14px;font-weight:900;font-family:'DM Mono',monospace;color:var(--red)">${fmtMoney(capitalRiesgo)}</div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px">Cuotas atrasadas</div>
         </div>` : ''}
+        <div style="text-align:center">
+          <div style="font-size:10px;color:var(--muted)">Capital recuperado</div>
+          <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--grn)">${fmtMoney(capitalRecuperado)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Capital ya vuelto</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:10px;color:var(--muted)">Capital pendiente</div>
+          <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--yel)">${fmtMoney(capitalPendiente)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Capital por recuperar</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:10px;color:var(--muted)">Mora real</div>
+          <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:${moraReal>0?'var(--red)':'var(--grn)'}">${moraReal}%</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Vencido / pendiente</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:10px;color:var(--muted)">Cashflow 7 días</div>
+          <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--money)">${fmtMoney(cashflow7)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Próximos cobros</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:10px;color:var(--muted)">Cashflow 30 días</div>
+          <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--money)">${fmtMoney(cashflow30)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Próximos cobros</div>
+        </div>
       </div>
     </div>
     <div class="srow2">
