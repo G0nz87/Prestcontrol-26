@@ -2463,18 +2463,31 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
   setBadge('hoy', cobrarHoy);
   setBadge('atr', atrasadas);
 
-  // Métricas históricas: incluyen préstamos reales (no los eliminados por error)
-  const prestamosValidos = prestamos.filter(p => !p._deleted && p.estado !== 'Cancelado' && p.estado !== 'Ejecutado');
-  const totalPrestado  = prestamosValidos.reduce((s,p)=>s+Number(p.monto||0),0);
-  const gananciaEsp    = prestamosValidos.reduce((s,p)=>s+Number(p.ganancia||0),0);
-  // Total pendiente de cobro (solo activos)
-  const totalACobrar   = prestamos.filter(p=>!p._deleted && p.estado!=='Pagado' && p.estado!=='Cancelado' && p.estado!=='Ejecutado').reduce((s,p)=>s+Number(p.total||0),0);
-  const capitalRiesgo  = cuotas.filter(c=>!c._deleted && c.estado==='Atrasado').reduce((s,c)=>s+Number(c.monto||0),0);
-  const clientesActivos= clientes.filter(c=>!c._deleted && c.estado==='Activo').length;
-  const prestActivos   = prestamos.filter(p=>!p._deleted && (p.estado==='Activo'||p.estado==='Atrasado')).length;
-  // Ganancia real = lo que ya entró en efectivo - el capital prestado de esos pagos
-  const gananciaReal   = Math.max(0, mCob - (totalPrestado - totalACobrar));
-  const pctCobrado     = totalPrestado > 0 ? Math.round(mCob / (totalPrestado + gananciaEsp) * 100) : 0;
+  const legacyPrestamosValidos = prestamos.filter(p => !p._deleted && p.estado !== 'Cancelado' && p.estado !== 'Ejecutado');
+  const legacyTotalPrestado = legacyPrestamosValidos.reduce((s,p)=>s+Number(p.monto||0),0);
+  const legacyGananciaEsp = legacyPrestamosValidos.reduce((s,p)=>s+Number(p.ganancia||0),0);
+  const legacyTotalACobrar = prestamos.filter(p=>!p._deleted && p.estado!=='Pagado' && p.estado!=='Cancelado' && p.estado!=='Ejecutado').reduce((s,p)=>s+Number(p.total||0),0);
+
+  const metricas = window.metricasFinancierasService
+    ? window.metricasFinancierasService.calcularMetricasGlobales({ prestamos, cuotas, clientes, hoy })
+    : {
+        capitalPrestado: prestamos.filter(p=>!p._deleted && (p.estado==='Activo'||p.estado==='Atrasado')).reduce((s,p)=>s+Number(p.monto||0),0),
+        interesProyectado: prestamos.filter(p=>!p._deleted && (p.estado==='Activo'||p.estado==='Atrasado')).reduce((s,p)=>s+Number(p.ganancia||0),0),
+        totalPendiente: mPend,
+        montoVencido: mAtr,
+        clientesActivos: clientes.filter(c=>!c._deleted && c.estado==='Activo').length,
+        prestamosActivos: prestamos.filter(p=>!p._deleted && (p.estado==='Activo'||p.estado==='Atrasado')).length,
+        interesCobrado: Math.max(0, mCob - (legacyTotalPrestado - legacyTotalACobrar)),
+        porcentajeRecuperado: legacyTotalPrestado > 0 ? Math.round(mCob / (legacyTotalPrestado + legacyGananciaEsp) * 100) : 0
+      };
+  const totalPrestado   = metricas.capitalPrestado;
+  const gananciaEsp     = metricas.interesProyectado;
+  const totalACobrar    = metricas.totalPendiente;
+  const capitalRiesgo   = metricas.montoVencido;
+  const clientesActivos = metricas.clientesActivos;
+  const prestActivos    = metricas.prestamosActivos;
+  const gananciaReal    = metricas.interesCobrado;
+  const pctCobrado      = metricas.porcentajeRecuperado;
 
   let urgente = '';
   if (cobrarHoy>0) urgente+=`<div class="abanner ay"><div class="abanner-ic">📢</div><div style="flex:1"><div class="abanner-t">${cobrarHoy} cobro${cobrarHoy>1?'s':''} para hoy</div><div class="abanner-s">Total: ${fmtMoney(mHoy)}</div><button class="btn btn-sm" style="background:var(--yel);color:#0A0F1F;margin-top:8px" onclick="goPage('hoy')">Ver →</button></div></div>`;
@@ -2504,7 +2517,7 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
         <div style="text-align:center">
           <div style="font-size:10px;color:var(--muted)">Capital prestado</div>
           <div style="font-size:14px;font-weight:900;font-family:'DM Mono',monospace;color:var(--money)">${fmtMoney(totalPrestado)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Total histórico</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Capital entregado</div>
         </div>
         <div style="text-align:center">
           <div style="font-size:10px;color:var(--muted)">Ya cobrado</div>
@@ -2514,18 +2527,18 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
         <div style="text-align:center">
           <div style="font-size:10px;color:var(--muted)">Ganancia real 💵</div>
           <div style="font-size:14px;font-weight:900;font-family:'DM Mono',monospace;color:var(--grn)">${fmtMoney(gananciaReal)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Lo que ya entraste de más</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Interés ya cobrado</div>
         </div>
         <div style="text-align:center">
           <div style="font-size:10px;color:var(--muted)">Ganancia proyectada 📈</div>
           <div style="font-size:14px;font-weight:900;font-family:'DM Mono',monospace;color:${gananciaReal>=gananciaEsp?'var(--grn)':'var(--yel)'}">${fmtMoney(gananciaEsp)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">${gananciaReal>=gananciaEsp ? '✅ Todo cobrado' : 'Si todos pagan completo'}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">${gananciaReal>=gananciaEsp ? '✅ Todo cobrado' : 'Interés pendiente de cobrar'}</div>
         </div>
         ${totalACobrar > 0 ? `
         <div style="text-align:center">
           <div style="font-size:10px;color:var(--muted)">Pendiente de cobro</div>
           <div style="font-size:14px;font-weight:900;font-family:'DM Mono',monospace;color:var(--yel)">${fmtMoney(totalACobrar)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">En préstamos activos</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Saldo pendiente</div>
         </div>` : ''}
         ${capitalRiesgo > 0 ? `
         <div style="text-align:center">
