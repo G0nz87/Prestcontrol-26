@@ -2445,13 +2445,14 @@ function switchDashCliente(id) {
 function buildDashGlobal(cuotas, clientes, prestamos) {
   const hoy = today();
   let cobrarHoy=0, mHoy=0, atrasadas=0, mAtr=0, pendientes=0, mPend=0, prox7=0, cobradas=0, mCob=0;
+  const prestamosPorId = prestamosMap(prestamos);
 
   // Solo cuotas NO eliminadas para el estado actual
   cuotas.filter(c => !c._deleted).forEach(c => {
     const venc = parseDate(c.fechaVenc);
     const m = Number(c.monto||0);
     if (c.estado === 'Pagado') { cobradas++; mCob += m; return; }
-    if (c.estado === 'Ejecutada') return; // No cuenta ni como cobrado ni como deuda
+    if (!esCuotaCobrable(c, prestamosPorId)) return; // No cuenta como cobro pendiente si la cuota o el préstamo están cerrados
     if (!venc) return;
     const dias = Math.floor((hoy - venc) / 86400000);
     pendientes++; mPend += m;
@@ -2688,20 +2689,61 @@ function buildDashCliente(cuotas, clientes, prestamos) {
 
 /* ---- HOY ---- */
 /* ---- COBROS (Hoy + Atrasadas en una sola vista) ---- */
+const ESTADOS_CUOTA_NO_COBRABLE = ['Pagado', 'Ejecutada', 'Ejecutado', 'Cancelada', 'Cancelado'];
+const ESTADOS_PRESTAMO_NO_COBRABLE = ['Pagado', 'Ejecutado', 'Cancelado'];
+const prestamosMap = prestamos => new Map((prestamos || []).map(p => [p.id, p]));
+function esCuotaCobrable(c, mapaPrestamos) {
+  if (!c || c._deleted) return false;
+  if (ESTADOS_CUOTA_NO_COBRABLE.includes(c.estado)) return false;
+  const prestamo = mapaPrestamos?.get(c.prestamoId);
+  if (prestamo && (prestamo._deleted || ESTADOS_PRESTAMO_NO_COBRABLE.includes(prestamo.estado))) return false;
+  return true;
+}
+
 async function renderCobros() {
   const el = document.getElementById('pg-cobros');
   el.innerHTML = '<div class="loader"><div class="spin"></div></div>';
   const cuotas = await dbAll('cuotas');
+  const prestamos = await dbAll('prestamos');
   const hoy = today();
+  const prestamosPorId = prestamosMap(prestamos);
+  window.marcarTodasCobrosHoy = async function() {
+    const cuotasActuales = await dbAll('cuotas');
+    const prestamosActuales = await dbAll('prestamos');
+    const mapaPrestamos = prestamosMap(prestamosActuales);
+    const hoyActual = today();
+    const lista = cuotasActuales.filter(c => {
+      if (!esCuotaCobrable(c, mapaPrestamos)) return false;
+      const v = parseDate(c.fechaVenc);
+      return v && v.getTime() === hoyActual.getTime();
+    });
+    if (!lista.length) { toast('ℹ️ No hay cuotas cobrables para hoy'); return; }
+    const fecha = new Date().toISOString().split('T')[0];
+    const preIds = new Set();
+    for (const c of lista) {
+      c.estado = 'Pagado';
+      c.fechaPago = new Date(fecha+'T12:00:00').toISOString();
+      c.metodo = 'Efectivo';
+      c.updatedAt = new Date().toISOString();
+      await dbPut('cuotas', c);
+      preIds.add(c.prestamoId);
+    }
+    for (const pid of preIds) await syncEstadoPrestamo(pid);
+    pushInmediato(); // sync inmediato a Firebase
+    toast(`✅ ${lista.length} cuota${lista.length>1?'s':''} cobrable${lista.length>1?'s':''} marcada${lista.length>1?'s':''} como Pagada`);
+    await renderCobros();
+    await updateBadges();
+    if (curPage === 'dashboard') await renderDashboard();
+  };
 
   const listaHoy = cuotas.filter(c => {
-    if (c.estado === 'Pagado') return false;
+    if (!esCuotaCobrable(c, prestamosPorId)) return false;
     const v = parseDate(c.fechaVenc);
     return v && v.getTime() === hoy.getTime();
   }).sort((a,b) => a.clienteNombre > b.clienteNombre ? 1 : -1);
 
   const listaAtr = cuotas.filter(c => {
-    if (c.estado === 'Pagado') return false;
+    if (!esCuotaCobrable(c, prestamosPorId)) return false;
     const v = parseDate(c.fechaVenc);
     return v && v < hoy;
   }).map(c => {
@@ -2719,7 +2761,7 @@ async function renderCobros() {
 
   if (listaHoy.length) {
     html += `<div style="font-size:12px;font-weight:800;color:var(--yel);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📅 Cobrar hoy — ${fmtMoney(totalHoy)}</div>`;
-    html += `<button class="btn btn-gold btn-full" style="margin-bottom:12px" onclick="marcarTodasHoy()">⚡ Marcar TODAS como Pagadas</button>`;
+    html += `<button class="btn btn-gold btn-full" style="margin-bottom:12px" onclick="marcarTodasCobrosHoy()">⚡ Marcar TODAS como Pagadas</button>`;
     html += listaHoy.map(c => cuotaItemHTML(c, 'hoy')).join('');
   }
 
@@ -2739,10 +2781,11 @@ async function renderCobros() {
 async function renderHoy() {
   const el = document.getElementById('pg-hoy');
   el.innerHTML = '<div class="loader"><div class="spin"></div></div>';
-  const cuotas = await dbAll('cuotas');
+  const [cuotas, prestamos] = await Promise.all([dbAll('cuotas'), dbAll('prestamos')]);
   const hoy = today();
+  const prestamosPorId = prestamosMap(prestamos);
   const lista = cuotas.filter(c => {
-    if (c.estado === 'Pagado') return false;
+    if (!esCuotaCobrable(c, prestamosPorId)) return false;
     const v = parseDate(c.fechaVenc);
     return v && v.getTime() === hoy.getTime();
   }).sort((a,b) => a.clienteNombre > b.clienteNombre ? 1 : -1);
@@ -2762,10 +2805,11 @@ async function renderHoy() {
 }
 
 async function marcarTodasHoy() {
-  const cuotas = await dbAll('cuotas');
+  const [cuotas, prestamos] = await Promise.all([dbAll('cuotas'), dbAll('prestamos')]);
   const hoy = today();
+  const prestamosPorId = prestamosMap(prestamos);
   const lista = cuotas.filter(c => {
-    if (c.estado === 'Pagado') return false;
+    if (!esCuotaCobrable(c, prestamosPorId)) return false;
     const v = parseDate(c.fechaVenc);
     return v && v.getTime() === hoy.getTime();
   });
@@ -2792,10 +2836,11 @@ async function marcarTodasHoy() {
 async function renderAtrasadas() {
   const el = document.getElementById('pg-atrasadas');
   el.innerHTML = '<div class="loader"><div class="spin"></div></div>';
-  const cuotas = await dbAll('cuotas');
+  const [cuotas, prestamos] = await Promise.all([dbAll('cuotas'), dbAll('prestamos')]);
   const hoy = today();
+  const prestamosPorId = prestamosMap(prestamos);
   const lista = cuotas.filter(c => {
-    if (c.estado === 'Pagado') return false;
+    if (!esCuotaCobrable(c, prestamosPorId)) return false;
     const v = parseDate(c.fechaVenc);
     return v && v.getTime() < hoy.getTime();
   }).map(c => {
@@ -3638,15 +3683,22 @@ async function openPrestamoDetail(id) {
 function cuotaDetailItemHTML(c) {
   const stMap = {Pagado:'cpag',Pendiente:'cpen',Atrasado:'catr'};
   const badgeMap = {Pagado:'bg-grn',Pendiente:'bg-yel',Atrasado:'bg-red'};
-  const pagBtn = c.estado !== 'Pagado'
-    ? `<div style="display:flex;gap:8px;margin-top:8px">
-        <button class="btn btn-grn btn-sm" style="flex:1" onclick="abrirPago('${esc(c.id)}')">✅ Marcar pagada</button>
-        <button class="btn btn-ghost btn-sm" onclick="enviarWACuota('${esc(c.id)}')">💬 WA</button>
-       </div>`
-    : `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+  const estadosCerrados = ['Pagado', 'Ejecutada', 'Ejecutado', 'Cancelada', 'Cancelado'];
+  const estaCerrada = estadosCerrados.includes(c.estado);
+  let pagBtn = '';
+  if (c.estado === 'Pagado') {
+    pagBtn = `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
         <div style="font-size:11px;color:var(--grn)">✅ Pagada ${fmtDate(c.fechaPago)} · ${esc(c.metodo||'')}</div>
         <button class="btn btn-sm btn-ghost" style="padding:5px 10px;font-size:11px" onclick="imprimirComprobante('${esc(c.id)}')">🖨️ Comprobante</button>
        </div>`;
+  } else if (estaCerrada) {
+    pagBtn = `<div style="font-size:11px;color:var(--muted);margin-top:8px">Cerrada · ${esc(c.estado)}</div>`;
+  } else {
+    pagBtn = `<div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-grn btn-sm" style="flex:1" onclick="abrirPago('${esc(c.id)}')">✅ Marcar pagada</button>
+        <button class="btn btn-ghost btn-sm" onclick="enviarWACuota('${esc(c.id)}')">💬 WA</button>
+       </div>`;
+  }
   return `<div class="ci ${stMap[c.estado]||'cpen'}" id="ci-${esc(c.id)}">
     <div class="ci-row">
       <div><div class="ci-n">Cuota ${c.nro}</div><div class="ci-info">Vence: ${fmtDate(c.fechaVenc)}</div></div>
@@ -4466,11 +4518,12 @@ function setBadge(id, n) {
 }
 
 async function updateBadges() {
-  const cuotas = await dbAll('cuotas');
+  const [cuotas, prestamos] = await Promise.all([dbAll('cuotas'), dbAll('prestamos')]);
   const hoy = today();
+  const prestamosPorId = prestamosMap(prestamos);
   let hoyN=0, atrN=0;
   cuotas.forEach(c => {
-    if (c.estado === 'Pagado') return;
+    if (!esCuotaCobrable(c, prestamosPorId)) return;
     const v = parseDate(c.fechaVenc); if (!v) return;
     const dias = Math.floor((hoy - v) / 86400000);
     if (v.getTime() === hoy.getTime()) hoyN++;
