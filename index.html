@@ -145,6 +145,8 @@ input,select,textarea{font-family:'DM Sans',sans-serif}
 .li.lgrn{border-left-color:var(--grn)}
 .li.lgold{border-left-color:var(--money)}
 .li.lblue{border-left-color:#60A5FA}
+.li.lvio{border-left-color:#A78BFA}
+.li.lmuted{border-left-color:var(--muted)}
 .li-row{display:flex;justify-content:space-between;align-items:center}
 .li-name{font-size:15px;font-weight:700}
 .li-sub{font-size:12px;color:var(--muted);margin-top:2px}
@@ -156,6 +158,7 @@ input,select,textarea{font-family:'DM Sans',sans-serif}
 .bg-yel{background:var(--yelBg);color:var(--yel);border:1px solid rgba(245,158,11,.2)}
 .bg-grn{background:var(--grnBg);color:var(--grn);border:1px solid rgba(16,185,129,.2)}
 .bg-blu{background:var(--accentBg);color:var(--accent);border:1px solid rgba(59,130,246,.2)}
+.bg-vio{background:rgba(167,139,250,.12);color:#A78BFA;border:1px solid rgba(167,139,250,.22)}
 .bg-muted{background:rgba(255,255,255,.05);color:var(--muted);border:1px solid var(--border)}
 
 /* AVATAR */
@@ -1716,6 +1719,18 @@ function calcularScoring(cuotas) {
     default:
       return { label:'Buen cliente',  icono:'🟢', color:'linear-gradient(135deg,#3B82F6,#2563EB)', autoRiesgo:'Bajo',  detalle:`${r.pctCumplimiento}% de cuotas al día` };
   }
+}
+
+function prestamoEstadoUI(estado) {
+  const map = {
+    Activo: { badgeClass: 'bg-blu', lineClass: 'lblue' },
+    Atrasado: { badgeClass: 'bg-red', lineClass: 'lred' },
+    Pagado: { badgeClass: 'bg-grn', lineClass: 'lgrn' },
+    Ejecutado: { badgeClass: 'bg-vio', lineClass: 'lvio' },
+    Cancelado: { badgeClass: 'bg-muted', lineClass: 'lmuted' },
+    Pendiente: { badgeClass: 'bg-yel', lineClass: 'lgold' }
+  };
+  return map[estado] || { badgeClass: 'bg-muted', lineClass: 'lmuted' };
 }
 
 /* =====================================================
@@ -3539,7 +3554,10 @@ async function openClienteDetail(id) {
 
   if (!cliente) { toast('Cliente no encontrado'); goBack(); return; }
 
-  const misPrestamos = prestamos.filter(p => p.clienteId === id);
+  const ordenPrestamoEstado = { Atrasado: 1, Activo: 2, Pendiente: 3, Pagado: 4, Ejecutado: 5, Cancelado: 6 };
+  const fechaOrdenPrestamo = p => new Date(p.fecha || p.createdAt || p.fechaInicio || 0).getTime() || 0;
+  const misPrestamos = prestamos.filter(p => p.clienteId === id)
+    .sort((a,b) => (ordenPrestamoEstado[a.estado] || 7) - (ordenPrestamoEstado[b.estado] || 7) || fechaOrdenPrestamo(b) - fechaOrdenPrestamo(a));
   const misCuotas    = cuotas.filter(c => c.clienteId === id);
   const totalPrestado = misPrestamos.reduce((s,p) => s+Number(p.monto||0), 0);
   const totalDeuda    = misCuotas.filter(c=>c.estado!=='Pagado').reduce((s,c) => s+Number(c.monto||0), 0);
@@ -3598,18 +3616,20 @@ async function openClienteDetail(id) {
     </div>
 
     <div class="sec-hdr"><div class="sec-title">Préstamos (${misPrestamos.length})</div></div>
-    ${misPrestamos.length ? misPrestamos.map(p => `
-      <div class="li ${p.estado==='Atrasado'?'lred':p.estado==='Pagado'?'lgrn':'lgold'}" onclick="openPrestamoDetail('${esc(p.id)}')">
+    ${misPrestamos.length ? misPrestamos.map(p => {
+      const estadoUI = prestamoEstadoUI(p.estado);
+      return `
+      <div class="li ${estadoUI.lineClass}" onclick="openPrestamoDetail('${esc(p.id)}')">
         <div class="li-row">
           <div><div class="li-name">${p.id}</div><div class="li-sub">${fmtDate(p.fecha)} · ${p.tipo} · ${p.nCuotas} cuotas</div></div>
-          <span class="badge ${p.estado==='Pagado'?'bg-grn':p.estado==='Atrasado'?'bg-red':'bg-blu'}">${p.estado}</span>
+          <span class="badge ${estadoUI.badgeClass}">${p.estado}</span>
         </div>
         <div class="chips">
           <div class="chip">Total<b>${fmtMoney(p.total)}</b></div>
           <div class="chip">Cuota<b>${fmtMoney(p.cuota)}</b></div>
         </div>
-      </div>
-    `).join('') : '<div style="font-size:13px;color:var(--muted);text-align:center;padding:16px">Sin préstamos</div>'}
+      </div>`;
+    }).join('') : '<div style="font-size:13px;color:var(--muted);text-align:center;padding:16px">Sin préstamos</div>'}
 
     <div class="sec-hdr" style="margin-top:4px"><div class="sec-title">Historial de pagos (${pagosHistorial.length})</div></div>
     <div class="card" style="padding:10px 14px">
@@ -3647,14 +3667,14 @@ async function openPrestamoDetail(id) {
   const pagadas   = cuotas.filter(c=>c.estado==='Pagado').length;
   const pct       = cuotas.length ? Math.round(pagadas/cuotas.length*100) : 0;
   const pbarCls   = pct===100 ? 'pg' : prestamo.estado==='Atrasado' ? 'pr' : 'py';
-  const badgeMap  = {Activo:'bg-blu',Atrasado:'bg-red',Pagado:'bg-grn'};
+  const estadoUI  = prestamoEstadoUI(prestamo.estado);
 
   const el = document.getElementById('pg-prestamo-detail');
   el.innerHTML = `<div class="fadeIn">
     <div class="card">
       <div class="li-row">
         <div><div style="font-size:18px;font-weight:900">${esc(prestamo.clienteNombre)}</div><div class="li-sub">${prestamo.id} · ${fmtDate(prestamo.fecha)}</div></div>
-        <span class="badge ${badgeMap[prestamo.estado]||'bg-muted'}">${prestamo.estado}</span>
+        <span class="badge ${estadoUI.badgeClass}">${prestamo.estado}</span>
       </div>
       <div class="pbar" style="margin-top:12px"><div class="pbar-fill ${pbarCls}" style="width:${pct}%"></div></div>
       <div style="font-size:11px;color:var(--muted);margin-top:5px;text-align:right">${pagadas}/${cuotas.length} cuotas pagadas (${pct}%)</div>
@@ -3873,7 +3893,7 @@ async function confirmarPago(metodo) {
 
   closeSheet();
 
-  if (['hoy','atrasadas','cobros','alertas'].includes(curPage)) {
+  if (['hoy','atrasadas','cobros','alertas','prestamos'].includes(curPage)) {
     const el = document.getElementById('li-' + CSS.escape(cuotaId));
     if (el) { el.style.opacity='.4'; el.style.transition='opacity .4s'; setTimeout(()=>el.remove(),400); }
     await renderPage(curPage);
