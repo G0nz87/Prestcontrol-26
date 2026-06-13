@@ -2224,6 +2224,7 @@ function alertaCuotaHTML(c, tipo) {
         <span class="badge ${badge}">${tipo === 'red' ? 'Vencida' : 'Pendiente'}</span>
       </div>
     </div>
+    <button class="btn btn-grn btn-sm" style="margin-top:10px" onclick="event.stopPropagation();abrirPago('${esc(c.id)}')">Pagar</button>
   </div>`;
 }
 
@@ -3865,13 +3866,14 @@ async function confirmarPago(metodo) {
 
   // 4. Sync estado préstamo
   await syncEstadoPrestamo(c.prestamoId);
+  await updateBadges();
 
   // 5. Drive — PUSH INMEDIATO para que aparezca en otros dispositivos al instante
   pushInmediato();
 
   closeSheet();
 
-  if (['hoy','atrasadas','cobros'].includes(curPage)) {
+  if (['hoy','atrasadas','cobros','alertas'].includes(curPage)) {
     const el = document.getElementById('li-' + CSS.escape(cuotaId));
     if (el) { el.style.opacity='.4'; el.style.transition='opacity .4s'; setTimeout(()=>el.remove(),400); }
     await renderPage(curPage);
