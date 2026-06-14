@@ -958,6 +958,93 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
   </div>
 </div>
 
+<!-- SHEET: PIN ADMINISTRADOR LOCAL -->
+<div class="sheet" id="sh-pin-admin">
+  <div class="sheet-handle"></div>
+  <div class="sheet-hdr">
+    <div class="sheet-title" id="pin-admin-title">PIN administrador</div>
+    <button class="icon-btn" onclick="closeSheet()">×</button>
+  </div>
+  <div class="sheet-body">
+    <div id="pin-admin-info" style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:16px"></div>
+    <div class="field">
+      <label class="lbl">PIN *</label>
+      <div class="pass-wrap">
+        <input class="inp" id="pin-admin-input" type="password" inputmode="numeric" maxlength="8"
+          placeholder="4 a 8 dígitos" autocomplete="off"
+          onkeydown="if(event.key==='Enter') confirmarPinAdmin()">
+        <button class="eye-btn" type="button" onclick="toggleEye('pin-admin-input',this)" tabindex="-1" title="Ver PIN"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
+    </div>
+    <div class="field" id="pin-admin-confirm-wrap" style="display:none">
+      <label class="lbl">Repetir PIN *</label>
+      <input class="inp" id="pin-admin-confirm" type="password" inputmode="numeric" maxlength="8"
+        placeholder="Repetí el PIN" autocomplete="off"
+        onkeydown="if(event.key==='Enter') confirmarPinAdmin()">
+    </div>
+    <div class="login-err" id="pin-admin-error" style="margin-bottom:12px"></div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:14px">
+      El PIN se protege localmente con PBKDF2 y no se guarda en texto plano ni se envía a Firebase.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button class="btn btn-ghost" onclick="closeSheet()">Cancelar</button>
+      <button class="btn btn-gold" id="pin-admin-submit" onclick="confirmarPinAdmin()">Validar</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHEET: EDICION DE PRESTAMO (FASE A, SIN GUARDADO) -->
+<div class="sheet" id="sh-editar-prestamo">
+  <div class="sheet-handle"></div>
+  <div class="sheet-hdr">
+    <div>
+      <div class="sheet-title">Editar préstamo</div>
+      <div id="edit-pre-id" style="font-size:12px;color:var(--muted);margin-top:3px"></div>
+    </div>
+    <button class="icon-btn" onclick="closeSheet()">×</button>
+  </div>
+  <div class="sheet-body">
+    <div id="edit-pre-warning" style="display:none;background:var(--redBg);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:12px;font-size:13px;line-height:1.5;color:var(--red);margin-bottom:14px"></div>
+    <div id="edit-pre-info" style="background:var(--goldBg);border:1px solid rgba(59,130,246,.15);border-radius:12px;padding:12px;font-size:12px;line-height:1.5;color:var(--muted);margin-bottom:14px"></div>
+    <div class="inp-row">
+      <div class="field">
+        <label class="lbl">Monto prestado</label>
+        <input class="inp" id="edit-pre-monto" type="number" disabled>
+      </div>
+      <div class="field">
+        <label class="lbl">Interés por cuota (%)</label>
+        <input class="inp" id="edit-pre-interes" type="number" disabled>
+      </div>
+    </div>
+    <div class="inp-row">
+      <div class="field">
+        <label class="lbl">N° de cuotas</label>
+        <input class="inp" id="edit-pre-ncuotas" type="number" disabled>
+      </div>
+      <div class="field">
+        <label class="lbl">Frecuencia</label>
+        <select class="inp" id="edit-pre-tipo" disabled>
+          <option value="Mensual">Mensual</option>
+          <option value="Semanal">Semanal</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label class="lbl">Fecha inicial</label>
+      <input class="inp" id="edit-pre-fecha" type="date" disabled>
+    </div>
+    <div class="field">
+      <label class="lbl">Prenda / Garantía</label>
+      <input class="inp" id="edit-pre-prenda" disabled>
+    </div>
+    <div class="field">
+      <label class="lbl">Notas</label>
+      <input class="inp" id="edit-pre-notas" disabled>
+    </div>
+    <button class="btn btn-ghost btn-full" onclick="closeSheet()">Cerrar</button>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -3074,6 +3161,7 @@ function loanItemHTML(p, todasCuotas) {
   const pct = misCuotas.length ? Math.round(pagadas/misCuotas.length*100) : 0;
   const pbarCls = pct===100 ? 'pg' : p.estado==='Atrasado' ? 'pr' : 'py';
   const isOpen = loanExpanded === p.id;
+  const puedeEditar = !p._deleted && ['Activo', 'Atrasado'].includes(p.estado);
 
   const cuotasHTML = misCuotas.map(c => {
     const stMap={Pagado:'cpag',Pendiente:'cpen',Atrasado:'catr'};
@@ -3126,7 +3214,10 @@ function loanItemHTML(p, todasCuotas) {
     <div class="loan-cuotas${isOpen?' on':''}" id="lc-${esc(p.id)}">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <span style="font-size:12px;font-weight:700;color:var(--muted)">CUOTAS (${misCuotas.length})</span>
-        <button class="btn btn-sm btn-red" onclick="event.stopPropagation();confirmarBorrarPrestamo('${esc(p.id)}')">🗑️ Eliminar</button>
+        <div style="display:flex;gap:6px">
+          ${puedeEditar ? `<button class="btn btn-sm btn-gold" onclick="event.stopPropagation();solicitarEdicionPrestamo('${esc(p.id)}')">Editar préstamo</button>` : ''}
+          <button class="btn btn-sm btn-red" onclick="event.stopPropagation();confirmarBorrarPrestamo('${esc(p.id)}')">🗑️ Eliminar</button>
+        </div>
       </div>
       ${misCuotas.length ? cuotasHTML : '<div style="font-size:13px;color:var(--muted);text-align:center">Sin cuotas generadas</div>'}
     </div>
@@ -3685,6 +3776,7 @@ async function openPrestamoDetail(id) {
   const pct       = cuotas.length ? Math.round(pagadas/cuotas.length*100) : 0;
   const pbarCls   = pct===100 ? 'pg' : prestamo.estado==='Atrasado' ? 'pr' : 'py';
   const estadoUI  = prestamoEstadoUI(prestamo.estado);
+  const puedeEditar = !prestamo._deleted && ['Activo', 'Atrasado'].includes(prestamo.estado);
 
   const el = document.getElementById('pg-prestamo-detail');
   el.innerHTML = `<div class="fadeIn">
@@ -3712,10 +3804,195 @@ async function openPrestamoDetail(id) {
     </div>
     <button class="btn btn-red btn-full" style="margin-bottom:10px" onclick="confirmarBorrarPrestamo('${esc(id)}')">🗑️ Eliminar préstamo</button>
     <button class="btn btn-ghost btn-full" style="margin-bottom:14px" onclick="imprimirComprobantePrestamo('${esc(id)}')">🖨️ Comprobante del Préstamo</button>
+    ${puedeEditar ? `<button class="btn btn-gold btn-full" style="margin-bottom:14px" onclick="solicitarEdicionPrestamo('${esc(id)}')">Editar préstamo</button>` : ''}
 
     <div class="sec-hdr"><div class="sec-title">Cuotas (${cuotas.length})</div></div>
     ${cuotas.map(c => cuotaDetailItemHTML(c, prestamo)).join('')}
   </div>`;
+}
+
+/* =====================================================
+   EDICION SEGURA DE PRESTAMOS — FASE A
+   PIN local + flujo informativo, sin persistir cambios.
+===================================================== */
+const PIN_ADMIN_ITERACIONES = 210000;
+let _pinAdminModo = 'validar';
+let _editarPrestamoId = null;
+let _prestamoEdicionAutorizado = null;
+
+function pinAdminConfigKey() {
+  return `admin_pin_${currentUser || 'default'}`;
+}
+
+function bytesToBase64(bytes) {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function base64ToBytes(value) {
+  return Uint8Array.from(atob(value), c => c.charCodeAt(0));
+}
+
+async function derivarHashPinAdmin(pin, salt, iterations = PIN_ADMIN_ITERACIONES) {
+  if (!globalThis.crypto?.subtle) throw new Error('Web Crypto no disponible');
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(pin),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  const bits = await crypto.subtle.deriveBits({
+    name: 'PBKDF2',
+    salt,
+    iterations,
+    hash: 'SHA-256'
+  }, key, 256);
+  return new Uint8Array(bits);
+}
+
+function hashesIguales(a, b) {
+  if (a.length !== b.length) return false;
+  let diferencia = 0;
+  for (let i = 0; i < a.length; i++) diferencia |= a[i] ^ b[i];
+  return diferencia === 0;
+}
+
+async function solicitarEdicionPrestamo(id) {
+  const prestamo = await dbGet('prestamos', id);
+  if (!prestamo) { toast('Préstamo no encontrado'); return; }
+  if (prestamo._deleted || ESTADOS_PRESTAMO_NO_COBRABLE.includes(prestamo.estado)) {
+    toast('Este préstamo está cerrado y no se puede editar');
+    return;
+  }
+
+  _editarPrestamoId = id;
+  const config = await getGlobalConfig(pinAdminConfigKey()).catch(() => null);
+  const pinConfigurado = Boolean(config?.salt && config?.hash);
+  _pinAdminModo = pinConfigurado ? 'validar' : 'crear';
+
+  document.getElementById('pin-admin-input').value = '';
+  document.getElementById('pin-admin-confirm').value = '';
+  document.getElementById('pin-admin-error').classList.remove('on');
+  document.getElementById('pin-admin-confirm-wrap').style.display = pinConfigurado ? 'none' : '';
+  document.getElementById('pin-admin-title').textContent = pinConfigurado
+    ? 'Validar PIN administrador'
+    : 'Crear PIN administrador';
+  document.getElementById('pin-admin-info').textContent = pinConfigurado
+    ? 'Ingresá tu PIN local para acceder a la edición segura del préstamo.'
+    : 'Configurá un PIN local de 4 a 8 dígitos. Se solicitará antes de editar préstamos.';
+  document.getElementById('pin-admin-submit').textContent = pinConfigurado ? 'Validar' : 'Crear PIN';
+
+  openSheet('sh-pin-admin');
+  setTimeout(() => document.getElementById('pin-admin-input')?.focus(), 150);
+}
+
+async function confirmarPinAdmin() {
+  const pin = document.getElementById('pin-admin-input').value;
+  const confirmacion = document.getElementById('pin-admin-confirm').value;
+  const errEl = document.getElementById('pin-admin-error');
+  const btn = document.getElementById('pin-admin-submit');
+  if (btn.disabled) return;
+  const mostrarError = mensaje => {
+    errEl.textContent = mensaje;
+    errEl.classList.add('on');
+  };
+
+  errEl.classList.remove('on');
+  if (!/^\d{4,8}$/.test(pin)) {
+    mostrarError('El PIN debe tener entre 4 y 8 dígitos');
+    return;
+  }
+  if (_pinAdminModo === 'crear' && pin !== confirmacion) {
+    mostrarError('Los PIN no coinciden');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = _pinAdminModo === 'crear' ? 'Creando...' : 'Validando...';
+  try {
+    if (_pinAdminModo === 'crear') {
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const hash = await derivarHashPinAdmin(pin, salt);
+      await setGlobalConfig(pinAdminConfigKey(), {
+        version: 1,
+        algorithm: 'PBKDF2-SHA256',
+        iterations: PIN_ADMIN_ITERACIONES,
+        salt: bytesToBase64(salt),
+        hash: bytesToBase64(hash),
+        creadoEn: new Date().toISOString()
+      });
+      toast('PIN administrador creado');
+    } else {
+      const config = await getGlobalConfig(pinAdminConfigKey());
+      if (!config?.salt || !config?.hash) throw new Error('Configuración de PIN inválida');
+      const hash = await derivarHashPinAdmin(
+        pin,
+        base64ToBytes(config.salt),
+        Number(config.iterations) || PIN_ADMIN_ITERACIONES
+      );
+      if (!hashesIguales(hash, base64ToBytes(config.hash))) {
+        mostrarError('PIN incorrecto');
+        document.getElementById('pin-admin-input').value = '';
+        document.getElementById('pin-admin-input').focus();
+        return;
+      }
+    }
+
+    document.getElementById('pin-admin-input').value = '';
+    document.getElementById('pin-admin-confirm').value = '';
+    _prestamoEdicionAutorizado = _editarPrestamoId;
+    await abrirEdicionPrestamoInformativa(_editarPrestamoId);
+  } catch(e) {
+    console.warn('PIN administrador:', e);
+    mostrarError('No se pudo validar el PIN en este dispositivo');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = _pinAdminModo === 'crear' ? 'Crear PIN' : 'Validar';
+  }
+}
+
+async function abrirEdicionPrestamoInformativa(id) {
+  if (!id || _prestamoEdicionAutorizado !== id) {
+    closeSheet();
+    toast('Validá el PIN administrador para continuar');
+    return;
+  }
+  _prestamoEdicionAutorizado = null;
+
+  const [prestamo, cuotas] = await Promise.all([
+    dbGet('prestamos', id),
+    dbAll('cuotas')
+  ]);
+  if (!prestamo) { closeSheet(); toast('Préstamo no encontrado'); return; }
+  if (prestamo._deleted || ESTADOS_PRESTAMO_NO_COBRABLE.includes(prestamo.estado)) {
+    closeSheet();
+    toast('Este préstamo está cerrado y no se puede editar');
+    return;
+  }
+
+  const pagadas = cuotas.filter(c => c.prestamoId === id && !c._deleted && c.estado === 'Pagado').length;
+  const warning = document.getElementById('edit-pre-warning');
+  document.getElementById('edit-pre-id').textContent = `${prestamo.id} · ${prestamo.clienteNombre || ''}`;
+  warning.style.display = pagadas ? '' : 'none';
+  warning.textContent = pagadas
+    ? 'Este préstamo ya tiene pagos registrados. No se puede modificar monto, fecha ni cuotas.'
+    : '';
+  document.getElementById('edit-pre-info').textContent = pagadas
+    ? 'Fase A activa: la edición financiera permanece bloqueada. Prenda y notas se habilitarán en una fase posterior.'
+    : 'PIN validado. El préstamo no tiene cuotas pagadas y podrá admitir edición financiera en la Fase B. En esta fase los campos son solo informativos y no se guardan cambios.';
+
+  const interesPorCuota = prestamo.interesPorCuota != null
+    ? prestamo.interesPorCuota
+    : round2(Number(prestamo.interes || 0) * 100 / Math.max(Number(prestamo.nCuotas || 1), 1));
+  document.getElementById('edit-pre-monto').value = prestamo.monto || '';
+  document.getElementById('edit-pre-interes').value = interesPorCuota;
+  document.getElementById('edit-pre-ncuotas').value = prestamo.nCuotas || '';
+  document.getElementById('edit-pre-tipo').value = prestamo.tipo || 'Mensual';
+  document.getElementById('edit-pre-fecha').value = prestamo.fecha ? String(prestamo.fecha).slice(0, 10) : '';
+  document.getElementById('edit-pre-prenda').value = prestamo.prenda || '';
+  document.getElementById('edit-pre-notas').value = prestamo.notas || '';
+
+  openSheet('sh-editar-prestamo');
 }
 
 function cuotaDetailItemHTML(c, prestamo) {
