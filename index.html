@@ -993,7 +993,7 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
   </div>
 </div>
 
-<!-- SHEET: EDICION DE PRESTAMO (FASE A, SIN GUARDADO) -->
+<!-- SHEET: EDICION SEGURA DE PRESTAMO -->
 <div class="sheet" id="sh-editar-prestamo">
   <div class="sheet-handle"></div>
   <div class="sheet-hdr">
@@ -1009,17 +1009,17 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
     <div class="inp-row">
       <div class="field">
         <label class="lbl">Monto prestado</label>
-        <input class="inp" id="edit-pre-monto" type="number" disabled>
+        <input class="inp" id="edit-pre-monto" type="number" min="1" disabled>
       </div>
       <div class="field">
         <label class="lbl">Interés por cuota (%)</label>
-        <input class="inp" id="edit-pre-interes" type="number" disabled>
+        <input class="inp" id="edit-pre-interes" type="number" min="0" max="100" step="0.1" disabled>
       </div>
     </div>
     <div class="inp-row">
       <div class="field">
         <label class="lbl">N° de cuotas</label>
-        <input class="inp" id="edit-pre-ncuotas" type="number" disabled>
+        <input class="inp" id="edit-pre-ncuotas" type="number" min="1" max="360" disabled>
       </div>
       <div class="field">
         <label class="lbl">Frecuencia</label>
@@ -1041,7 +1041,11 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
       <label class="lbl">Notas</label>
       <input class="inp" id="edit-pre-notas" disabled>
     </div>
-    <button class="btn btn-ghost btn-full" onclick="closeSheet()">Cerrar</button>
+    <div class="login-err" id="edit-pre-error" style="margin-bottom:12px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button class="btn btn-ghost" onclick="closeSheet()">Cancelar</button>
+      <button class="btn btn-gold" id="edit-pre-save" onclick="guardarEdicionPrestamo()">Guardar cambios</button>
+    </div>
   </div>
 </div>
 
@@ -3758,9 +3762,9 @@ async function openClienteDetail(id) {
 /* =====================================================
    PRÉSTAMO DETAIL
 ===================================================== */
-async function openPrestamoDetail(id) {
+async function openPrestamoDetail(id, mantenerNavegacion = false) {
   document.getElementById('pg-prestamo-detail').innerHTML = '<div class="loader"><div class="spin"></div></div>';
-  goDetail('prestamo-detail');
+  if (!mantenerNavegacion) goDetail('prestamo-detail');
   document.getElementById('hdr-title').textContent = '💵 Detalle Préstamo';
 
   const [prestamo, todasCuotas] = await Promise.all([
@@ -3812,13 +3816,14 @@ async function openPrestamoDetail(id) {
 }
 
 /* =====================================================
-   EDICION SEGURA DE PRESTAMOS — FASE A
-   PIN local + flujo informativo, sin persistir cambios.
+   EDICION SEGURA DE PRESTAMOS
+   PIN local + edición condicionada por pagos y estado.
 ===================================================== */
 const PIN_ADMIN_ITERACIONES = 210000;
 let _pinAdminModo = 'validar';
 let _editarPrestamoId = null;
 let _prestamoEdicionAutorizado = null;
+let _editarPrestamoPermiteFinanzas = false;
 
 function pinAdminConfigKey() {
   return `admin_pin_${currentUser || 'default'}`;
@@ -3971,15 +3976,18 @@ async function abrirEdicionPrestamoInformativa(id) {
   }
 
   const pagadas = cuotas.filter(c => c.prestamoId === id && !c._deleted && c.estado === 'Pagado').length;
+  _editarPrestamoPermiteFinanzas = pagadas === 0;
   const warning = document.getElementById('edit-pre-warning');
+  const error = document.getElementById('edit-pre-error');
   document.getElementById('edit-pre-id').textContent = `${prestamo.id} · ${prestamo.clienteNombre || ''}`;
+  error.classList.remove('on');
   warning.style.display = pagadas ? '' : 'none';
   warning.textContent = pagadas
     ? 'Este préstamo ya tiene pagos registrados. No se puede modificar monto, fecha ni cuotas.'
     : '';
   document.getElementById('edit-pre-info').textContent = pagadas
-    ? 'Fase A activa: la edición financiera permanece bloqueada. Prenda y notas se habilitarán en una fase posterior.'
-    : 'PIN validado. El préstamo no tiene cuotas pagadas y podrá admitir edición financiera en la Fase B. En esta fase los campos son solo informativos y no se guardan cambios.';
+    ? 'Solo podés modificar la prenda o garantía y las notas.'
+    : 'El préstamo no tiene cuotas pagadas. Podés modificar sus condiciones financieras; las cuotas se recalcularán al guardar.';
 
   const interesPorCuota = prestamo.interesPorCuota != null
     ? prestamo.interesPorCuota
@@ -3992,7 +4000,173 @@ async function abrirEdicionPrestamoInformativa(id) {
   document.getElementById('edit-pre-prenda').value = prestamo.prenda || '';
   document.getElementById('edit-pre-notas').value = prestamo.notas || '';
 
+  ['edit-pre-monto','edit-pre-interes','edit-pre-ncuotas','edit-pre-tipo','edit-pre-fecha']
+    .forEach(campoId => { document.getElementById(campoId).disabled = !_editarPrestamoPermiteFinanzas; });
+  document.getElementById('edit-pre-prenda').disabled = false;
+  document.getElementById('edit-pre-notas').disabled = false;
+  document.getElementById('edit-pre-save').disabled = false;
+
   openSheet('sh-editar-prestamo');
+}
+
+async function guardarEdicionPrestamo() {
+  const id = _editarPrestamoId;
+  const errEl = document.getElementById('edit-pre-error');
+  const btn = document.getElementById('edit-pre-save');
+  const mostrarError = mensaje => {
+    errEl.textContent = mensaje;
+    errEl.classList.add('on');
+  };
+
+  if (activeSheet !== 'sh-editar-prestamo' || !id || btn.disabled) return;
+  errEl.classList.remove('on');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  try {
+    const [prestamo, cuotas, todasCuotas] = await Promise.all([
+      dbGet('prestamos', id),
+      dbAll('cuotas'),
+      dbAllIncludeDeleted('cuotas')
+    ]);
+    if (!prestamo) throw new Error('Préstamo no encontrado');
+    if (prestamo._deleted || ESTADOS_PRESTAMO_NO_COBRABLE.includes(prestamo.estado)) {
+      throw new Error('Este préstamo está cerrado y no se puede editar');
+    }
+
+    const cuotasPrestamo = cuotas.filter(c => c.prestamoId === id && !c._deleted);
+    const pagadas = cuotasPrestamo.filter(c => c.estado === 'Pagado');
+    const prenda = document.getElementById('edit-pre-prenda').value.trim();
+    const notas = document.getElementById('edit-pre-notas').value.trim();
+    const nowISO = new Date().toISOString();
+
+    if (pagadas.length) {
+      if (prenda === (prestamo.prenda || '') && notas === (prestamo.notas || '')) {
+        toast('No hay cambios para guardar');
+        return;
+      }
+      const actualizado = { ...prestamo, prenda, notas, updatedAt: nowISO };
+      await dbPut('prestamos', actualizado);
+      await addToSyncQueue('prestamos', id, actualizado, 'upsert');
+      await logBitacora('edicion',
+        `Préstamo editado: ${prestamo.clienteNombre || id} · actualización de prenda/notas`,
+        id
+      );
+    } else {
+      const monto = Number(document.getElementById('edit-pre-monto').value);
+      const interesPorCuota = Number(document.getElementById('edit-pre-interes').value);
+      const nCuotas = Number.parseInt(document.getElementById('edit-pre-ncuotas').value, 10);
+      const tipo = document.getElementById('edit-pre-tipo').value;
+      const fechaRaw = document.getElementById('edit-pre-fecha').value;
+
+      if (!monto || monto <= 0) throw new Error('Ingresá un monto válido');
+      if (!Number.isFinite(interesPorCuota) || interesPorCuota < 0) throw new Error('Ingresá un interés válido');
+      if (!nCuotas || nCuotas < 1 || nCuotas > 360) throw new Error('Ingresá entre 1 y 360 cuotas');
+      if (!['Mensual', 'Semanal'].includes(tipo)) throw new Error('Seleccioná una frecuencia válida');
+      if (!fechaRaw) throw new Error('Ingresá la fecha inicial');
+
+      const fecha = new Date(fechaRaw + 'T12:00:00');
+      if (Number.isNaN(fecha.getTime())) throw new Error('Ingresá una fecha válida');
+      const { interesTotal, total, cuotaMonto, ganancia } =
+        window.prestamoService.calcularPlanPagos(monto, interesPorCuota, nCuotas);
+      const actualizado = {
+        ...prestamo,
+        monto,
+        fecha: fecha.toISOString(),
+        interes: interesTotal,
+        interesPorCuota,
+        tipo,
+        nCuotas,
+        total,
+        cuota: cuotaMonto,
+        ganancia,
+        prenda,
+        notas,
+        updatedAt: nowISO
+      };
+
+      const existentesPorNumero = new Map();
+      cuotasPrestamo
+        .sort((a,b) => a.nro - b.nro)
+        .forEach(c => { if (!existentesPorNumero.has(Number(c.nro))) existentesPorNumero.set(Number(c.nro), c); });
+      const idsUsados = new Set();
+      let maxIdCuota = 0;
+      todasCuotas.forEach(c => {
+        const match = String(c.id || '').match(/^C-(\d+)$/);
+        if (match) maxIdCuota = Math.max(maxIdCuota, Number(match[1]));
+      });
+
+      const cuotasActualizadas = [];
+      const hoy = today();
+      for (let nro = 1; nro <= nCuotas; nro++) {
+        const existente = existentesPorNumero.get(nro);
+        const vencimiento = window.prestamoService.calcularVencimiento(fecha, tipo, nro);
+        const estado = parseDate(vencimiento) < hoy ? 'Atrasado' : 'Pendiente';
+        const cuota = existente
+          ? {
+              ...existente,
+              prestamoId: id,
+              clienteId: prestamo.clienteId,
+              clienteNombre: prestamo.clienteNombre,
+              nro,
+              fechaVenc: vencimiento.toISOString(),
+              monto: cuotaMonto,
+              estado,
+              fechaPago: null,
+              metodo: null,
+              updatedAt: nowISO
+            }
+          : {
+              id: `C-${String(++maxIdCuota).padStart(3, '0')}`,
+              prestamoId: id,
+              clienteId: prestamo.clienteId,
+              clienteNombre: prestamo.clienteNombre,
+              nro,
+              fechaVenc: vencimiento.toISOString(),
+              monto: cuotaMonto,
+              estado,
+              fechaPago: null,
+              metodo: null,
+              notas: '',
+              creadoEn: nowISO,
+              updatedAt: nowISO
+            };
+        idsUsados.add(cuota.id);
+        cuotasActualizadas.push(cuota);
+      }
+
+      const cuotasSobrantes = cuotasPrestamo.filter(c => !idsUsados.has(c.id));
+      actualizado.estado = cuotasActualizadas.some(c => c.estado === 'Atrasado') ? 'Atrasado' : 'Activo';
+
+      await dbPut('prestamos', actualizado);
+      await addToSyncQueue('prestamos', id, actualizado, 'upsert');
+      for (const cuota of cuotasActualizadas) {
+        await dbPut('cuotas', cuota);
+        await addToSyncQueue('cuotas', cuota.id, cuota, 'upsert');
+      }
+      for (const cuota of cuotasSobrantes) {
+        await dbSoftDelete('cuotas', cuota.id);
+        await addToSyncQueue('cuotas', cuota.id, { id: cuota.id, _deleted: true }, 'delete');
+      }
+
+      await logBitacora('edicion',
+        `Préstamo editado: ${prestamo.clienteNombre || id} · ${fmtMoney(prestamo.monto)} → ${fmtMoney(monto)} · ${prestamo.nCuotas} → ${nCuotas} cuotas · ${prestamo.tipo} → ${tipo}`,
+        id
+      );
+    }
+
+    closeSheet();
+    toast('Préstamo actualizado correctamente');
+    await renderPrestamos();
+    await updateBadges();
+    await renderDashboard();
+    await openPrestamoDetail(id, true);
+  } catch(e) {
+    mostrarError(e.message || 'No se pudo guardar la edición');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Guardar cambios';
+  }
 }
 
 function cuotaDetailItemHTML(c, prestamo) {
