@@ -2225,6 +2225,7 @@ async function calcularAlertas() {
 function alertaCuotaHTML(c, tipo) {
   const cls = tipo === 'red' ? 'lred' : 'lgold';
   const badge = tipo === 'red' ? 'bg-red' : 'bg-yel';
+  const esCobrable = !ESTADOS_CUOTA_NO_COBRABLE.includes(c.estado);
   const detalle = tipo === 'red'
     ? `${c._dias} día${c._dias!==1?'s':''} de atraso`
     : `Vence ${fmtDate(c.fechaVenc)}`;
@@ -2239,10 +2240,10 @@ function alertaCuotaHTML(c, tipo) {
         <span class="badge ${badge}">${tipo === 'red' ? 'Vencida' : 'Pendiente'}</span>
       </div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:10px">
+    ${esCobrable ? `<div style="display:flex;gap:8px;margin-top:10px">
       <button class="btn btn-grn btn-sm" onclick="event.stopPropagation();abrirPago('${esc(c.id)}')">Pagar</button>
       <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();enviarWACuota('${esc(c.id)}')">WA</button>
-    </div>
+    </div>` : ''}
   </div>`;
 }
 
@@ -2884,6 +2885,7 @@ async function renderAtrasadas() {
 function cuotaItemHTML(c, tipo) {
   const bCls = tipo === 'atr' ? 'bg-red' : 'bg-yel';
   const lCls = tipo === 'atr' ? 'lred' : 'lgold';
+  const esCobrable = !ESTADOS_CUOTA_NO_COBRABLE.includes(c.estado);
   const info = tipo === 'atr'
     ? `${c._dias} día${c._dias>1?'s':''} de atraso`
     : `Vence hoy`;
@@ -2897,7 +2899,10 @@ function cuotaItemHTML(c, tipo) {
       <div style="font-size:12px;color:var(--muted)">A cobrar</div>
       <div class="li-amt">${fmtMoney(c.monto)}</div>
     </div>
-    <button class="btn btn-gold btn-full" style="margin-top:10px" onclick="abrirPago('${esc(c.id)}')">💵 Marcar Pagada</button>
+    ${esCobrable ? `<div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-gold btn-sm" style="flex:1" onclick="abrirPago('${esc(c.id)}')">💵 Marcar Pagada</button>
+      <button class="btn btn-ghost btn-sm" onclick="enviarWACuota('${esc(c.id)}')">💬 WA</button>
+    </div>` : ''}
   </div>`;
 }
 
@@ -3073,12 +3078,18 @@ function loanItemHTML(p, todasCuotas) {
   const cuotasHTML = misCuotas.map(c => {
     const stMap={Pagado:'cpag',Pendiente:'cpen',Atrasado:'catr'};
     const bMap={Pagado:'bg-grn',Pendiente:'bg-yel',Atrasado:'bg-red'};
-    const pagBtn = c.estado !== 'Pagado'
-      ? `<button class="btn btn-grn btn-sm" style="margin-top:6px" onclick="event.stopPropagation();abrirPago('${esc(c.id)}')">✅ Pagar</button>`
-      : `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+    const esCobrable = esCuotaCobrable(c, new Map([[p.id, p]]));
+    const pagBtn = esCobrable
+      ? `<div style="display:flex;gap:6px;margin-top:6px">
+          <button class="btn btn-grn btn-sm" style="flex:1" onclick="event.stopPropagation();abrirPago('${esc(c.id)}')">✅ Pagar</button>
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();enviarWACuota('${esc(c.id)}')">💬 WA</button>
+        </div>`
+      : c.estado === 'Pagado'
+        ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
           <span style="font-size:11px;color:var(--grn)">✅ ${fmtDate(c.fechaPago)} · ${esc(c.metodo||'')}</span>
           <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px" onclick="event.stopPropagation();imprimirComprobante('${esc(c.id)}')">🎫 Ver ticket</button>
-        </div>`;
+        </div>`
+        : `<div style="font-size:11px;color:var(--muted);margin-top:6px">Cerrada · ${esc(c.estado)}</div>`;
     return `<div class="ci ${stMap[c.estado]||'cpen'}" id="ci-${esc(c.id)}">
       <div class="ci-row">
         <div><div class="ci-n">Cuota ${c.nro}</div><div class="ci-info">Vence: ${fmtDate(c.fechaVenc)}</div></div>
@@ -3132,6 +3143,7 @@ async function renderCuotas() {
   const cuotas = await dbAll('cuotas');
   const prestamos = await dbAll('prestamos');
   const hoy = today();
+  const prestamosPorId = prestamosMap(prestamos);
 
   // Calcular días de atraso
   cuotas.forEach(c => {
@@ -3141,15 +3153,15 @@ async function renderCuotas() {
   });
 
   const counts = {
-    Activas:   cuotas.filter(c=>c.estado!=='Pagado').length,
-    Pendiente: cuotas.filter(c=>c.estado==='Pendiente').length,
-    Atrasado:  cuotas.filter(c=>c.estado==='Atrasado').length
+    Activas:   cuotas.filter(c=>esCuotaCobrable(c, prestamosPorId)).length,
+    Pendiente: cuotas.filter(c=>c.estado==='Pendiente' && esCuotaCobrable(c, prestamosPorId)).length,
+    Atrasado:  cuotas.filter(c=>c.estado==='Atrasado' && esCuotaCobrable(c, prestamosPorId)).length
   };
 
   // Aplicar filtros
   let filtrada;
-  if (cuotaFiltro === 'Activas') filtrada = cuotas.filter(c => c.estado !== 'Pagado');
-  else filtrada = cuotas.filter(c => c.estado === cuotaFiltro);
+  if (cuotaFiltro === 'Activas') filtrada = cuotas.filter(c => esCuotaCobrable(c, prestamosPorId));
+  else filtrada = cuotas.filter(c => c.estado === cuotaFiltro && esCuotaCobrable(c, prestamosPorId));
 
   // Filtro adicional por préstamo
   if (cuotaFiltroPrestamo) {
@@ -3230,15 +3242,17 @@ async function renderCuotas() {
       const lMap = { Pagado:'lgrn', Pendiente:'lgold', Atrasado:'lred' };
       const atrTag = c._diasAtr > 0
         ? `<span class="badge bg-red" style="font-size:9px;margin-left:4px">${c._diasAtr}d</span>` : '';
-      const pagBtn = c.estado !== 'Pagado'
+      const pagBtn = esCuotaCobrable(c, prestamosPorId)
         ? `<div style="display:flex;gap:6px;margin-top:8px">
             <button class="btn btn-grn btn-sm" style="flex:1" onclick="abrirPago('${esc(c.id)}')">✅ Pagar</button>
-            <button class="btn btn-ghost btn-sm" onclick="enviarWACuota('${esc(c.id)}')">💬</button>
+            <button class="btn btn-ghost btn-sm" onclick="enviarWACuota('${esc(c.id)}')">💬 WA</button>
            </div>`
-        : `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px">
+        : c.estado === 'Pagado'
+          ? `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px">
             <span style="font-size:11px;color:var(--grn);flex:1;min-width:140px">✅ ${fmtDate(c.fechaPago)} · ${esc(c.metodo||'')}</span>
             <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px" onclick="imprimirComprobante('${esc(c.id)}')">🎫 Ver ticket</button>
-           </div>`;
+           </div>`
+          : `<div style="font-size:11px;color:var(--muted);margin-top:6px">Cerrada · ${esc(c.estado)}</div>`;
 
       return `<div class="li ${lMap[c.estado]||'lgold'}" id="li-${esc(c.id)}" style="margin-bottom:8px">
         <div class="li-row">
@@ -3700,15 +3714,16 @@ async function openPrestamoDetail(id) {
     <button class="btn btn-ghost btn-full" style="margin-bottom:14px" onclick="imprimirComprobantePrestamo('${esc(id)}')">🖨️ Comprobante del Préstamo</button>
 
     <div class="sec-hdr"><div class="sec-title">Cuotas (${cuotas.length})</div></div>
-    ${cuotas.map(c => cuotaDetailItemHTML(c)).join('')}
+    ${cuotas.map(c => cuotaDetailItemHTML(c, prestamo)).join('')}
   </div>`;
 }
 
-function cuotaDetailItemHTML(c) {
+function cuotaDetailItemHTML(c, prestamo) {
   const stMap = {Pagado:'cpag',Pendiente:'cpen',Atrasado:'catr'};
   const badgeMap = {Pagado:'bg-grn',Pendiente:'bg-yel',Atrasado:'bg-red'};
-  const estadosCerrados = ['Pagado', 'Ejecutada', 'Ejecutado', 'Cancelada', 'Cancelado'];
-  const estaCerrada = estadosCerrados.includes(c.estado);
+  const estaCerrada = ESTADOS_CUOTA_NO_COBRABLE.includes(c.estado)
+    || prestamo?._deleted
+    || ESTADOS_PRESTAMO_NO_COBRABLE.includes(prestamo?.estado);
   let pagBtn = '';
   if (c.estado === 'Pagado') {
     pagBtn = `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
@@ -4147,7 +4162,7 @@ let calSelDay = null;
 async function renderCalendario() {
   const el = document.getElementById('pg-calendario');
   el.innerHTML = '<div class="loader"><div class="spin"></div></div>';
-  const cuotas = await dbAll('cuotas');
+  const [cuotas, prestamos] = await Promise.all([dbAll('cuotas'), dbAll('prestamos')]);
   const hoy = today();
 
   // Build map: 'YYYY-MM-DD' -> [cuotas]
@@ -4159,10 +4174,10 @@ async function renderCalendario() {
     map[key].push(c);
   });
 
-  buildCalendario(el, map, hoy);
+  buildCalendario(el, map, hoy, prestamosMap(prestamos));
 }
 
-function buildCalendario(el, map, hoy) {
+function buildCalendario(el, map, hoy, prestamosPorId) {
   const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const firstDay = new Date(calYear, calMonth, 1);
   const lastDay  = new Date(calYear, calMonth+1, 0);
@@ -4208,9 +4223,14 @@ function buildCalendario(el, map, hoy) {
       <div style="font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:10px">${fmtDate(calSelDay)} — ${qs.length} cuota${qs.length>1?'s':''}</div>
       ${qs.map(c=>{
         const bMap={Pagado:'bg-grn',Pendiente:'bg-yel',Atrasado:'bg-red'};
-        const btn = c.estado!=='Pagado'
-          ? `<button class="btn btn-grn btn-sm" onclick="abrirPago('${esc(c.id)}')">✅ Pagar</button>`
-          : `<span style="font-size:11px;color:var(--grn)">✅ ${fmtDate(c.fechaPago)}</span>`;
+        const btn = esCuotaCobrable(c, prestamosPorId)
+          ? `<div style="display:flex;gap:6px">
+              <button class="btn btn-grn btn-sm" onclick="abrirPago('${esc(c.id)}')">✅ Pagar</button>
+              <button class="btn btn-ghost btn-sm" onclick="enviarWACuota('${esc(c.id)}')">WA</button>
+            </div>`
+          : c.estado === 'Pagado'
+            ? `<span style="font-size:11px;color:var(--grn)">✅ ${fmtDate(c.fechaPago)}</span>`
+            : `<span style="font-size:11px;color:var(--muted)">Cerrada</span>`;
         return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
           <div style="flex:1">
             <div style="font-size:13px;font-weight:800">${esc(c.clienteNombre)}</div>
