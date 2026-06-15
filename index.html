@@ -291,6 +291,37 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 .sri-v{font-size:14px;font-weight:800;font-family:'DM Mono',monospace;color:var(--money);line-height:1.1}
 .sri-l{font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-top:3px}
 
+/* DASHBOARD GLOBAL */
+.dash-global{display:grid;gap:12px}
+.dash-global .dtabs{margin-bottom:0}
+.dash-alerts{display:grid;gap:8px}
+.dash-alerts .abanner{margin-bottom:0;padding:10px 12px;align-items:center}
+.dash-alerts .abanner-ic{font-size:18px}
+.dash-alerts .abanner-t{font-size:12px}
+.dash-alerts .abanner-s{font-size:11px}
+.dash-alerts .btn{margin-top:5px!important;padding:5px 10px;font-size:11px}
+.dash-section{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:13px}
+.dash-section-title{display:flex;align-items:center;gap:7px;margin-bottom:10px;color:var(--muted);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px}
+.dash-grid{display:grid;grid-template-columns:1fr;gap:8px}
+.dash-kpi{min-width:0;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px}
+.dash-kpi-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.35px}
+.dash-kpi-value{margin-top:5px;font-size:18px;font-weight:900;font-family:'DM Mono',monospace;color:var(--money);line-height:1.15;overflow-wrap:anywhere}
+.dash-kpi-meta{margin-top:5px;font-size:10px;color:var(--muted);line-height:1.35}
+.dash-kpi.is-yellow .dash-kpi-value{color:var(--yel)}
+.dash-kpi.is-red .dash-kpi-value{color:var(--red)}
+.dash-kpi.is-green .dash-kpi-value{color:var(--grn)}
+.dash-kpi.is-accent .dash-kpi-value{color:var(--accent)}
+@media (min-width:600px){
+  #pg-dashboard:has(.dash-global){max-width:920px;padding-left:20px;padding-right:20px}
+  .dash-global{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+  .dash-global .dtabs,.dash-alerts{grid-column:1/-1}
+  .dash-alerts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dash-alerts .abanner:only-child{grid-column:1/-1}
+  .dash-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dash-section-operativo,.dash-section-riesgo{grid-column:1/-1}
+  .dash-section-operativo .dash-grid,.dash-section-riesgo .dash-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+
 /* CALENDAR */
 .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .cal-nav-btn{background:var(--card2);border:1px solid var(--border);color:var(--txt);border-radius:8px;padding:7px 13px;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:700}
@@ -2661,104 +2692,50 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
   if (atrasadas>0) urgente+=`<div class="abanner ar"><div class="abanner-ic">🚨</div><div style="flex:1"><div class="abanner-t">${atrasadas} cuota${atrasadas>1?'s':''} con atraso</div><div class="abanner-s">${fmtMoney(mAtr)} en riesgo</div><button class="btn btn-sm" style="background:var(--red);color:#fff;margin-top:8px" onclick="goPage('atrasadas')">Ver →</button></div></div>`;
   if (!cobrarHoy&&!atrasadas) urgente=`<div class="abanner ag"><div class="abanner-ic">✅</div><div><div class="abanner-t">¡Todo al día!</div><div class="abanner-s">Sin cobros urgentes.</div></div></div>`;
 
-  return `<div class="fadeIn">
+  return `<div class="fadeIn dash-global">
     <div class="dtabs">
       <button class="dtab on" onclick="switchDashTab('global')">🌐 Global</button>
       <button class="dtab" onclick="switchDashTab('cliente')">👤 Cliente</button>
       <button class="dtab" onclick="switchDashTab('graficos')">📊 Gráficos</button>
     </div>
-    ${urgente}
-    <div class="srow">
-      <div class="sri"><div class="sri-ic">📅</div><div class="sri-v" style="color:var(--yel)">${cobrarHoy}</div><div class="sri-l">Cobrar Hoy</div></div>
-      <div class="sri"><div class="sri-ic">⚠️</div><div class="sri-v" style="color:var(--red)">${atrasadas}</div><div class="sri-l">Atrasadas</div></div>
-      <div class="sri"><div class="sri-ic">⏳</div><div class="sri-v">${pendientes}</div><div class="sri-l">Pendientes</div></div>
-    </div>
-    <div class="srow">
-      <div class="sri"><div class="sri-ic">✅</div><div class="sri-v" style="color:var(--grn)">${cobradas}</div><div class="sri-l">Cobradas</div></div>
-      <div class="sri"><div class="sri-ic">👥</div><div class="sri-v" style="color:var(--gold)">${clientesActivos}</div><div class="sri-l">Clientes Act.</div></div>
-      <div class="sri"><div class="sri-ic">📋</div><div class="sri-v" style="color:var(--gold)">${prestActivos}</div><div class="sri-l">Préstamos Act.</div></div>
-    </div>
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:10px">
-      <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">💰 Resumen financiero</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div style="text-align:center">
-          <div style="font-size:10px;color:var(--muted)">Capital prestado</div>
-          <div style="font-size:14px;font-weight:900;font-family:'DM Mono',monospace;color:var(--money)">${fmtMoney(totalPrestado)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Capital entregado</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:10px;color:var(--muted)">Ya cobrado</div>
-          <div style="font-size:14px;font-weight:900;font-family:'DM Mono',monospace;color:var(--grn)">${fmtMoney(mCob)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">${pctCobrado}% del total</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:10px;color:var(--muted)">Ganancia real 💵</div>
-          <div style="font-size:14px;font-weight:900;font-family:'DM Mono',monospace;color:var(--grn)">${fmtMoney(gananciaReal)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Interés ya cobrado</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:10px;color:var(--muted)">Ganancia proyectada 📈</div>
-          <div style="font-size:14px;font-weight:900;font-family:'DM Mono',monospace;color:${gananciaReal>=gananciaEsp?'var(--grn)':'var(--yel)'}">${fmtMoney(gananciaEsp)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Interés pendiente: ${fmtMoney(interesPendiente)}</div>
-        </div>
-        ${totalACobrar > 0 ? `
-        <div style="text-align:center">
-          <div style="font-size:10px;color:var(--muted)">Pendiente de cobro</div>
-          <div style="font-size:14px;font-weight:900;font-family:'DM Mono',monospace;color:var(--yel)">${fmtMoney(totalACobrar)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Saldo pendiente</div>
-        </div>` : ''}
-        ${capitalRiesgo > 0 ? `
-        <div style="text-align:center">
-          <div style="font-size:10px;color:var(--muted)">Capital en riesgo ⚠️</div>
-          <div style="font-size:14px;font-weight:900;font-family:'DM Mono',monospace;color:var(--red)">${fmtMoney(capitalRiesgo)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Capital de cuotas vencidas</div>
-        </div>` : ''}
-        <div style="text-align:center">
-          <div style="font-size:10px;color:var(--muted)">Capital recuperado</div>
-          <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--grn)">${fmtMoney(capitalRecuperado)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Capital ya vuelto</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:10px;color:var(--muted)">Capital pendiente</div>
-          <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--yel)">${fmtMoney(capitalPendiente)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Capital por recuperar</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:10px;color:var(--muted)">Capital ejecutado</div>
-          <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--red)">${fmtMoney(capitalEjecutado)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Capital de cuotas ejecutadas</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:10px;color:var(--muted)">Recuperación capital</div>
-          <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--grn)">${recuperacionCapitalPct.toFixed(1)}%</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Recuperado / capital base</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:10px;color:var(--muted)">ROI bruto</div>
-          <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--money)">${roiBrutoCobrado.toFixed(1)}%</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Interés cobrado / capital base</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:10px;color:var(--muted)">Mora real</div>
-          <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:${moraReal>0?'var(--red)':'var(--grn)'}">${moraReal}%</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Vencido / pendiente</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:10px;color:var(--muted)">Cashflow 7 días</div>
-          <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--money)">${fmtMoney(cashflow7)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Próximos cobros</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:10px;color:var(--muted)">Cashflow 30 días</div>
-          <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--money)">${fmtMoney(cashflow30)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Próximos cobros</div>
-        </div>
+    <div class="dash-alerts">${urgente}</div>
+    <section class="dash-section dash-section-operativo">
+      <div class="dash-section-title">📋 Operativo</div>
+      <div class="dash-grid">
+        <div class="dash-kpi is-yellow"><div class="dash-kpi-label">Cobrar hoy</div><div class="dash-kpi-value">${cobrarHoy}</div><div class="dash-kpi-meta">${fmtMoney(mHoy)} programado</div></div>
+        <div class="dash-kpi is-red"><div class="dash-kpi-label">Atrasadas</div><div class="dash-kpi-value">${atrasadas}</div><div class="dash-kpi-meta">${fmtMoney(mAtr)} vencido</div></div>
+        <div class="dash-kpi"><div class="dash-kpi-label">Pendientes</div><div class="dash-kpi-value">${pendientes}</div><div class="dash-kpi-meta">${fmtMoney(totalACobrar)} por cobrar</div></div>
+        <div class="dash-kpi is-accent"><div class="dash-kpi-label">Préstamos activos</div><div class="dash-kpi-value">${prestActivos}</div><div class="dash-kpi-meta">${clientesActivos} clientes activos · ${cobradas} cuotas cobradas</div></div>
       </div>
-    </div>
-    <div class="srow2">
-      <div class="sri"><div class="sri-ic">💸</div><div class="sri-v" style="font-size:12px;color:var(--grn)">${fmtMoney(mCob)}</div><div class="sri-l">Ya Cobrado</div></div>
-      <div class="sri"><div class="sri-ic">📆</div><div class="sri-v">${prox7}</div><div class="sri-l">Próx. 7 días</div></div>
-    </div>
+    </section>
+    <section class="dash-section">
+      <div class="dash-section-title">💼 Cartera</div>
+      <div class="dash-grid">
+        <div class="dash-kpi"><div class="dash-kpi-label">Capital activo</div><div class="dash-kpi-value">${fmtMoney(totalPrestado)}</div><div class="dash-kpi-meta">Capital actualmente prestado</div></div>
+        <div class="dash-kpi is-green"><div class="dash-kpi-label">Capital recuperado</div><div class="dash-kpi-value">${fmtMoney(capitalRecuperado)}</div><div class="dash-kpi-meta">${fmtMoney(mCob)} cobrado total · ${pctCobrado}% del plan</div></div>
+        <div class="dash-kpi is-yellow"><div class="dash-kpi-label">Capital pendiente</div><div class="dash-kpi-value">${fmtMoney(capitalPendiente)}</div><div class="dash-kpi-meta">Capital por recuperar</div></div>
+        <div class="dash-kpi is-red"><div class="dash-kpi-label">Capital ejecutado</div><div class="dash-kpi-value">${fmtMoney(capitalEjecutado)}</div><div class="dash-kpi-meta">Capital de cuotas ejecutadas</div></div>
+        <div class="dash-kpi is-green"><div class="dash-kpi-label">Recuperación capital</div><div class="dash-kpi-value">${recuperacionCapitalPct.toFixed(1)}%</div><div class="dash-kpi-meta">Recuperado / capital base</div></div>
+      </div>
+    </section>
+    <section class="dash-section">
+      <div class="dash-section-title">📈 Rentabilidad</div>
+      <div class="dash-grid">
+        <div class="dash-kpi is-green"><div class="dash-kpi-label">Ganancia real</div><div class="dash-kpi-value">${fmtMoney(gananciaReal)}</div><div class="dash-kpi-meta">Interés ya cobrado</div></div>
+        <div class="dash-kpi ${gananciaReal>=gananciaEsp?'is-green':'is-yellow'}"><div class="dash-kpi-label">Ganancia proyectada</div><div class="dash-kpi-value">${fmtMoney(gananciaEsp)}</div><div class="dash-kpi-meta">Ganancia esperada activa</div></div>
+        <div class="dash-kpi is-yellow"><div class="dash-kpi-label">Interés pendiente</div><div class="dash-kpi-value">${fmtMoney(interesPendiente)}</div><div class="dash-kpi-meta">Interés todavía no cobrado</div></div>
+        <div class="dash-kpi is-accent"><div class="dash-kpi-label">ROI bruto</div><div class="dash-kpi-value">${roiBrutoCobrado.toFixed(1)}%</div><div class="dash-kpi-meta">Interés cobrado / capital base</div></div>
+      </div>
+    </section>
+    <section class="dash-section dash-section-riesgo">
+      <div class="dash-section-title">⚠️ Riesgo y flujo</div>
+      <div class="dash-grid">
+        <div class="dash-kpi ${moraReal>0?'is-red':'is-green'}"><div class="dash-kpi-label">Mora real</div><div class="dash-kpi-value">${moraReal}%</div><div class="dash-kpi-meta">Vencido / pendiente</div></div>
+        <div class="dash-kpi ${capitalRiesgo>0?'is-red':'is-green'}"><div class="dash-kpi-label">Capital en riesgo</div><div class="dash-kpi-value">${fmtMoney(capitalRiesgo)}</div><div class="dash-kpi-meta">Capital de cuotas vencidas</div></div>
+        <div class="dash-kpi"><div class="dash-kpi-label">Cashflow 7 días</div><div class="dash-kpi-value">${fmtMoney(cashflow7)}</div><div class="dash-kpi-meta">Próximos cobros</div></div>
+        <div class="dash-kpi"><div class="dash-kpi-label">Cashflow 30 días</div><div class="dash-kpi-value">${fmtMoney(cashflow30)}</div><div class="dash-kpi-meta">Próximos cobros</div></div>
+      </div>
+    </section>
   </div>`;
 }
 
