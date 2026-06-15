@@ -2579,9 +2579,34 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
   const legacyTotalPrestado = legacyPrestamosValidos.reduce((s,p)=>s+Number(p.monto||0),0);
   const legacyGananciaEsp = legacyPrestamosValidos.reduce((s,p)=>s+Number(p.ganancia||0),0);
   const legacyTotalACobrar = prestamos.filter(p=>!p._deleted && p.estado!=='Pagado' && p.estado!=='Cancelado' && p.estado!=='Ejecutado').reduce((s,p)=>s+Number(p.total||0),0);
+  const fallbackCuotasCobrables = cuotas.filter(c => esCuotaCobrable(c, prestamosPorId));
+  const fallbackDesglosar = c => {
+    const prestamo = prestamosPorId.get(c.prestamoId);
+    const total = Number(prestamo?.total || 0);
+    const monto = Number(c.monto || 0);
+    if (!prestamo || total <= 0) return { capital: monto, interes: 0 };
+    return {
+      capital: monto * Number(prestamo.monto || 0) / total,
+      interes: monto * Number(prestamo.ganancia || 0) / total
+    };
+  };
+  const fallbackVencidas = fallbackCuotasCobrables.filter(c => {
+    const venc = parseDate(c.fechaVenc);
+    return venc && venc < hoy;
+  });
+  const fallbackCapitalPendiente = fallbackCuotasCobrables.reduce((s,c)=>s+fallbackDesglosar(c).capital,0);
+  const fallbackInteresPendiente = fallbackCuotasCobrables.reduce((s,c)=>s+fallbackDesglosar(c).interes,0);
+  const fallbackCapitalEnRiesgo = fallbackVencidas.reduce((s,c)=>s+fallbackDesglosar(c).capital,0);
+  const fallbackCashflow = dias => {
+    const limite = new Date(hoy);
+    limite.setDate(limite.getDate() + dias);
+    return fallbackCuotasCobrables
+      .filter(c => { const venc=parseDate(c.fechaVenc); return venc && venc>=hoy && venc<=limite; })
+      .reduce((s,c)=>s+Number(c.monto||0),0);
+  };
 
   const metricas = window.metricasFinancierasService
-    ? window.metricasFinancierasService.calcularMetricasGlobales({ prestamos, cuotas, clientes, hoy })
+    ? window.metricasFinancierasService.calcularMetricasGlobales({ prestamos, cuotas, clientes, hoy, esCuotaCobrable })
     : {
         capitalPrestado: prestamos.filter(p=>!p._deleted && (p.estado==='Activo'||p.estado==='Atrasado')).reduce((s,p)=>s+Number(p.monto||0),0),
         interesProyectado: prestamos.filter(p=>!p._deleted && (p.estado==='Activo'||p.estado==='Atrasado')).reduce((s,p)=>s+Number(p.ganancia||0),0),
@@ -2590,20 +2615,23 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
         clientesActivos: clientes.filter(c=>!c._deleted && c.estado==='Activo').length,
         prestamosActivos: prestamos.filter(p=>!p._deleted && (p.estado==='Activo'||p.estado==='Atrasado')).length,
         interesCobrado: Math.max(0, mCob - (legacyTotalPrestado - legacyTotalACobrar)),
+        interesPendiente: fallbackInteresPendiente,
         porcentajeRecuperado: legacyTotalPrestado > 0 ? Math.round(mCob / (legacyTotalPrestado + legacyGananciaEsp) * 100) : 0,
         capitalRecuperado: Math.max(0, legacyTotalPrestado - legacyTotalACobrar),
-        capitalPendiente: legacyTotalACobrar,
+        capitalPendiente: fallbackCapitalPendiente,
+        capitalEnRiesgo: fallbackCapitalEnRiesgo,
         moraReal: mPend > 0 ? Math.round((mAtr / mPend) * 100) : 0,
-        cashflow7: 0,
-        cashflow30: 0
+        cashflow7: fallbackCashflow(7),
+        cashflow30: fallbackCashflow(30)
       };
   const totalPrestado   = metricas.capitalPrestado;
   const gananciaEsp     = metricas.interesProyectado;
   const totalACobrar    = metricas.totalPendiente;
-  const capitalRiesgo   = metricas.montoVencido;
+  const capitalRiesgo   = metricas.capitalEnRiesgo;
   const clientesActivos = metricas.clientesActivos;
   const prestActivos    = metricas.prestamosActivos;
   const gananciaReal    = metricas.interesCobrado;
+  const interesPendiente = metricas.interesPendiente;
   const pctCobrado      = metricas.porcentajeRecuperado;
   const capitalRecuperado = metricas.capitalRecuperado;
   const capitalPendiente  = metricas.capitalPendiente;
@@ -2654,7 +2682,7 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
         <div style="text-align:center">
           <div style="font-size:10px;color:var(--muted)">Ganancia proyectada 📈</div>
           <div style="font-size:14px;font-weight:900;font-family:'DM Mono',monospace;color:${gananciaReal>=gananciaEsp?'var(--grn)':'var(--yel)'}">${fmtMoney(gananciaEsp)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">${gananciaReal>=gananciaEsp ? '✅ Todo cobrado' : 'Interés pendiente de cobrar'}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Interés pendiente: ${fmtMoney(interesPendiente)}</div>
         </div>
         ${totalACobrar > 0 ? `
         <div style="text-align:center">
@@ -2666,7 +2694,7 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
         <div style="text-align:center">
           <div style="font-size:10px;color:var(--muted)">Capital en riesgo ⚠️</div>
           <div style="font-size:14px;font-weight:900;font-family:'DM Mono',monospace;color:var(--red)">${fmtMoney(capitalRiesgo)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Cuotas atrasadas</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Capital de cuotas vencidas</div>
         </div>` : ''}
         <div style="text-align:center">
           <div style="font-size:10px;color:var(--muted)">Capital recuperado</div>
@@ -3055,11 +3083,26 @@ function cliItemHTML(c) {
 
 /* ---- PRÉSTAMOS ---- */
 let loanExpanded = null; // id del préstamo actualmente expandido
+const PRIORIDAD_ESTADO_PRESTAMO = {
+  Atrasado: 1,
+  Activo: 2,
+  Pendiente: 3,
+  Pagado: 4,
+  Ejecutado: 5,
+  Cancelado: 6
+};
+
+function ordenarPrestamosPorPrioridad(a, b) {
+  const prioridadA = PRIORIDAD_ESTADO_PRESTAMO[a?.estado] ?? 99;
+  const prioridadB = PRIORIDAD_ESTADO_PRESTAMO[b?.estado] ?? 99;
+  if (prioridadA !== prioridadB) return prioridadA - prioridadB;
+  return new Date(b?.fecha || 0) - new Date(a?.fecha || 0);
+}
 
 async function renderPrestamos() {
   const el = document.getElementById('pg-prestamos');
   const [listaCompleta, todasCuotas] = await Promise.all([dbAll('prestamos'), dbAll('cuotas')]);
-  listaCompleta.sort((a,b) => new Date(b.fecha||0) - new Date(a.fecha||0));
+  listaCompleta.sort(ordenarPrestamosPorPrioridad);
 
   if (!listaCompleta.length) {
     el.innerHTML = emptyHTML('📋','Sin préstamos','Tocá ＋ para crear el primer préstamo.');
@@ -3128,6 +3171,7 @@ function filtrarPrestamos(filtro, btn) {
   else if (filtro === 'todos') filtrada = lista;
   else if (filtro === 'Semanal' || filtro === 'Mensual') filtrada = lista.filter(p => p.tipo === filtro && p.estado !== 'Cancelado' && p.estado !== 'Ejecutado');
   else filtrada = lista.filter(p => p.estado === filtro);
+  filtrada.sort(ordenarPrestamosPorPrioridad);
   const listEl = document.getElementById('prest-list');
   if (listEl) listEl.innerHTML = filtrada.length
     ? filtrada.map(p => loanItemHTML(p, cuotas)).join('')

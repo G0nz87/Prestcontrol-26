@@ -3,26 +3,27 @@
 // la relacion monto/total y ganancia/total del prestamo asociado.
 
 export class MetricasFinancierasService {
-  calcularMetricasGlobales({ prestamos = [], cuotas = [], clientes = [], hoy = new Date() } = {}) {
-    return this._calcularMetricas({ prestamos, cuotas, clientes, hoy });
+  calcularMetricasGlobales({ prestamos = [], cuotas = [], clientes = [], hoy = new Date(), esCuotaCobrable } = {}) {
+    return this._calcularMetricas({ prestamos, cuotas, clientes, hoy, esCuotaCobrable });
   }
 
-  calcularMetricasCliente(clienteId, { prestamos = [], cuotas = [], clientes = [], hoy = new Date() } = {}) {
+  calcularMetricasCliente(clienteId, { prestamos = [], cuotas = [], clientes = [], hoy = new Date(), esCuotaCobrable } = {}) {
     return this._calcularMetricas({
       prestamos: prestamos.filter(p => p.clienteId === clienteId),
       cuotas: cuotas.filter(c => c.clienteId === clienteId),
       clientes: clientes.filter(c => c.id === clienteId),
-      hoy
+      hoy,
+      esCuotaCobrable
     });
   }
 
-  calcularCashflow(cuotas = [], dias = 7, hoy = new Date()) {
+  calcularCashflow(cuotas = [], dias = 7, hoy = new Date(), esCuotaCobrable, prestamosPorId) {
     const inicio = this._startOfDay(hoy);
     const limite = new Date(inicio);
     limite.setDate(limite.getDate() + Number(dias || 0));
 
     return cuotas
-      .filter(c => this._esCuotaPendiente(c))
+      .filter(c => this._esCuotaCobrable(c, esCuotaCobrable, prestamosPorId))
       .filter(c => {
         const venc = this._parseDate(c.fechaVenc);
         return venc && venc >= inicio && venc <= limite;
@@ -30,9 +31,10 @@ export class MetricasFinancierasService {
       .reduce((sum, c) => sum + this._num(c.monto), 0);
   }
 
-  _calcularMetricas({ prestamos, cuotas, clientes, hoy }) {
+  _calcularMetricas({ prestamos, cuotas, clientes, hoy, esCuotaCobrable }) {
     const fechaHoy = this._startOfDay(hoy);
     const prestamosActivosLista = prestamos.filter(p => this._esPrestamoActivo(p));
+    const prestamosPorId = new Map(prestamos.map(p => [p.id, p]));
     const prestamosRealesMap = new Map(
       prestamos
         .filter(p => !p?._deleted && p.estado !== 'Cancelado')
@@ -40,7 +42,9 @@ export class MetricasFinancierasService {
     );
     const cuotasActivas = cuotas.filter(c => !c?._deleted);
     const cuotasPagadasLista = cuotasActivas.filter(c => c.estado === 'Pagado');
-    const cuotasPendientesLista = cuotasActivas.filter(c => this._esCuotaPendiente(c));
+    const cuotasPendientesLista = cuotasActivas.filter(c =>
+      this._esCuotaCobrable(c, esCuotaCobrable, prestamosPorId)
+    );
     const cuotasVencidasLista = cuotasPendientesLista.filter(c => {
       const venc = this._parseDate(c.fechaVenc);
       return venc && venc < fechaHoy;
@@ -55,9 +59,16 @@ export class MetricasFinancierasService {
     });
 
     let capitalPendiente = 0;
+    let interesPendiente = 0;
     cuotasPendientesLista.forEach(c => {
-      capitalPendiente += this._desglosarCuota(c, prestamosRealesMap.get(c.prestamoId)).capital;
+      const desglose = this._desglosarCuota(c, prestamosRealesMap.get(c.prestamoId));
+      capitalPendiente += desglose.capital;
+      interesPendiente += desglose.interes;
     });
+
+    const capitalEnRiesgo = cuotasVencidasLista.reduce((sum, c) =>
+      sum + this._desglosarCuota(c, prestamosRealesMap.get(c.prestamoId)).capital, 0
+    );
 
     const capitalPrestado = prestamosActivosLista.reduce((sum, p) => sum + this._num(p.monto), 0);
     const interesProyectado = prestamosActivosLista.reduce((sum, p) => sum + this._num(p.ganancia), 0);
@@ -73,18 +84,20 @@ export class MetricasFinancierasService {
       capitalRecuperado,
       capitalPendiente,
       interesCobrado,
+      interesPendiente,
       interesProyectado,
       totalCobrado,
       totalPendiente,
       montoVencido,
+      capitalEnRiesgo,
       montoAtrasado,
       porcentajeRecuperado: (capitalRecuperado + capitalPendiente) > 0
         ? Math.round((capitalRecuperado / (capitalRecuperado + capitalPendiente)) * 100)
         : 0,
       moraReal: totalPendiente > 0 ? Math.round((montoVencido / totalPendiente) * 100) : 0,
-      cashflow7: this.calcularCashflow(cuotasActivas, 7, fechaHoy),
-      cashflow15: this.calcularCashflow(cuotasActivas, 15, fechaHoy),
-      cashflow30: this.calcularCashflow(cuotasActivas, 30, fechaHoy),
+      cashflow7: this.calcularCashflow(cuotasActivas, 7, fechaHoy, esCuotaCobrable, prestamosPorId),
+      cashflow15: this.calcularCashflow(cuotasActivas, 15, fechaHoy, esCuotaCobrable, prestamosPorId),
+      cashflow30: this.calcularCashflow(cuotasActivas, 30, fechaHoy, esCuotaCobrable, prestamosPorId),
       prestamosActivos: prestamosActivosLista.length,
       clientesActivos: clientes.filter(c => !c?._deleted && c.estado === 'Activo').length,
       cuotasPagadas: cuotasPagadasLista.length,
@@ -114,6 +127,15 @@ export class MetricasFinancierasService {
   _esCuotaPendiente(cuota) {
     const estadosNoPendientes = new Set(['Pagado', 'Ejecutada', 'Ejecutado', 'Cancelada', 'Cancelado']);
     return !cuota?._deleted && !estadosNoPendientes.has(cuota.estado);
+  }
+
+  _esCuotaCobrable(cuota, esCuotaCobrable, prestamosPorId) {
+    if (typeof esCuotaCobrable === 'function') {
+      return esCuotaCobrable(cuota, prestamosPorId);
+    }
+    if (!this._esCuotaPendiente(cuota)) return false;
+    const prestamo = prestamosPorId?.get(cuota?.prestamoId);
+    return !prestamo || (!prestamo._deleted && !['Pagado', 'Ejecutado', 'Cancelado'].includes(prestamo.estado));
   }
 
   _parseDate(value) {
