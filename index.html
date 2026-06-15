@@ -322,6 +322,38 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
   .dash-section-operativo .dash-grid,.dash-section-riesgo .dash-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
 }
 
+/* DASHBOARD CLIENTE */
+.dash-client{display:grid;gap:12px}
+.dash-client .dtabs,.dash-client .field{margin-bottom:0}
+.dash-client-card{display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px}
+.dash-client-main{flex:1;min-width:0}
+.dash-client-name{font-size:17px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-client-dni{font-size:11px;color:var(--muted);margin-top:3px}
+.dash-client-badges{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+.dash-client-alerts{display:grid;gap:8px}
+.dash-client-alerts .abanner{margin-bottom:0;padding:10px 12px;align-items:center}
+.dash-client-section{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:13px}
+.dash-client-section-title{display:flex;align-items:center;gap:7px;margin-bottom:10px;color:var(--muted);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px}
+.dash-client-grid{display:grid;grid-template-columns:1fr;gap:8px}
+.dash-client-kpi{min-width:0;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px}
+.dash-client-kpi-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.35px}
+.dash-client-kpi-value{margin-top:5px;font-size:18px;font-weight:900;font-family:'DM Mono',monospace;color:var(--money);line-height:1.15;overflow-wrap:anywhere}
+.dash-client-kpi-meta{margin-top:5px;font-size:10px;color:var(--muted);line-height:1.35}
+.dash-client-kpi.is-yellow .dash-client-kpi-value{color:var(--yel)}
+.dash-client-kpi.is-red .dash-client-kpi-value{color:var(--red)}
+.dash-client-kpi.is-green .dash-client-kpi-value{color:var(--grn)}
+.dash-client-kpi.is-accent .dash-client-kpi-value{color:var(--accent)}
+.dash-client-history{padding:2px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px}
+@media (min-width:600px){
+  #pg-dashboard:has(.dash-client){max-width:920px;padding-left:20px;padding-right:20px}
+  .dash-client{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+  .dash-client .dtabs,.dash-client .field,.dash-client-card,.dash-client-alerts,.dash-client-operativo,.dash-client-history-section{grid-column:1/-1}
+  .dash-client-alerts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dash-client-alerts .abanner:only-child{grid-column:1/-1}
+  .dash-client-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dash-client-operativo .dash-client-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+
 /* CALENDAR */
 .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .cal-nav-btn{background:var(--card2);border:1px solid var(--border);color:var(--txt);border-radius:8px;padding:7px 13px;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:700}
@@ -2740,81 +2772,115 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
 }
 
 function buildDashCliente(cuotas, clientes, prestamos) {
-  const activos = clientes.filter(c => c.estado === 'Activo');
+  const activos = clientes.filter(c => !c._deleted && c.estado === 'Activo');
   const selId   = dashClienteId || (activos[0] ? activos[0].id : null);
-  const selCli  = clientes.find(c => c.id === selId);
-  const selectOpts = activos.map(c =>
-    `<option value="${esc(c.id)}" ${c.id===selId?'selected':''}>${esc(c.nombre)}</option>`
-  ).join('');
+  const selCli  = activos.find(c => c.id === selId);
 
   let body = '';
   if (!selCli) {
     body = `<div class="empty"><div class="empty-ic">👤</div><div class="empty-t">Sin clientes activos</div></div>`;
   } else {
     const hoy = today();
-    // Filtrar préstamos y cuotas NO eliminados (para estado actual del cliente)
-    const misPre = prestamos.filter(p => p.clienteId === selId && !p._deleted);
     const misCuo = cuotas.filter(c => c.clienteId === selId && !c._deleted);
-    let cHoy=0,mHoy=0,cAtr=0,mAtr=0,cPend=0,mPend=0,cPag=0;
-    misCuo.forEach(c => {
-      const venc = parseDate(c.fechaVenc); if (!venc) return;
-      const dias = Math.floor((hoy - venc) / 86400000);
-      const m = Number(c.monto||0);
-      if (c.estado==='Pagado' || c.estado==='Ejecutada'){cPag++;return;}
-      cPend++;mPend+=m;
-      if (venc.getTime()===hoy.getTime()){cHoy++;mHoy+=m;}
-      else if (dias>0){cAtr++;mAtr+=m;}
+    const mapaPrestamos = prestamosMap(prestamos);
+    const cuotasCobrables = misCuo.filter(c => esCuotaCobrable(c, mapaPrestamos));
+    const cuotasHoy = cuotasCobrables.filter(c => {
+      const venc = parseDate(c.fechaVenc);
+      return venc && venc.getTime() === hoy.getTime();
     });
-    const totalPrestado = misPre.reduce((s,p)=>s+Number(p.monto||0),0);
-    const totalDeuda    = misCuo.filter(c=>c.estado!=='Pagado' && c.estado!=='Ejecutada').reduce((s,c)=>s+Number(c.monto||0),0);
-    const totalGanancia = misPre.reduce((s,p)=>s+Number(p.ganancia||0),0);
+    const cuotasAtrasadas = cuotasCobrables.filter(c => {
+      const venc = parseDate(c.fechaVenc);
+      return venc && venc < hoy;
+    });
+    const cHoy = cuotasHoy.length;
+    const mHoy = cuotasHoy.reduce((s,c)=>s+Number(c.monto||0),0);
+    const cAtr = cuotasAtrasadas.length;
+    const mAtr = cuotasAtrasadas.reduce((s,c)=>s+Number(c.monto||0),0);
+    const cEjecutadas = misCuo.filter(c => c.estado === 'Ejecutada' || c.estado === 'Ejecutado').length;
+    const metricas = window.metricasFinancierasService.calcularMetricasCliente(selId, {
+      prestamos, cuotas, clientes, hoy, esCuotaCobrable
+    });
     const rMap = {Bajo:'bg-grn',Medio:'bg-yel',Alto:'bg-red'};
     let urgCli = '';
     if (cHoy>0) urgCli+=`<div class="abanner ay"><div class="abanner-ic">📅</div><div><div class="abanner-t">${cHoy} cuota${cHoy>1?'s':''} vencen hoy</div><div class="abanner-s">${fmtMoney(mHoy)}</div></div></div>`;
     if (cAtr>0) urgCli+=`<div class="abanner ar"><div class="abanner-ic">⚠️</div><div><div class="abanner-t">${cAtr} cuota${cAtr>1?'s':''} atrasada${cAtr>1?'s':''}</div><div class="abanner-s">${fmtMoney(mAtr)}</div></div></div>`;
     if (!cHoy&&!cAtr) urgCli=`<div class="abanner ag"><div class="abanner-ic">✅</div><div><div class="abanner-t">Al día</div><div class="abanner-s">Sin cobros urgentes.</div></div></div>`;
     body = `
-      <div class="card" style="display:flex;gap:12px;align-items:center">
+      <div class="dash-client-card">
         <div class="ava" style="width:46px;height:46px;font-size:20px;flex-shrink:0">${esc(selCli.nombre).charAt(0).toUpperCase()}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:16px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(selCli.nombre)}</div>
-          <div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap">
+        <div class="dash-client-main">
+          <div class="dash-client-name">${esc(selCli.nombre)}</div>
+          ${selCli.dni ? `<div class="dash-client-dni">DNI ${esc(selCli.dni)}</div>` : ''}
+          <div class="dash-client-badges">
             <span class="badge ${selCli.estado==='Activo'?'bg-blu':'bg-muted'}">${selCli.estado}</span>
             <span class="badge ${rMap[selCli.riesgo]||'bg-muted'}">Riesgo ${selCli.riesgo||'—'}</span>
           </div>
         </div>
         <button class="btn btn-sm btn-ghost" onclick="openClienteDetail('${esc(selId)}')">Ver →</button>
       </div>
-      ${urgCli}
-      <div class="srow">
-        <div class="sri"><div class="sri-ic">📅</div><div class="sri-v" style="color:var(--yel)">${cHoy}</div><div class="sri-l">Hoy</div></div>
-        <div class="sri"><div class="sri-ic">⚠️</div><div class="sri-v" style="color:var(--red)">${cAtr}</div><div class="sri-l">Atrasadas</div></div>
-        <div class="sri"><div class="sri-ic">✅</div><div class="sri-v" style="color:var(--grn)">${cPag}</div><div class="sri-l">Pagadas</div></div>
-      </div>
-      <div class="srow2">
-        <div class="sri"><div class="sri-ic">💵</div><div class="sri-v" style="font-size:12px;color:var(--money)">${fmtMoney(totalPrestado)}</div><div class="sri-l">Capital</div></div>
-        <div class="sri"><div class="sri-ic">💸</div><div class="sri-v" style="font-size:12px;color:var(--red)">${fmtMoney(totalDeuda)}</div><div class="sri-l">Deuda</div></div>
-      </div>
-      <div class="srow2">
-        <div class="sri"><div class="sri-ic">📈</div><div class="sri-v" style="font-size:12px;color:var(--grn)">${fmtMoney(totalGanancia)}</div><div class="sri-l">Ganancia</div></div>
-        <div class="sri"><div class="sri-ic">📋</div><div class="sri-v">${misPre.length}</div><div class="sri-l">Préstamos</div></div>
-      </div>
-      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Historial de pagos</div>
-      <div class="card" style="padding:10px 14px;max-height:220px;overflow-y:auto">
+      <div class="dash-client-alerts">${urgCli}</div>
+      <section class="dash-client-section dash-client-operativo">
+        <div class="dash-client-section-title">📋 Operativo</div>
+        <div class="dash-client-grid">
+          <div class="dash-client-kpi is-yellow"><div class="dash-client-kpi-label">Vencen hoy</div><div class="dash-client-kpi-value">${cHoy}</div><div class="dash-client-kpi-meta">${fmtMoney(mHoy)} programado</div></div>
+          <div class="dash-client-kpi is-red"><div class="dash-client-kpi-label">Atrasadas</div><div class="dash-client-kpi-value">${cAtr}</div><div class="dash-client-kpi-meta">${fmtMoney(mAtr)} vencido</div></div>
+          <div class="dash-client-kpi"><div class="dash-client-kpi-label">Pendientes</div><div class="dash-client-kpi-value">${metricas.cuotasPendientes}</div><div class="dash-client-kpi-meta">${fmtMoney(metricas.totalPendiente)} cobrable</div></div>
+          <div class="dash-client-kpi is-accent"><div class="dash-client-kpi-label">Préstamos activos</div><div class="dash-client-kpi-value">${metricas.prestamosActivos}</div><div class="dash-client-kpi-meta">Activos y atrasados</div></div>
+        </div>
+      </section>
+      <section class="dash-client-section">
+        <div class="dash-client-section-title">🧾 Estado de cuotas</div>
+        <div class="dash-client-grid">
+          <div class="dash-client-kpi is-green"><div class="dash-client-kpi-label">Pagadas</div><div class="dash-client-kpi-value">${metricas.cuotasPagadas}</div><div class="dash-client-kpi-meta">Pagos reales registrados</div></div>
+          <div class="dash-client-kpi is-red"><div class="dash-client-kpi-label">Ejecutadas</div><div class="dash-client-kpi-value">${cEjecutadas}</div><div class="dash-client-kpi-meta">No cuentan como pagadas</div></div>
+          <div class="dash-client-kpi is-red"><div class="dash-client-kpi-label">Capital ejecutado</div><div class="dash-client-kpi-value">${fmtMoney(metricas.capitalEjecutado)}</div><div class="dash-client-kpi-meta">Capital de cuotas ejecutadas</div></div>
+          <div class="dash-client-kpi is-green"><div class="dash-client-kpi-label">Total cobrado</div><div class="dash-client-kpi-value">${fmtMoney(metricas.totalCobrado)}</div><div class="dash-client-kpi-meta">Capital e interés cobrados</div></div>
+        </div>
+      </section>
+      <section class="dash-client-section">
+        <div class="dash-client-section-title">💼 Cartera</div>
+        <div class="dash-client-grid">
+          <div class="dash-client-kpi"><div class="dash-client-kpi-label">Capital activo</div><div class="dash-client-kpi-value">${fmtMoney(metricas.capitalPrestado)}</div><div class="dash-client-kpi-meta">Capital actualmente prestado</div></div>
+          <div class="dash-client-kpi is-green"><div class="dash-client-kpi-label">Capital recuperado</div><div class="dash-client-kpi-value">${fmtMoney(metricas.capitalRecuperado)}</div><div class="dash-client-kpi-meta">Capital ya cobrado</div></div>
+          <div class="dash-client-kpi is-yellow"><div class="dash-client-kpi-label">Capital pendiente</div><div class="dash-client-kpi-value">${fmtMoney(metricas.capitalPendiente)}</div><div class="dash-client-kpi-meta">Capital por recuperar</div></div>
+          <div class="dash-client-kpi is-green"><div class="dash-client-kpi-label">Recuperación capital</div><div class="dash-client-kpi-value">${metricas.recuperacionCapitalPct.toFixed(1)}%</div><div class="dash-client-kpi-meta">Recuperado / capital base</div></div>
+        </div>
+      </section>
+      <section class="dash-client-section">
+        <div class="dash-client-section-title">📈 Rentabilidad</div>
+        <div class="dash-client-grid">
+          <div class="dash-client-kpi is-green"><div class="dash-client-kpi-label">Ganancia real</div><div class="dash-client-kpi-value">${fmtMoney(metricas.gananciaReal)}</div><div class="dash-client-kpi-meta">Interés ya cobrado</div></div>
+          <div class="dash-client-kpi is-yellow"><div class="dash-client-kpi-label">Ganancia proyectada</div><div class="dash-client-kpi-value">${fmtMoney(metricas.interesProyectado)}</div><div class="dash-client-kpi-meta">Ganancia esperada activa</div></div>
+          <div class="dash-client-kpi is-yellow"><div class="dash-client-kpi-label">Interés pendiente</div><div class="dash-client-kpi-value">${fmtMoney(metricas.interesPendiente)}</div><div class="dash-client-kpi-meta">Interés todavía no cobrado</div></div>
+          <div class="dash-client-kpi is-accent"><div class="dash-client-kpi-label">ROI bruto</div><div class="dash-client-kpi-value">${metricas.roiBrutoCobrado.toFixed(1)}%</div><div class="dash-client-kpi-meta">Interés cobrado / capital base</div></div>
+        </div>
+      </section>
+      <section class="dash-client-section">
+        <div class="dash-client-section-title">⚠️ Riesgo</div>
+        <div class="dash-client-grid">
+          <div class="dash-client-kpi ${metricas.moraReal>0?'is-red':'is-green'}"><div class="dash-client-kpi-label">Mora real</div><div class="dash-client-kpi-value">${metricas.moraReal}%</div><div class="dash-client-kpi-meta">Vencido / pendiente</div></div>
+          <div class="dash-client-kpi ${metricas.capitalEnRiesgo>0?'is-red':'is-green'}"><div class="dash-client-kpi-label">Capital en riesgo</div><div class="dash-client-kpi-value">${fmtMoney(metricas.capitalEnRiesgo)}</div><div class="dash-client-kpi-meta">Capital de cuotas vencidas</div></div>
+          <div class="dash-client-kpi ${selCli.riesgo==='Alto'?'is-red':selCli.riesgo==='Medio'?'is-yellow':'is-green'}"><div class="dash-client-kpi-label">Riesgo asignado</div><div class="dash-client-kpi-value">${esc(selCli.riesgo||'—')}</div><div class="dash-client-kpi-meta">Clasificación actual del cliente</div></div>
+        </div>
+      </section>
+      <section class="dash-client-section dash-client-history-section">
+        <div class="dash-client-section-title">🕘 Últimos pagos reales</div>
+        <div class="dash-client-history">
         ${misCuo.filter(c=>c.estado==='Pagado').sort((a,b)=>new Date(b.fechaPago||0)-new Date(a.fechaPago||0)).slice(0,15).map(c=>`
           <div class="hist-item">
             <div class="hist-dot"></div>
             <div class="hist-body"><div class="hist-name">Cuota ${c.nro} · ${esc(c.prestamoId)}</div><div class="hist-meta">${fmtDate(c.fechaPago)} · ${esc(c.metodo||'—')}</div></div>
             <div class="hist-amt">${fmtMoney(c.monto)}</div>
           </div>`).join('') || '<div style="font-size:13px;color:var(--muted);text-align:center;padding:12px">Sin pagos registrados</div>'}
-      </div>`;
+        </div>
+      </section>`;
   }
   // Build autocomplete options for dash client search
   const acOpts = activos.map(c =>
     `<div class="ac-item" onclick="switchDashCliente('${esc(c.id)}')" data-id="${esc(c.id)}">${esc(c.nombre)}</div>`
   ).join('');
 
-  return `<div class="fadeIn">
+  return `<div class="fadeIn dash-client">
     <div class="dtabs">
       <button class="dtab" onclick="switchDashTab('global')">🌐 Global</button>
       <button class="dtab on" onclick="switchDashTab('cliente')">👤 Cliente</button>
@@ -3035,10 +3101,51 @@ function cuotaItemHTML(c, tipo) {
 }
 
 /* ---- CLIENTES ---- */
+function situacionCrediticiaCliente(cliente, prestamos, cuotas, mapaPrestamos, hoy) {
+  if (cliente?.estado !== 'Activo') {
+    return { codigo:'inactivo', label:'Inactivo', badgeClass:'bg-muted', lineClass:'lmuted', prioridad:4 };
+  }
+
+  const prestamosCliente = (prestamos || []).filter(p => p.clienteId === cliente.id && !p._deleted);
+  const cuotasCobrables = (cuotas || []).filter(c =>
+    c.clienteId === cliente.id && esCuotaCobrable(c, mapaPrestamos)
+  );
+  const tieneAtraso = prestamosCliente.some(p => p.estado === 'Atrasado') || cuotasCobrables.some(c => {
+    const venc = parseDate(c.fechaVenc);
+    return venc && venc < hoy;
+  });
+
+  if (tieneAtraso) {
+    return { codigo:'atrasado', label:'Atrasado', badgeClass:'bg-red', lineClass:'lred', prioridad:1 };
+  }
+
+  const tienePrestamoActivo = prestamosCliente.some(p => p.estado === 'Activo');
+  if (tienePrestamoActivo && cuotasCobrables.length) {
+    return { codigo:'credito_activo', label:'Crédito activo', badgeClass:'bg-blu', lineClass:'lblue', prioridad:2 };
+  }
+
+  if (!cuotasCobrables.length) {
+    return { codigo:'sin_deuda', label:'Sin deuda', badgeClass:'bg-grn', lineClass:'lgrn', prioridad:3 };
+  }
+
+  return { codigo:'credito_activo', label:'Crédito activo', badgeClass:'bg-blu', lineClass:'lblue', prioridad:2 };
+}
+
 async function renderClientes() {
   const el = document.getElementById('pg-clientes');
-  const lista = await dbAll('clientes');
-  lista.sort((a,b) => a.nombre > b.nombre ? 1 : -1);
+  const [clientes, prestamos, cuotas] = await Promise.all([
+    dbAll('clientes'), dbAll('prestamos'), dbAll('cuotas')
+  ]);
+  const mapaPrestamos = prestamosMap(prestamos);
+  const hoy = today();
+  const lista = clientes.map(cliente => ({
+    ...cliente,
+    _situacionCrediticia: situacionCrediticiaCliente(cliente, prestamos, cuotas, mapaPrestamos, hoy)
+  }));
+  lista.sort((a,b) =>
+    a._situacionCrediticia.prioridad - b._situacionCrediticia.prioridad ||
+    String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity:'base' })
+  );
 
   if (!lista.length) {
     el.innerHTML = emptyHTML('👤','Sin clientes','Tocá ＋ para agregar tu primer cliente.');
@@ -3068,12 +3175,18 @@ function filterClientes(q) {
 function cliItemHTML(c) {
   const rMap = {Bajo:'bg-grn',Medio:'bg-yel',Alto:'bg-red'};
   const eCls = c.estado==='Activo' ? 'bg-blu' : 'bg-muted';
+  const estadoAdministrativo = c.estado === 'Activo' ? 'Habilitado' : (c.estado || 'Inactivo');
+  const situacion = c._situacionCrediticia || {
+    label: c.estado === 'Activo' ? 'Sin deuda' : 'Inactivo',
+    badgeClass: c.estado === 'Activo' ? 'bg-grn' : 'bg-muted',
+    lineClass: c.estado === 'Activo' ? 'lgrn' : 'lmuted'
+  };
   const subInfo = [
     c.dni ? '🪪 ' + esc(c.dni) : '',
     c.telefono ? '📞 ' + esc(c.telefono) : '',
     c.direccion ? '📍 ' + esc(c.direccion) : ''
   ].filter(Boolean).join(' · ') || 'Sin datos';
-  return `<div class="li lblue" onclick="openClienteDetail('${esc(c.id)}')">
+  return `<div class="li ${situacion.lineClass}" onclick="openClienteDetail('${esc(c.id)}')">
     <div class="li-row">
       <div style="display:flex;gap:10px;align-items:center">
         <div class="ava" style="width:38px;height:38px;font-size:15px">${esc(c.nombre).charAt(0).toUpperCase()}</div>
@@ -3083,7 +3196,8 @@ function cliItemHTML(c) {
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
-        <span class="badge ${eCls}">${c.estado}</span>
+        <span class="badge ${situacion.badgeClass}">${situacion.label}</span>
+        <span class="badge ${eCls}">${estadoAdministrativo}</span>
         <span class="badge ${rMap[c.riesgo]||'bg-muted'}">${c.riesgo||'—'}</span>
       </div>
     </div>
@@ -3724,8 +3838,10 @@ async function openClienteDetail(id) {
   const misPrestamos = prestamos.filter(p => p.clienteId === id)
     .sort((a,b) => (ordenPrestamoEstado[a.estado] || 7) - (ordenPrestamoEstado[b.estado] || 7) || fechaOrdenPrestamo(b) - fechaOrdenPrestamo(a));
   const misCuotas    = cuotas.filter(c => c.clienteId === id);
+  const mapaPrestamos = prestamosMap(prestamos);
+  const situacionCrediticia = situacionCrediticiaCliente(cliente, prestamos, cuotas, mapaPrestamos, today());
   const totalPrestado = misPrestamos.reduce((s,p) => s+Number(p.monto||0), 0);
-  const totalDeuda    = misCuotas.filter(c=>c.estado!=='Pagado').reduce((s,c) => s+Number(c.monto||0), 0);
+  const totalDeuda    = misCuotas.filter(c => esCuotaCobrable(c, mapaPrestamos)).reduce((s,c) => s+Number(c.monto||0), 0);
   const totalCobrado  = misCuotas.filter(c=>c.estado==='Pagado').reduce((s,c)=>s+Number(c.monto||0),0);
   const pagosHistorial= misCuotas.filter(c=>c.estado==='Pagado').sort((a,b)=>new Date(b.fechaPago||0)-new Date(a.fechaPago||0));
 
@@ -3739,9 +3855,12 @@ async function openClienteDetail(id) {
 
   const rMap = {Bajo:'bg-grn',Medio:'bg-yel',Alto:'bg-red'};
   const eCls = cliente.estado==='Activo' ? 'bg-blu' : 'bg-muted';
+  const estadoAdministrativo = cliente.estado === 'Activo' ? 'Habilitado' : (cliente.estado || 'Inactivo');
   // Contadores de créditos
-  const credActivos  = misPrestamos.filter(p=>p.estado==='Activo'||p.estado==='Atrasado').length;
-  const credPagados  = misPrestamos.filter(p=>p.estado==='Pagado').length;
+  const prestamosVigentes = misPrestamos.filter(p => p.estado === 'Activo' || p.estado === 'Atrasado');
+  const idsPrestamosVigentes = new Set(prestamosVigentes.map(p => p.id));
+  const cuotasCreditoVigente = misCuotas.filter(c => !c._deleted && idsPrestamosVigentes.has(c.prestamoId));
+  const cuotasCobradasCreditoVigente = cuotasCreditoVigente.filter(c => c.estado === 'Pagado').length;
   const credTotal    = misPrestamos.length;
 
   const el = document.getElementById('pg-cliente-detail');
@@ -3755,7 +3874,8 @@ async function openClienteDetail(id) {
         <div style="font-size:20px;font-weight:900">${esc(cliente.nombre)}</div>
         ${cliente.dni ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">🪪 DNI ${esc(cliente.dni)}</div>` : ''}
         <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-          <span class="badge ${eCls}">${cliente.estado}</span>
+          <span class="badge ${situacionCrediticia.badgeClass}">${situacionCrediticia.label}</span>
+          <span class="badge ${eCls}">${estadoAdministrativo}</span>
           <span class="badge ${rMap[cliente.riesgo]||'bg-muted'}" title="${scoring.detalle}">
             ${scoring.icono} ${scoring.label}
           </span>
@@ -3772,7 +3892,11 @@ async function openClienteDetail(id) {
       <div class="info-cell"><div class="info-lbl">Total prestado</div><div class="info-val" style="color:var(--gold)">${fmtMoney(totalPrestado)}</div></div>
       <div class="info-cell"><div class="info-lbl">Deuda pendiente</div><div class="info-val" style="color:${totalDeuda>0?'var(--red)':'var(--grn)'}">${fmtMoney(totalDeuda)}</div></div>
       <div class="info-cell"><div class="info-lbl">Total cobrado</div><div class="info-val" style="color:var(--grn)">${fmtMoney(totalCobrado)}</div></div>
-      <div class="info-cell"><div class="info-lbl">Pagados / Total</div><div class="info-val">${credPagados} / ${credTotal}</div></div>
+      ${prestamosVigentes.length ? `
+      <div class="info-cell"><div class="info-lbl">Cuotas crédito vigente</div><div class="info-val">${cuotasCobradasCreditoVigente} / ${cuotasCreditoVigente.length}</div></div>
+      ` : `
+      <div class="info-cell"><div class="info-lbl">Crédito vigente</div><div class="info-val" style="color:var(--muted)">Sin crédito vigente</div></div>
+      `}
     </div>
     ${cliente.notas ? `<div class="card-sm" style="font-size:13px;color:var(--muted)">📝 ${esc(cliente.notas)}</div>` : ''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
