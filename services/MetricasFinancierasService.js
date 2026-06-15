@@ -42,6 +42,9 @@ export class MetricasFinancierasService {
     );
     const cuotasActivas = cuotas.filter(c => !c?._deleted);
     const cuotasPagadasLista = cuotasActivas.filter(c => c.estado === 'Pagado');
+    const cuotasEjecutadasLista = cuotasActivas.filter(c =>
+      c.estado === 'Ejecutada' || c.estado === 'Ejecutado'
+    );
     const cuotasPendientesLista = cuotasActivas.filter(c =>
       this._esCuotaCobrable(c, esCuotaCobrable, prestamosPorId)
     );
@@ -58,6 +61,10 @@ export class MetricasFinancierasService {
       interesCobrado += desglose.interes;
     });
 
+    const capitalEjecutado = cuotasEjecutadasLista.reduce((sum, c) =>
+      sum + this._desglosarCuota(c, prestamosRealesMap.get(c.prestamoId)).capital, 0
+    );
+
     let capitalPendiente = 0;
     let interesPendiente = 0;
     cuotasPendientesLista.forEach(c => {
@@ -71,6 +78,10 @@ export class MetricasFinancierasService {
     );
 
     const capitalPrestado = prestamosActivosLista.reduce((sum, p) => sum + this._num(p.monto), 0);
+    const estadosCapitalBase = new Set(['Activo', 'Atrasado', 'Pagado', 'Ejecutado']);
+    const capitalBase = prestamos
+      .filter(p => !p?._deleted && estadosCapitalBase.has(p.estado))
+      .reduce((sum, p) => sum + this._num(p.monto), 0);
     const interesProyectado = prestamosActivosLista.reduce((sum, p) => sum + this._num(p.ganancia), 0);
     const totalCobrado = cuotasPagadasLista.reduce((sum, c) => sum + this._num(c.monto), 0);
     const totalPendiente = cuotasPendientesLista.reduce((sum, c) => sum + this._num(c.monto), 0);
@@ -81,9 +92,12 @@ export class MetricasFinancierasService {
 
     return {
       capitalPrestado,
+      capitalBase,
       capitalRecuperado,
+      capitalEjecutado,
       capitalPendiente,
       interesCobrado,
+      gananciaReal: interesCobrado,
       interesPendiente,
       interesProyectado,
       totalCobrado,
@@ -94,6 +108,8 @@ export class MetricasFinancierasService {
       porcentajeRecuperado: (capitalRecuperado + capitalPendiente) > 0
         ? Math.round((capitalRecuperado / (capitalRecuperado + capitalPendiente)) * 100)
         : 0,
+      recuperacionCapitalPct: capitalBase > 0 ? (capitalRecuperado / capitalBase) * 100 : 0,
+      roiBrutoCobrado: capitalBase > 0 ? (interesCobrado / capitalBase) * 100 : 0,
       moraReal: totalPendiente > 0 ? Math.round((montoVencido / totalPendiente) * 100) : 0,
       cashflow7: this.calcularCashflow(cuotasActivas, 7, fechaHoy, esCuotaCobrable, prestamosPorId),
       cashflow15: this.calcularCashflow(cuotasActivas, 15, fechaHoy, esCuotaCobrable, prestamosPorId),

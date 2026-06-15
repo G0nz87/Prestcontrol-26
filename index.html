@@ -2597,6 +2597,12 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
   const fallbackCapitalPendiente = fallbackCuotasCobrables.reduce((s,c)=>s+fallbackDesglosar(c).capital,0);
   const fallbackInteresPendiente = fallbackCuotasCobrables.reduce((s,c)=>s+fallbackDesglosar(c).interes,0);
   const fallbackCapitalEnRiesgo = fallbackVencidas.reduce((s,c)=>s+fallbackDesglosar(c).capital,0);
+  const fallbackCapitalEjecutado = cuotas
+    .filter(c=>!c._deleted && (c.estado==='Ejecutada'||c.estado==='Ejecutado'))
+    .reduce((s,c)=>s+fallbackDesglosar(c).capital,0);
+  const fallbackCapitalBase = prestamos
+    .filter(p=>!p._deleted && ['Activo','Atrasado','Pagado','Ejecutado'].includes(p.estado))
+    .reduce((s,p)=>s+Number(p.monto||0),0);
   const fallbackCashflow = dias => {
     const limite = new Date(hoy);
     limite.setDate(limite.getDate() + dias);
@@ -2605,6 +2611,9 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
       .reduce((s,c)=>s+Number(c.monto||0),0);
   };
 
+  const fallbackCuotasPagadas = cuotas.filter(c=>!c._deleted && c.estado==='Pagado');
+  const fallbackInteresCobrado = fallbackCuotasPagadas.reduce((s,c)=>s+fallbackDesglosar(c).interes,0);
+  const fallbackCapitalRecuperado = fallbackCuotasPagadas.reduce((s,c)=>s+fallbackDesglosar(c).capital,0);
   const metricas = window.metricasFinancierasService
     ? window.metricasFinancierasService.calcularMetricasGlobales({ prestamos, cuotas, clientes, hoy, esCuotaCobrable })
     : {
@@ -2614,10 +2623,15 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
         montoVencido: mAtr,
         clientesActivos: clientes.filter(c=>!c._deleted && c.estado==='Activo').length,
         prestamosActivos: prestamos.filter(p=>!p._deleted && (p.estado==='Activo'||p.estado==='Atrasado')).length,
-        interesCobrado: Math.max(0, mCob - (legacyTotalPrestado - legacyTotalACobrar)),
+        interesCobrado: fallbackInteresCobrado,
+        gananciaReal: fallbackInteresCobrado,
         interesPendiente: fallbackInteresPendiente,
         porcentajeRecuperado: legacyTotalPrestado > 0 ? Math.round(mCob / (legacyTotalPrestado + legacyGananciaEsp) * 100) : 0,
-        capitalRecuperado: Math.max(0, legacyTotalPrestado - legacyTotalACobrar),
+        capitalBase: fallbackCapitalBase,
+        capitalRecuperado: fallbackCapitalRecuperado,
+        capitalEjecutado: fallbackCapitalEjecutado,
+        recuperacionCapitalPct: fallbackCapitalBase > 0 ? fallbackCapitalRecuperado / fallbackCapitalBase * 100 : 0,
+        roiBrutoCobrado: fallbackCapitalBase > 0 ? fallbackInteresCobrado / fallbackCapitalBase * 100 : 0,
         capitalPendiente: fallbackCapitalPendiente,
         capitalEnRiesgo: fallbackCapitalEnRiesgo,
         moraReal: mPend > 0 ? Math.round((mAtr / mPend) * 100) : 0,
@@ -2630,11 +2644,14 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
   const capitalRiesgo   = metricas.capitalEnRiesgo;
   const clientesActivos = metricas.clientesActivos;
   const prestActivos    = metricas.prestamosActivos;
-  const gananciaReal    = metricas.interesCobrado;
+  const gananciaReal    = metricas.gananciaReal ?? metricas.interesCobrado;
   const interesPendiente = metricas.interesPendiente;
   const pctCobrado      = metricas.porcentajeRecuperado;
   const capitalRecuperado = metricas.capitalRecuperado;
   const capitalPendiente  = metricas.capitalPendiente;
+  const capitalEjecutado  = metricas.capitalEjecutado;
+  const recuperacionCapitalPct = metricas.recuperacionCapitalPct;
+  const roiBrutoCobrado   = metricas.roiBrutoCobrado;
   const moraReal          = metricas.moraReal;
   const cashflow7         = metricas.cashflow7;
   const cashflow30        = metricas.cashflow30;
@@ -2705,6 +2722,21 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
           <div style="font-size:10px;color:var(--muted)">Capital pendiente</div>
           <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--yel)">${fmtMoney(capitalPendiente)}</div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px">Capital por recuperar</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:10px;color:var(--muted)">Capital ejecutado</div>
+          <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--red)">${fmtMoney(capitalEjecutado)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Capital de cuotas ejecutadas</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:10px;color:var(--muted)">Recuperación capital</div>
+          <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--grn)">${recuperacionCapitalPct.toFixed(1)}%</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Recuperado / capital base</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:10px;color:var(--muted)">ROI bruto</div>
+          <div style="font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--money)">${roiBrutoCobrado.toFixed(1)}%</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Interés cobrado / capital base</div>
         </div>
         <div style="text-align:center">
           <div style="font-size:10px;color:var(--muted)">Mora real</div>
