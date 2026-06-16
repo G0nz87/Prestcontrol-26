@@ -2998,11 +2998,51 @@ function buildDashCliente(cuotas, clientes, prestamos) {
 const ESTADOS_CUOTA_NO_COBRABLE = ['Pagado', 'Ejecutada', 'Ejecutado', 'Cancelada', 'Cancelado'];
 const ESTADOS_PRESTAMO_NO_COBRABLE = ['Pagado', 'Ejecutado', 'Cancelado'];
 const prestamosMap = prestamos => new Map((prestamos || []).map(p => [p.id, p]));
+function esEstadoCuotaCerrado(estado) {
+  return ESTADOS_CUOTA_NO_COBRABLE.includes(estado);
+}
+function esEstadoPrestamoCerrado(estado) {
+  return ESTADOS_PRESTAMO_NO_COBRABLE.includes(estado);
+}
+function normalizarUpdatedAtRemoto(data) {
+  const r = { ...data };
+  if (r.updatedAt?.toMillis) {
+    r.updatedAt = new Date(r.updatedAt.toMillis()).toISOString();
+  }
+  return r;
+}
+function hayConflictoSync(local, remoto) {
+  if (!local || !remoto) return false;
+  const campos = ['estado', 'fechaPago', 'metodo', 'metodoPago', 'monto'];
+  return campos.some(k => String(local?.[k] ?? '') !== String(remoto?.[k] ?? ''));
+}
+function esCambioRemotoMasSeguro(local, remoto) {
+  if (!local || !remoto) return false;
+  if (remoto._deleted && !local._deleted) return true;
+  const remotoCuotaCerrada = esEstadoCuotaCerrado(remoto.estado);
+  const localCuotaAbierta = !esEstadoCuotaCerrado(local.estado);
+  if (remotoCuotaCerrada && localCuotaAbierta) return true;
+  const remotoPrestamoCerrado = esEstadoPrestamoCerrado(remoto.estado);
+  const localPrestamoAbierto = !esEstadoPrestamoCerrado(local.estado);
+  if (remotoPrestamoCerrado && localPrestamoAbierto) return true;
+  return false;
+}
+function debeAplicarRemoto(local, remoto) {
+  if (!local) return true;
+  const rTime = new Date(remoto?.updatedAt || 0).getTime();
+  const lTime = new Date(local?.updatedAt || 0).getTime();
+  if (rTime > lTime) return true;
+  if (esCambioRemotoMasSeguro(local, remoto)) return true;
+  if (hayConflictoSync(local, remoto) && rTime <= lTime) {
+    console.warn('Conflicto sync no aplicado automáticamente:', { local, remoto });
+  }
+  return false;
+}
 function esCuotaCobrable(c, mapaPrestamos) {
   if (!c || c._deleted) return false;
-  if (ESTADOS_CUOTA_NO_COBRABLE.includes(c.estado)) return false;
+  if (esEstadoCuotaCerrado(c.estado)) return false;
   const prestamo = mapaPrestamos?.get(c.prestamoId);
-  if (prestamo && (prestamo._deleted || ESTADOS_PRESTAMO_NO_COBRABLE.includes(prestamo.estado))) return false;
+  if (prestamo && (prestamo._deleted || esEstadoPrestamoCerrado(prestamo.estado))) return false;
   return true;
 }
 
@@ -3032,6 +3072,7 @@ async function renderCobros() {
       c.metodo = 'Efectivo';
       c.updatedAt = new Date().toISOString();
       await dbPut('cuotas', c);
+      await addToSyncQueue('cuotas', c.id, c, 'upsert');
       preIds.add(c.prestamoId);
     }
     for (const pid of preIds) await syncEstadoPrestamo(pid);
@@ -3128,6 +3169,7 @@ async function marcarTodasHoy() {
     c.metodo = 'Efectivo';
     c.updatedAt = new Date().toISOString();
     await dbPut('cuotas', c);
+    await addToSyncQueue('cuotas', c.id, c, 'upsert');
     preIds.add(c.prestamoId);
   }
   for (const pid of preIds) await syncEstadoPrestamo(pid);
@@ -4775,9 +4817,7 @@ async function syncEstadoPrestamo(prestamoId) {
   const nuevo = window.prestamoService.calcularEstado(misCuotas);
 
   if (nuevo && prestamo.estado !== nuevo
-      && prestamo.estado !== 'Cancelado'
-      && prestamo.estado !== 'Pagado'
-      && prestamo.estado !== 'Ejecutado') {
+      && !esEstadoPrestamoCerrado(prestamo.estado)) {
     prestamo.estado    = nuevo;
     prestamo.updatedAt = new Date().toISOString();
     await dbPut('prestamos', prestamo);
@@ -7026,12 +7066,11 @@ async function _pullFromFirebase() {
     const merge = async (store, rows) => {
       for (const r of rows) {
         if (hasPendingSyncOperation(pendingLocalKeys, store, r.id)) continue;
-        const local = await dbGet(store, r.id).catch(() => null);
-        if (!local) { await dbPut(store, r); changed = true; }
-        else {
-          const rTime = r.updatedAt?.toMillis?.() || new Date(r.updatedAt||0).getTime();
-          const lTime = new Date(local.updatedAt||0).getTime();
-          if (rTime > lTime) { await dbPut(store, r); changed = true; }
+        const remoto = normalizarUpdatedAtRemoto(r);
+        const local = await dbGet(store, remoto.id).catch(() => null);
+        if (debeAplicarRemoto(local, remoto)) {
+          await dbPut(store, remoto);
+          changed = true;
         }
       }
     };
@@ -7084,10 +7123,9 @@ async function repararSyncLocalDesdeFirebase() {
     for (const row of rows) {
       if (!row?.id) continue;
       if (hasPendingSyncOperation(pendingKeys, store, row.id)) continue;
-      const data = { ...row };
-      if (data.updatedAt?.toMillis) {
-        data.updatedAt = new Date(data.updatedAt.toMillis()).toISOString();
-      }
+      const data = normalizarUpdatedAtRemoto(row);
+      const local = await dbGet(store, data.id).catch(() => null);
+      if (!debeAplicarRemoto(local, data)) continue;
       await dbPut(store, data);
       actualizados++;
     }
@@ -7349,17 +7387,10 @@ function iniciarSyncRealtime() {
           const pendingLocalKeys = await getSyncQueuePendingRecordKeys();
           for (const change of snapshot.docChanges()) {
             if (change.type === 'added' || change.type === 'modified') {
-              const data = { id: change.doc.id, ...change.doc.data() };
+              const data = normalizarUpdatedAtRemoto({ id: change.doc.id, ...change.doc.data() });
               if (hasPendingSyncOperation(pendingLocalKeys, store, data.id)) continue;
-              // Normalizar updatedAt de Firestore a ISO para consistencia
-              if (data.updatedAt?.toMillis) {
-                data.updatedAt = new Date(data.updatedAt.toMillis()).toISOString();
-              }
               const local = await dbGet(store, data.id).catch(() => null);
-              const rt = new Date(data.updatedAt || 0).getTime();
-              const lt = new Date(local?.updatedAt || 0).getTime();
-              // Aplicar si no existe localmente, o si el remoto es >= (evita perder cambios)
-              if (!local || rt >= lt) { await dbPut(store, data); changed = true; }
+              if (debeAplicarRemoto(local, data)) { await dbPut(store, data); changed = true; }
             } else if (change.type === 'removed') {
               // También reaccionar a borrados remotos
               changed = true;
@@ -7614,7 +7645,7 @@ async function autoUpdateEstados() {
   const cuotas = await dbAll('cuotas');
   const hoy = today();
   for (const c of cuotas) {
-    if (c.estado === 'Pagado' || c.estado === 'Ejecutada') continue;
+    if (esEstadoCuotaCerrado(c.estado)) continue;
     const v = parseDate(c.fechaVenc); if (!v) continue;
     const diasAtr = Math.floor((hoy - v) / 86400000);
     const nuevoEst = diasAtr > 0 ? 'Atrasado' : 'Pendiente';
