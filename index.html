@@ -3747,6 +3747,7 @@ async function renderConfig() {
         <button class="btn btn-gold" onclick="driveAutoSync()">🔄 Sincronizar</button>
         <button class="btn btn-ghost" onclick="driveGuardarAhora()">📤 Guardar ahora</button>
       </div>
+      <button class="btn btn-ghost btn-full" style="margin-top:8px" onclick="repararSyncLocalDesdeFirebase()">Reparar sincronización local</button>
       <div style="margin-top:10px">
         <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Última sincronización:</div>
         <div id="cfg-drive-sync" style="font-size:12px;color:var(--grn)">—</div>
@@ -4780,6 +4781,7 @@ async function syncEstadoPrestamo(prestamoId) {
     prestamo.estado    = nuevo;
     prestamo.updatedAt = new Date().toISOString();
     await dbPut('prestamos', prestamo);
+    await addToSyncQueue('prestamos', prestamo.id, prestamo, 'upsert');
   }
 }
 
@@ -7054,6 +7056,76 @@ async function _pullFromFirebase() {
   }
 }
 
+async function repararSyncLocalDesdeFirebase() {
+  if (!_fbUser || !_fbDb) {
+    toast('⚠️ Firebase no está conectado');
+    return;
+  }
+
+  const pending = await getSyncQueuePending();
+  if (pending.length) {
+    const msg = `Hay operaciones pendientes. Primero guardá ahora. (${pending.length})`;
+    driveSetStatus('err', msg);
+    alert(msg);
+    return;
+  }
+
+  if (!confirm('Esto actualizará los datos locales desde Firebase. No se borrarán operaciones pendientes.')) return;
+
+  driveSetStatus('syncing', 'Reparando sincronización local...');
+
+  const resultado = { clientes: 0, prestamos: 0, cuotas: 0 };
+  const errores = [];
+  const pendingKeys = await getSyncQueuePendingRecordKeys();
+
+  const repararStore = async (store) => {
+    const rows = await fbObtenerTodos(store);
+    let actualizados = 0;
+    for (const row of rows) {
+      if (!row?.id) continue;
+      if (hasPendingSyncOperation(pendingKeys, store, row.id)) continue;
+      const data = { ...row };
+      if (data.updatedAt?.toMillis) {
+        data.updatedAt = new Date(data.updatedAt.toMillis()).toISOString();
+      }
+      await dbPut(store, data);
+      actualizados++;
+    }
+    resultado[store] = actualizados;
+  };
+
+  for (const store of ['clientes', 'prestamos', 'cuotas']) {
+    try {
+      await repararStore(store);
+    } catch(e) {
+      errores.push(`${store}: ${firebaseErrorMessage(e)}`);
+    }
+  }
+
+  if (!errores.length) {
+    const now = new Date().toISOString();
+    await setGlobalConfig('drive_last_sync_' + currentUser, now);
+    const syncEl = document.getElementById('cfg-drive-sync');
+    if (syncEl) syncEl.textContent = '✅ ' + new Date(now).toLocaleString('es-AR');
+    await updateBadges();
+    await renderPage(curPage);
+    driveSetStatus('ok', 'Sincronización local reparada ✓');
+  } else {
+    driveSetStatus('err', 'Reparación incompleta');
+  }
+
+  const msg = [
+    'Reparación de sincronización local finalizada.',
+    '',
+    `Clientes actualizados: ${resultado.clientes}`,
+    `Préstamos actualizados: ${resultado.prestamos}`,
+    `Cuotas actualizadas: ${resultado.cuotas}`,
+    `Operaciones pendientes: ${pending.length}`,
+    errores.length ? `Errores:\n${errores.join('\n')}` : 'Errores: ninguno'
+  ].join('\n');
+  alert(msg);
+}
+
 async function driveSave()     { await _pushToFirebase(); }
 async function driveLoad()     { return null; }
 async function driveAutoSync() {
@@ -7546,7 +7618,11 @@ async function autoUpdateEstados() {
     const v = parseDate(c.fechaVenc); if (!v) continue;
     const diasAtr = Math.floor((hoy - v) / 86400000);
     const nuevoEst = diasAtr > 0 ? 'Atrasado' : 'Pendiente';
-    if (c.estado !== nuevoEst) { c.estado = nuevoEst; await dbPut('cuotas', c); }
+    if (c.estado !== nuevoEst) {
+      c.estado = nuevoEst;
+      await dbPut('cuotas', c);
+      await addToSyncQueue('cuotas', c.id, c, 'upsert');
+    }
   }
   // Sync loan states
   const prestamos = await dbAll('prestamos');
