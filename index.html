@@ -379,6 +379,28 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 .chart-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
 .chart-wrap{position:relative;height:180px}
 
+/* DASHBOARD GRAFICOS */
+.dash-charts{display:grid;gap:12px}
+.dash-charts .dtabs{margin-bottom:0}
+.dash-chart-grid{display:grid;grid-template-columns:1fr;gap:12px}
+.dash-chart-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px}
+.dash-chart-title{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px}
+.dash-chart-wrap{position:relative;min-height:220px;height:220px}
+.dash-chart-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.dash-chart-kpi{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:9px 10px}
+.dash-chart-kpi-l{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.35px}
+.dash-chart-kpi-v{font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--money);margin-top:3px;overflow-wrap:anywhere}
+.dash-chart-empty{min-height:220px;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);font-size:13px;line-height:1.45;background:var(--bg);border:1px dashed var(--border);border-radius:12px;padding:18px}
+.dash-chart-filter{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+.dash-chart-filter .dtab{white-space:nowrap}
+@media (min-width:600px){
+  #pg-dashboard:has(.dash-charts){max-width:920px;padding-left:20px;padding-right:20px}
+  .dash-chart-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dash-chart-wide{grid-column:1/-1}
+  .dash-chart-wide .dash-chart-wrap{height:280px}
+  .dash-chart-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+
 /* HISTORY */
 .hist-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
 .hist-item:last-child{border-bottom:none}
@@ -769,6 +791,13 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
           <option value="Bajo">🟢 Bajo</option>
           <option value="Medio">🟡 Medio</option>
           <option value="Alto">🔴 Alto</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="lbl">Estado</label>
+        <select class="inp" id="cli-estado">
+          <option value="Activo">Activo</option>
+          <option value="Bloqueado">Bloqueado</option>
         </select>
       </div>
       <div class="field">
@@ -3102,7 +3131,7 @@ function cuotaItemHTML(c, tipo) {
 
 /* ---- CLIENTES ---- */
 function situacionCrediticiaCliente(cliente, prestamos, cuotas, mapaPrestamos, hoy) {
-  if (cliente?.estado !== 'Activo') {
+  if (!['Activo', 'Bloqueado'].includes(cliente?.estado)) {
     return { codigo:'inactivo', label:'Inactivo', badgeClass:'bg-muted', lineClass:'lmuted', prioridad:4 };
   }
 
@@ -3174,12 +3203,12 @@ function filterClientes(q) {
 
 function cliItemHTML(c) {
   const rMap = {Bajo:'bg-grn',Medio:'bg-yel',Alto:'bg-red'};
-  const eCls = c.estado==='Activo' ? 'bg-blu' : 'bg-muted';
+  const eCls = c.estado === 'Bloqueado' ? 'bg-red' : (c.estado === 'Activo' ? 'bg-blu' : 'bg-muted');
   const estadoAdministrativo = c.estado === 'Activo' ? 'Habilitado' : (c.estado || 'Inactivo');
   const situacion = c._situacionCrediticia || {
-    label: c.estado === 'Activo' ? 'Sin deuda' : 'Inactivo',
-    badgeClass: c.estado === 'Activo' ? 'bg-grn' : 'bg-muted',
-    lineClass: c.estado === 'Activo' ? 'lgrn' : 'lmuted'
+    label: ['Activo', 'Bloqueado'].includes(c.estado) ? 'Sin deuda' : 'Inactivo',
+    badgeClass: ['Activo', 'Bloqueado'].includes(c.estado) ? 'bg-grn' : 'bg-muted',
+    lineClass: ['Activo', 'Bloqueado'].includes(c.estado) ? 'lgrn' : 'lmuted'
   };
   const subInfo = [
     c.dni ? '🪪 ' + esc(c.dni) : '',
@@ -3854,7 +3883,7 @@ async function openClienteDetail(id) {
   }
 
   const rMap = {Bajo:'bg-grn',Medio:'bg-yel',Alto:'bg-red'};
-  const eCls = cliente.estado==='Activo' ? 'bg-blu' : 'bg-muted';
+  const eCls = cliente.estado === 'Bloqueado' ? 'bg-red' : (cliente.estado === 'Activo' ? 'bg-blu' : 'bg-muted');
   const estadoAdministrativo = cliente.estado === 'Activo' ? 'Habilitado' : (cliente.estado || 'Inactivo');
   // Contadores de créditos
   const prestamosVigentes = misPrestamos.filter(p => p.estado === 'Activo' || p.estado === 'Atrasado');
@@ -3899,7 +3928,8 @@ async function openClienteDetail(id) {
       `}
     </div>
     ${cliente.notas ? `<div class="card-sm" style="font-size:13px;color:var(--muted)">📝 ${esc(cliente.notas)}</div>` : ''}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+      <button class="btn btn-gold" onclick="darPrestamoCliente('${esc(id)}')">Dar préstamo</button>
       <button class="btn btn-ghost" onclick="editarCliente('${esc(id)}')">✏️ Editar</button>
       <button class="btn btn-red" onclick="confirmarBorrarCliente('${esc(id)}')">🗑️ Eliminar</button>
     </div>
@@ -4405,16 +4435,27 @@ function filtrarClientesAC(q) {
   if (!lista.length) {
     drop.innerHTML = `<div class="ac-item" style="color:var(--muted);cursor:default">Sin resultados</div>`;
   } else {
-    drop.innerHTML = lista.slice(0, 8).map(c => {
-      const nombre = esc(c.nombre);
-      const marked = r ? nombre.replace(new RegExp(`(${r.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'), '<b>$1</b>') : nombre;
-      return `<div class="ac-item" onclick="seleccionarClienteAC('${esc(c.id)}','${esc(c.nombre)}')">${marked}${c.telefono?` <span style="color:var(--muted);font-size:11px">· ${esc(c.telefono)}</span>`:''}</div>`;
-    }).join('');
+    drop.innerHTML = lista.slice(0, 8).map(c => clienteACItemHTML(c, r)).join('');
   }
   drop.classList.add('on');
 }
 
+function clienteACItemHTML(c, r) {
+  const nombre = esc(c.nombre);
+  const marked = r ? nombre.replace(new RegExp(`(${r.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'), '<b>$1</b>') : nombre;
+  const bloqueado = c.estado === 'Bloqueado';
+  const tel = c.telefono ? ` <span style="color:var(--muted);font-size:11px">· ${esc(c.telefono)}</span>` : '';
+  const badge = bloqueado ? ' <span class="badge bg-red">Bloqueado</span>' : '';
+  const style = bloqueado ? 'color:var(--red);cursor:not-allowed' : '';
+  return `<div class="ac-item" style="${style}" onclick="seleccionarClienteAC('${esc(c.id)}','${esc(c.nombre)}')">${marked}${tel}${badge}</div>`;
+}
+
 function seleccionarClienteAC(id, nombre) {
+  const cliente = (_acClientes || []).find(c => c.id === id);
+  if (cliente?.estado === 'Bloqueado') {
+    toast('Cliente bloqueado. No puede recibir nuevos préstamos.');
+    return;
+  }
   document.getElementById('pre-cliente').value = id;
   document.getElementById('pre-cliente-search').value = '';
   document.getElementById('pre-cliente-search').style.display = 'none';
@@ -4431,6 +4472,16 @@ function limpiarClienteAC() {
   document.getElementById('pre-cliente-search').focus && document.getElementById('pre-cliente-search').focus();
   document.getElementById('pre-cliente-drop').classList.remove('on');
   document.getElementById('pre-cliente-tag').classList.remove('on');
+}
+
+async function darPrestamoCliente(clienteId) {
+  const cliente = await dbGet('clientes', clienteId);
+  if (!cliente) { toast('Cliente no encontrado'); return; }
+  if (cliente.estado === 'Bloqueado') {
+    toast('Cliente bloqueado. No puede recibir nuevos préstamos.');
+    return;
+  }
+  openSheetPrestamo(clienteId);
 }
 
 // Cerrar dropdown al tocar fuera
@@ -4681,12 +4732,40 @@ var _deletePrestamoMotivo = null;
    GRÁFICOS
 ===================================================== */
 let chartInstances = {};
+let dashGraficosFiltro = 'Todos';
+
+function filtrarDashGraficos(filtro) {
+  if (!['Todos', 'Semanal', 'Mensual'].includes(filtro)) return;
+  dashGraficosFiltro = filtro;
+  renderGraficos();
+}
 
 async function renderGraficos() {
   const el = document.getElementById('pg-dashboard');
   const [cuotas, clientes, prestamos] = await Promise.all([
     dbAllIncludeDeleted('cuotas'), dbAllIncludeDeleted('clientes'), dbAllIncludeDeleted('prestamos')
   ]);
+  const hoy = today();
+  const filtroGraficos = dashGraficosFiltro || 'Todos';
+  const prestamosFiltrados = filtroGraficos === 'Todos'
+    ? prestamos
+    : prestamos.filter(p => p.tipo === filtroGraficos);
+  const prestamosFiltradosIds = new Set(prestamosFiltrados.map(p => p.id));
+  const cuotasFiltradas = filtroGraficos === 'Todos'
+    ? cuotas
+    : cuotas.filter(c => prestamosFiltradosIds.has(c.prestamoId));
+  const prestamosPorId = prestamosMap(prestamosFiltrados);
+  const clientesFiltradosIds = new Set(prestamosFiltrados.map(p => p.clienteId));
+  const cuotasActivas = cuotasFiltradas.filter(c => !c._deleted);
+  const clientesNoEliminados = clientes.filter(c =>
+    !c._deleted && (filtroGraficos === 'Todos' || clientesFiltradosIds.has(c.id))
+  );
+  const clientesHabilitados = clientesNoEliminados.filter(c => c.estado === 'Activo');
+  const clientesBloqueados = clientesNoEliminados.filter(c => c.estado === 'Bloqueado').length;
+  const cuotasCobrables = cuotasActivas.filter(c => esCuotaCobrable(c, prestamosPorId));
+  const metricasGlobales = window.metricasFinancierasService.calcularMetricasGlobales({
+    prestamos: prestamosFiltrados, cuotas: cuotasFiltradas, clientes, hoy, esCuotaCobrable
+  });
 
   // Destroy previous charts
   Object.values(chartInstances).forEach(c => { try { c.destroy(); } catch(e){} });
@@ -4700,48 +4779,75 @@ async function renderGraficos() {
     months.push({ label: d.toLocaleDateString('es-AR',{month:'short',year:'2-digit'}), year: d.getFullYear(), month: d.getMonth() });
   }
   const cobrosPorMes = months.map(m => {
-    return cuotas.filter(c => {
+    return cuotasActivas.filter(c => {
       if (c.estado !== 'Pagado' || !c.fechaPago) return false;
       const fp = parseDate(c.fechaPago);
       return fp && fp.getFullYear() === m.year && fp.getMonth() === m.month;
     }).reduce((s,c)=>s+Number(c.monto||0),0);
   });
 
-  const pendPorMes = months.map(m => {
-    return cuotas.filter(c => {
-      if (c.estado === 'Pagado') return false;
+  const cobrablePorMes = months.map(m => {
+    return cuotasCobrables.filter(c => {
       const fv = parseDate(c.fechaVenc);
       return fv && fv.getFullYear() === m.year && fv.getMonth() === m.month;
     }).reduce((s,c)=>s+Number(c.monto||0),0);
   });
 
-  // Riesgo por cliente
-  const bajo = clientes.filter(c=>c.riesgo==='Bajo').length;
-  const medio= clientes.filter(c=>c.riesgo==='Medio').length;
-  const alto = clientes.filter(c=>c.riesgo==='Alto').length;
+  // Situacion crediticia de clientes
+  const situacionesClientes = clientesNoEliminados.filter(c => c.estado !== 'Bloqueado').map(c =>
+    situacionCrediticiaCliente(c, prestamosFiltrados, cuotasFiltradas, prestamosPorId, hoy)
+  );
+  const clientesAtrasados = situacionesClientes.filter(s => s.codigo === 'atrasado').length;
+  const clientesCreditoActivo = situacionesClientes.filter(s => s.codigo === 'credito_activo').length;
+  const clientesSinDeuda = situacionesClientes.filter(s => s.codigo === 'sin_deuda').length;
 
-  // Estado cuotas
-  const pag  = cuotas.filter(c=>c.estado==='Pagado').length;
-  const pen  = cuotas.filter(c=>c.estado==='Pendiente').length;
-  const atr  = cuotas.filter(c=>c.estado==='Atrasado').length;
+  const totalCobradoMes = cobrosPorMes.reduce((s,n)=>s+n,0);
+  const totalCobrableMes = cobrablePorMes.reduce((s,n)=>s+n,0);
+  const totalSituacionClientes = clientesAtrasados + clientesCreditoActivo + clientesSinDeuda + clientesBloqueados;
+  const totalCartera = metricasGlobales.capitalRecuperado + metricasGlobales.capitalPendiente + metricasGlobales.capitalEjecutado;
 
-  el.innerHTML = `<div class="fadeIn">
+  el.innerHTML = `<div class="fadeIn dash-charts">
     <div class="dtabs">
       <button class="dtab" onclick="switchDashTab('global')">🌐 Global</button>
       <button class="dtab" onclick="switchDashTab('cliente')">👤 Cliente</button>
       <button class="dtab on" onclick="switchDashTab('graficos')">📊 Gráficos</button>
     </div>
-    <div class="chart-card">
-      <div class="chart-title">💵 Cobros vs Pendientes por mes</div>
-      <div class="chart-wrap"><canvas id="chart-cobros"></canvas></div>
+    <div class="dash-chart-filter">
+      <button class="dtab ${filtroGraficos === 'Todos' ? 'on' : ''}" onclick="filtrarDashGraficos('Todos')">Todos</button>
+      <button class="dtab ${filtroGraficos === 'Semanal' ? 'on' : ''}" onclick="filtrarDashGraficos('Semanal')">Semanales</button>
+      <button class="dtab ${filtroGraficos === 'Mensual' ? 'on' : ''}" onclick="filtrarDashGraficos('Mensual')">Mensuales</button>
     </div>
-    <div class="chart-card">
-      <div class="chart-title">🎯 Estado de todas las cuotas</div>
-      <div class="chart-wrap" style="height:160px"><canvas id="chart-estado"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">👥 Riesgo de clientes</div>
-      <div class="chart-wrap" style="height:160px"><canvas id="chart-riesgo"></canvas></div>
+    <div class="dash-chart-grid">
+      <div class="dash-chart-card dash-chart-wide">
+        <div class="dash-chart-title">💵 Cobrado real vs cobrable por mes</div>
+        <div class="dash-chart-kpis">
+          <div class="dash-chart-kpi"><div class="dash-chart-kpi-l">Cobrado 6 meses</div><div class="dash-chart-kpi-v" style="color:var(--grn)">${fmtMoney(totalCobradoMes)}</div></div>
+          <div class="dash-chart-kpi"><div class="dash-chart-kpi-l">Cobrable 6 meses</div><div class="dash-chart-kpi-v" style="color:var(--yel)">${fmtMoney(totalCobrableMes)}</div></div>
+        </div>
+        ${totalCobradoMes || totalCobrableMes
+          ? '<div class="dash-chart-wrap"><canvas id="chart-cobros"></canvas></div>'
+          : '<div class="dash-chart-empty">Sin cobros ni cuotas cobrables en los últimos 6 meses.</div>'}
+      </div>
+      <div class="dash-chart-card">
+        <div class="dash-chart-title">👥 Situación crediticia de clientes</div>
+        <div class="dash-chart-kpis">
+          <div class="dash-chart-kpi"><div class="dash-chart-kpi-l">Clientes habilitados</div><div class="dash-chart-kpi-v">${clientesHabilitados.length}</div></div>
+          <div class="dash-chart-kpi"><div class="dash-chart-kpi-l">Atrasados</div><div class="dash-chart-kpi-v" style="color:var(--red)">${clientesAtrasados}</div></div>
+        </div>
+        ${totalSituacionClientes
+          ? '<div class="dash-chart-wrap"><canvas id="chart-situacion"></canvas></div>'
+          : '<div class="dash-chart-empty">Sin clientes para graficar.</div>'}
+      </div>
+      <div class="dash-chart-card">
+        <div class="dash-chart-title">💼 Estado de cartera</div>
+        <div class="dash-chart-kpis">
+          <div class="dash-chart-kpi"><div class="dash-chart-kpi-l">Recuperado</div><div class="dash-chart-kpi-v" style="color:var(--grn)">${fmtMoney(metricasGlobales.capitalRecuperado)}</div></div>
+          <div class="dash-chart-kpi"><div class="dash-chart-kpi-l">Pendiente</div><div class="dash-chart-kpi-v" style="color:var(--yel)">${fmtMoney(metricasGlobales.capitalPendiente)}</div></div>
+        </div>
+        ${totalCartera
+          ? '<div class="dash-chart-wrap"><canvas id="chart-cartera"></canvas></div>'
+          : '<div class="dash-chart-empty">Sin cartera para graficar.</div>'}
+      </div>
     </div>
   </div>`;
 
@@ -4749,35 +4855,55 @@ async function renderGraficos() {
   Chart.defaults.color = '#94A3B8';
   Chart.defaults.font.family = "'DM Sans', sans-serif";
 
-  chartInstances.cobros = new Chart(document.getElementById('chart-cobros'), {
-    type: 'bar',
-    data: {
-      labels: months.map(m=>m.label),
-      datasets: [
-        { label:'Cobrado', data: cobrosPorMes, backgroundColor:'rgba(34,197,94,.7)', borderRadius:6 },
-        { label:'Pendiente', data: pendPorMes, backgroundColor:'rgba(251,191,36,.5)', borderRadius:6 }
-      ]
-    },
-    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{labels:{color:'#94A3B8',font:{size:11}}} }, scales:{ x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{font:{size:10}}}, y:{grid:{color:'rgba(255,255,255,.05)'},ticks:{callback:v=>'$'+Number(v).toLocaleString('es-AR',{maximumFractionDigits:0}),font:{size:10}}} } }
-  });
+  const legendBottom = { position:'bottom', labels:{ color:'#94A3B8', font:{ size:11 }, padding:10, boxWidth:12 } };
+  const gridColor = 'rgba(255,255,255,.05)';
 
-  chartInstances.estado = new Chart(document.getElementById('chart-estado'), {
-    type: 'doughnut',
-    data: {
-      labels: ['Pagadas','Pendientes','Atrasadas'],
-      datasets: [{ data:[pag,pen,atr], backgroundColor:['rgba(34,197,94,.8)','rgba(251,191,36,.8)','rgba(239,68,68,.8)'], borderWidth:0 }]
-    },
-    options: { responsive:true, maintainAspectRatio:false, cutout:'65%', plugins:{ legend:{position:'right',labels:{color:'#94A3B8',font:{size:11},padding:8}} } }
-  });
+  const cobrosCanvas = document.getElementById('chart-cobros');
+  if (cobrosCanvas) {
+    chartInstances.cobros = new Chart(cobrosCanvas, {
+      type: 'bar',
+      data: {
+        labels: months.map(m=>m.label),
+        datasets: [
+          { label:'Cobrado real', data:cobrosPorMes, backgroundColor:'rgba(16,185,129,.75)', borderRadius:6 },
+          { label:'Cobrable', data:cobrablePorMes, backgroundColor:'rgba(245,158,11,.55)', borderRadius:6 }
+        ]
+      },
+      options: {
+        responsive:true,
+        maintainAspectRatio:false,
+        plugins:{ legend:legendBottom },
+        scales:{
+          x:{ grid:{ color:gridColor }, ticks:{ font:{ size:10 } } },
+          y:{ grid:{ color:gridColor }, ticks:{ callback:v=>'$'+Number(v).toLocaleString('es-AR',{maximumFractionDigits:0}), font:{ size:10 } } }
+        }
+      }
+    });
+  }
 
-  chartInstances.riesgo = new Chart(document.getElementById('chart-riesgo'), {
-    type: 'doughnut',
-    data: {
-      labels: ['Bajo','Medio','Alto'],
-      datasets: [{ data:[bajo,medio,alto], backgroundColor:['rgba(34,197,94,.8)','rgba(251,191,36,.8)','rgba(239,68,68,.8)'], borderWidth:0 }]
-    },
-    options: { responsive:true, maintainAspectRatio:false, cutout:'65%', plugins:{ legend:{position:'right',labels:{color:'#94A3B8',font:{size:11},padding:8}} } }
-  });
+  const situacionCanvas = document.getElementById('chart-situacion');
+  if (situacionCanvas) {
+    chartInstances.situacion = new Chart(situacionCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: ['Atrasado','Crédito activo','Sin deuda','Bloqueado'],
+        datasets: [{ data:[clientesAtrasados,clientesCreditoActivo,clientesSinDeuda,clientesBloqueados], backgroundColor:['rgba(239,68,68,.85)','rgba(96,165,250,.8)','rgba(16,185,129,.85)','rgba(148,163,184,.55)'], borderWidth:0 }]
+      },
+      options: { responsive:true, maintainAspectRatio:false, cutout:'62%', plugins:{ legend:legendBottom } }
+    });
+  }
+
+  const carteraCanvas = document.getElementById('chart-cartera');
+  if (carteraCanvas) {
+    chartInstances.cartera = new Chart(carteraCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: ['Capital recuperado','Capital pendiente','Capital ejecutado'],
+        datasets: [{ data:[metricasGlobales.capitalRecuperado,metricasGlobales.capitalPendiente,metricasGlobales.capitalEjecutado], backgroundColor:['rgba(16,185,129,.85)','rgba(245,158,11,.8)','rgba(239,68,68,.85)'], borderWidth:0 }]
+      },
+      options: { responsive:true, maintainAspectRatio:false, cutout:'62%', plugins:{ legend:legendBottom } }
+    });
+  }
 }
 
 /* =====================================================

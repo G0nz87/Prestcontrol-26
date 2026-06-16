@@ -8,7 +8,7 @@
 // - abrirPago / confirmarPago (cuota, no prestamo)
 // - imprimirComprobantePrestamo / enviarWACuota (utility actions)
 
-export function openSheetPrestamo() {
+export function openSheetPrestamo(clientePreseleccionadoId = null) {
   ['pre-monto','pre-interes','pre-ncuotas','pre-notas','pre-prenda'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('pre-tipo').value = 'Mensual';
   document.getElementById('pre-fecha').value = new Date().toISOString().split('T')[0];
@@ -16,13 +16,19 @@ export function openSheetPrestamo() {
   window.limpiarClienteAC();
 
   window.dbAll('clientes').then(lista => {
-    window._acClientes = lista.filter(c => c.estado === 'Activo');
+    window._acClientes = lista.filter(c => ['Activo', 'Bloqueado'].includes(c.estado));
     if (!window._acClientes.length) {
-      document.getElementById('pre-cliente-search').placeholder = 'Sin clientes activos';
+      document.getElementById('pre-cliente-search').placeholder = 'Sin clientes disponibles';
       document.getElementById('pre-cliente-search').disabled = true;
     } else {
       document.getElementById('pre-cliente-search').placeholder = 'Buscar cliente por nombre…';
       document.getElementById('pre-cliente-search').disabled = false;
+    }
+    if (clientePreseleccionadoId) {
+      const cliente = window._acClientes.find(c => c.id === clientePreseleccionadoId);
+      if (cliente && cliente.estado !== 'Bloqueado') {
+        window.seleccionarClienteAC(cliente.id, cliente.nombre);
+      }
     }
   });
 
@@ -55,6 +61,9 @@ export async function savePrestamo() {
   }
 
   const cliente = await window.dbGet('clientes', clienteId);
+  if (cliente?.estado === 'Bloqueado') {
+    return window.toast('Cliente bloqueado. No puede recibir nuevos préstamos.');
+  }
   if (!cliente) return window.toast('⚠️ Cliente no encontrado');
 
   // Calculo financiero delegado al service

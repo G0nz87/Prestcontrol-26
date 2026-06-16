@@ -9,6 +9,7 @@ export function openSheetCliente(editId = null) {
   if (!editId) {
     ['cli-nombre','cli-dni','cli-tel','cli-dir','cli-notas'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('cli-riesgo').value = 'Bajo';
+    document.getElementById('cli-estado').value = 'Activo';
   }
   window.openSheet('sh-cliente');
 }
@@ -21,6 +22,7 @@ export async function editarCliente(id) {
   document.getElementById('cli-tel').value    = c.telefono || '';
   document.getElementById('cli-dir').value    = c.direccion || '';
   document.getElementById('cli-riesgo').value = c.riesgo || 'Bajo';
+  document.getElementById('cli-estado').value = c.estado === 'Bloqueado' ? 'Bloqueado' : 'Activo';
   document.getElementById('cli-notas').value  = c.notas || '';
   openSheetCliente(id);
 }
@@ -30,6 +32,7 @@ export async function saveCliente() {
   const dni      = document.getElementById('cli-dni').value.trim();
   const telefono = document.getElementById('cli-tel').value.trim();
   const editId   = document.getElementById('cli-edit-id').value;
+  const estado   = document.getElementById('cli-estado').value === 'Bloqueado' ? 'Bloqueado' : 'Activo';
 
   // Validacion delegada al service (nombre obligatorio, DNI formato + duplicado, telefono formato)
   try {
@@ -51,7 +54,7 @@ export async function saveCliente() {
     direccion: document.getElementById('cli-dir').value.trim(),
     riesgo   : document.getElementById('cli-riesgo').value,
     notas    : document.getElementById('cli-notas').value.trim(),
-    estado   : 'Activo',
+    estado,
     _deleted : false,
     deletedAt: null,
     creadoEn : editId ? undefined : new Date().toISOString()
@@ -59,7 +62,7 @@ export async function saveCliente() {
 
   if (editId) {
     const orig = await window.dbGet('clientes', editId);
-    Object.assign(cli, { estado: orig.estado, creadoEn: orig.creadoEn });
+    Object.assign(cli, { creadoEn: orig.creadoEn });
   }
 
   await window.dbPut('clientes', cli);
