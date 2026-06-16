@@ -36,27 +36,49 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html{overscroll-behavior:none}
 :root{
-  --bg:#0F172A;
-  --bg2:#1E293B;
-  --card:#1E293B;
-  --card2:#334155;
-  --accent:#3B82F6;
-  --accent2:#2563EB;
-  --accentBg:rgba(59,130,246,.12);
-  /* compatibilidad con código JS que usa --gold */
-  --gold:#3B82F6;
-  --gold2:#2563EB;
-  --goldBg:rgba(59,130,246,.12);
-  --txt:#F1F5F9;
-  --muted:#94A3B8;
-  --border:rgba(148,163,184,.12);
-  --grn:#10B981;
-  --grnBg:rgba(16,185,129,.12);
-  --red:#EF4444;
-  --redBg:rgba(239,68,68,.12);
-  --yel:#F59E0B;
-  --yelBg:rgba(245,158,11,.12);
-  --money:#60A5FA;
+  /* Tokens profesionales */
+  --surface-0:#0F172A;
+  --surface-1:#1E293B;
+  --surface-2:#334155;
+  --surface-3:#475569;
+  --text-strong:#F8FAFC;
+  --text-main:#F1F5F9;
+  --text-muted:#94A3B8;
+  --border-soft:rgba(148,163,184,.12);
+  --primary:#3B82F6;
+  --primary-strong:#2563EB;
+  --primary-soft:rgba(59,130,246,.12);
+  --success:#10B981;
+  --success-soft:rgba(16,185,129,.12);
+  --warning:#F59E0B;
+  --warning-soft:rgba(245,158,11,.12);
+  --danger:#EF4444;
+  --danger-soft:rgba(239,68,68,.12);
+  --info:#60A5FA;
+  --info-soft:rgba(96,165,250,.12);
+  --muted-soft:rgba(255,255,255,.05);
+
+  /* Compatibilidad legacy */
+  --bg:var(--surface-0);
+  --bg2:var(--surface-1);
+  --card:var(--surface-1);
+  --card2:var(--surface-2);
+  --accent:var(--primary);
+  --accent2:var(--primary-strong);
+  --accentBg:var(--primary-soft);
+  --gold:var(--primary);
+  --gold2:var(--primary-strong);
+  --goldBg:var(--primary-soft);
+  --txt:var(--text-main);
+  --muted:var(--text-muted);
+  --border:var(--border-soft);
+  --grn:var(--success);
+  --grnBg:var(--success-soft);
+  --red:var(--danger);
+  --redBg:var(--danger-soft);
+  --yel:var(--warning);
+  --yelBg:var(--warning-soft);
+  --money:var(--info);
   --nav:60px;
   --radius:12px;
   --shadow:0 4px 20px rgba(15,23,42,.2);
