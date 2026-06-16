@@ -163,12 +163,13 @@ input,select,textarea{font-family:'DM Sans',sans-serif}
 /* LIST ITEMS */
 .li{cursor:pointer;border-left:4px solid var(--accent);transition:.15s}
 .li:active{background:var(--card2)}
-.li.lred{border-left-color:var(--red)}
-.li.lgrn{border-left-color:var(--grn)}
-.li.lgold{border-left-color:var(--money)}
-.li.lblue{border-left-color:#60A5FA}
-.li.lvio{border-left-color:#A78BFA}
-.li.lmuted{border-left-color:var(--muted)}
+.li.line-danger,.li.lred{border-left-color:var(--danger)}
+.li.line-success,.li.lgrn{border-left-color:var(--success)}
+.li.line-warning,.li.lgold{border-left-color:var(--warning)}
+.li.line-info,.li.lblue{border-left-color:var(--info)}
+.li.line-primary{border-left-color:var(--primary)}
+.li.line-violet,.li.lvio{border-left-color:#A78BFA}
+.li.line-muted,.li.lmuted{border-left-color:var(--muted)}
 .li-row{display:flex;justify-content:space-between;align-items:center}
 .li-name{font-size:15px;font-weight:700}
 .li-sub{font-size:12px;color:var(--muted);margin-top:2px}
@@ -176,12 +177,13 @@ input,select,textarea{font-family:'DM Sans',sans-serif}
 
 /* BADGES */
 .badge{padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;display:inline-block}
-.bg-red{background:var(--redBg);color:var(--red);border:1px solid rgba(239,68,68,.2)}
-.bg-yel{background:var(--yelBg);color:var(--yel);border:1px solid rgba(245,158,11,.2)}
-.bg-grn{background:var(--grnBg);color:var(--grn);border:1px solid rgba(16,185,129,.2)}
-.bg-blu{background:var(--accentBg);color:var(--accent);border:1px solid rgba(59,130,246,.2)}
-.bg-vio{background:rgba(167,139,250,.12);color:#A78BFA;border:1px solid rgba(167,139,250,.22)}
-.bg-muted{background:rgba(255,255,255,.05);color:var(--muted);border:1px solid var(--border)}
+.badge-success,.bg-grn{background:var(--success-soft);color:var(--success);border:1px solid rgba(16,185,129,.2)}
+.badge-danger,.bg-red{background:var(--danger-soft);color:var(--danger);border:1px solid rgba(239,68,68,.2)}
+.badge-warning,.bg-yel{background:var(--warning-soft);color:var(--warning);border:1px solid rgba(245,158,11,.2)}
+.badge-info,.bg-blu{background:var(--info-soft);color:var(--info);border:1px solid rgba(96,165,250,.22)}
+.badge-primary{background:var(--primary-soft);color:var(--primary);border:1px solid rgba(59,130,246,.2)}
+.badge-violet,.bg-vio{background:rgba(167,139,250,.12);color:#A78BFA;border:1px solid rgba(167,139,250,.22)}
+.badge-muted,.bg-muted{background:var(--muted-soft);color:var(--muted);border:1px solid var(--border)}
 
 /* AVATAR */
 .ava{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;flex-shrink:0}
@@ -190,6 +192,45 @@ input,select,textarea{font-family:'DM Sans',sans-serif}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .chip{background:var(--bg);border-radius:7px;padding:6px 10px;font-size:12px;border:1px solid var(--border)}
 .chip b{display:block;font-size:14px;font-family:'DM Mono',monospace;color:var(--money);margin-top:1px}
+
+/* OPERATIVE CARDS */
+.op-card{position:relative;overflow:hidden}
+.op-card .li-row{gap:10px}
+.op-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.op-main{min-width:0;flex:1}
+.op-title{font-size:15px;font-weight:900;letter-spacing:-.15px;color:var(--text-strong);line-height:1.25}
+.op-meta{display:flex;flex-wrap:wrap;gap:5px 9px;margin-top:4px;font-size:11px;color:var(--muted);line-height:1.35}
+.op-meta span{min-width:0}
+.op-badges{display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;align-items:flex-start;max-width:48%}
+.op-amount{font-size:20px;font-weight:900;font-family:'DM Mono',monospace;color:var(--money);line-height:1.1;white-space:nowrap}
+.op-label{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.45px}
+.op-actions{display:flex;gap:8px;margin-top:12px}
+.op-actions .btn:first-child{flex:1}
+.op-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:12px;pointer-events:none}
+.op-loan .op-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+.op-kpi{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:8px 9px;min-width:0}
+.op-kpi-label{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.35px}
+.op-kpi-value{font-size:13px;font-weight:900;font-family:'DM Mono',monospace;color:var(--money);margin-top:2px;overflow-wrap:anywhere}
+.op-kpi-value.is-main{color:var(--text-strong)}
+.op-progress-meta{font-size:10px;color:var(--muted);margin-top:5px;text-align:right;pointer-events:none}
+.op-client{padding:14px}
+.op-client .li-row{align-items:flex-start}
+.op-client .li-name{font-size:16px;font-weight:900;color:var(--text-strong);letter-spacing:-.15px}
+.op-client .li-sub{font-size:11px;line-height:1.45;margin-top:4px}
+.op-client .badge{font-size:10px;padding:3px 7px}
+.op-loan .loan-hdr{align-items:flex-start}
+.op-loan .li-name{font-size:15px;font-weight:900;color:var(--text-strong)}
+.op-loan .li-sub{margin-top:4px}
+.op-cuota .li-name,.op-alert .li-name{font-size:15px;font-weight:900;color:var(--text-strong)}
+.op-cuota .li-sub,.op-alert .li-sub{margin-top:4px;line-height:1.4}
+.op-cuota .li-amt,.op-alert .li-amt{font-size:22px;color:var(--text-strong)}
+.op-money-row{padding-top:8px;border-top:1px solid var(--border)}
+@media (max-width:380px){
+  .op-head{flex-direction:column}
+  .op-badges{max-width:none;justify-content:flex-start}
+  .op-kpis{grid-template-columns:1fr 1fr}
+  .op-loan .op-kpis{grid-template-columns:1fr 1fr}
+}
 
 /* BOTTOM SHEET */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;opacity:0;pointer-events:none;transition:opacity .2s;backdrop-filter:blur(4px)}
@@ -1928,14 +1969,14 @@ function calcularScoring(cuotas) {
 
 function prestamoEstadoUI(estado) {
   const map = {
-    Activo: { badgeClass: 'bg-blu', lineClass: 'lblue' },
-    Atrasado: { badgeClass: 'bg-red', lineClass: 'lred' },
-    Pagado: { badgeClass: 'bg-grn', lineClass: 'lgrn' },
-    Ejecutado: { badgeClass: 'bg-vio', lineClass: 'lvio' },
-    Cancelado: { badgeClass: 'bg-muted', lineClass: 'lmuted' },
-    Pendiente: { badgeClass: 'bg-yel', lineClass: 'lgold' }
+    Activo: { badgeClass: 'badge-info', lineClass: 'line-info' },
+    Atrasado: { badgeClass: 'badge-danger', lineClass: 'line-danger' },
+    Pagado: { badgeClass: 'badge-success', lineClass: 'line-success' },
+    Ejecutado: { badgeClass: 'badge-violet', lineClass: 'line-violet' },
+    Cancelado: { badgeClass: 'badge-muted', lineClass: 'line-muted' },
+    Pendiente: { badgeClass: 'badge-warning', lineClass: 'line-warning' }
   };
-  return map[estado] || { badgeClass: 'bg-muted', lineClass: 'lmuted' };
+  return map[estado] || { badgeClass: 'badge-muted', lineClass: 'line-muted' };
 }
 
 /* =====================================================
@@ -2434,7 +2475,7 @@ function alertaCuotaHTML(c, tipo) {
   const detalle = tipo === 'red'
     ? `${c._dias} día${c._dias!==1?'s':''} de atraso`
     : `Vence ${fmtDate(c.fechaVenc)}`;
-  return `<div class="li ${cls}" onclick="${c.clienteId ? `openClienteDetail('${esc(c.clienteId)}')` : ''}">
+  return `<div class="li op-card op-alert ${cls}" onclick="${c.clienteId ? `openClienteDetail('${esc(c.clienteId)}')` : ''}">
     <div class="li-row">
       <div style="min-width:0">
         <div class="li-name">${esc(c.clienteNombre || '—')}</div>
@@ -2445,7 +2486,7 @@ function alertaCuotaHTML(c, tipo) {
         <span class="badge ${badge}">${tipo === 'red' ? 'Vencida' : 'Pendiente'}</span>
       </div>
     </div>
-    ${esCobrable ? `<div style="display:flex;gap:8px;margin-top:10px">
+    ${esCobrable ? `<div class="op-actions">
       <button class="btn btn-grn btn-sm" onclick="event.stopPropagation();abrirPago('${esc(c.id)}')">Pagar</button>
       <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();enviarWACuota('${esc(c.id)}')">WA</button>
     </div>` : ''}
@@ -2480,7 +2521,7 @@ async function renderAlertas() {
     'var(--red)',
     alertas.clientesConAtrasos,
     'Sin clientes con varias cuotas atrasadas.',
-    c => `<div class="li lred" onclick="${c.clienteId ? `openClienteDetail('${esc(c.clienteId)}')` : ''}">
+    c => `<div class="li op-card op-alert lred" onclick="${c.clienteId ? `openClienteDetail('${esc(c.clienteId)}')` : ''}">
       <div class="li-row">
         <div>
           <div class="li-name">${esc(c.nombre || '—')}</div>
@@ -2497,7 +2538,7 @@ async function renderAlertas() {
   const syncHTML = `
     <div style="font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px">Sincronización</div>
     ${alertas.sync.errores.length ? alertas.sync.errores.map(o => `
-      <div class="li lred">
+      <div class="li op-card op-alert lred">
         <div class="li-row">
           <div>
             <div class="li-name">${esc(o.store || 'sync')} · ${esc(o.recordId || o.opId || '')}</div>
@@ -2851,7 +2892,7 @@ function buildDashCliente(cuotas, clientes, prestamos) {
     const metricas = window.metricasFinancierasService.calcularMetricasCliente(selId, {
       prestamos, cuotas, clientes, hoy, esCuotaCobrable
     });
-    const rMap = {Bajo:'bg-grn',Medio:'bg-yel',Alto:'bg-red'};
+    const rMap = {Bajo:'badge-success',Medio:'badge-warning',Alto:'badge-danger'};
     let urgCli = '';
     if (cHoy>0) urgCli+=`<div class="abanner ay"><div class="abanner-ic">📅</div><div><div class="abanner-t">${cHoy} cuota${cHoy>1?'s':''} vencen hoy</div><div class="abanner-s">${fmtMoney(mHoy)}</div></div></div>`;
     if (cAtr>0) urgCli+=`<div class="abanner ar"><div class="abanner-ic">⚠️</div><div><div class="abanner-t">${cAtr} cuota${cAtr>1?'s':''} atrasada${cAtr>1?'s':''}</div><div class="abanner-s">${fmtMoney(mAtr)}</div></div></div>`;
@@ -2863,7 +2904,7 @@ function buildDashCliente(cuotas, clientes, prestamos) {
           <div class="dash-client-name">${esc(selCli.nombre)}</div>
           ${selCli.dni ? `<div class="dash-client-dni">DNI ${esc(selCli.dni)}</div>` : ''}
           <div class="dash-client-badges">
-            <span class="badge ${selCli.estado==='Activo'?'bg-blu':'bg-muted'}">${selCli.estado}</span>
+            <span class="badge ${selCli.estado==='Activo'?'badge-success':'badge-danger'}">${selCli.estado}</span>
             <span class="badge ${rMap[selCli.riesgo]||'bg-muted'}">Riesgo ${selCli.riesgo||'—'}</span>
           </div>
         </div>
@@ -3128,25 +3169,25 @@ async function renderAtrasadas() {
 }
 
 function cuotaItemHTML(c, tipo) {
-  const bCls = tipo === 'atr' ? 'bg-red' : 'bg-yel';
-  const lCls = tipo === 'atr' ? 'lred' : 'lgold';
+  const bCls = tipo === 'atr' ? 'badge-danger' : 'badge-warning';
+  const lCls = tipo === 'atr' ? 'line-danger' : 'line-warning';
   const esCobrable = !ESTADOS_CUOTA_NO_COBRABLE.includes(c.estado);
   const info = tipo === 'atr'
     ? `${c._dias} día${c._dias>1?'s':''} de atraso`
     : `Vence hoy`;
-  return `<div class="li ${lCls}" id="li-${esc(c.id)}">
+  return `<div class="li op-card op-cuota ${lCls}" id="li-${esc(c.id)}">
     <div class="li-row">
       <div class="li-name">${esc(c.clienteNombre)}</div>
       <span class="badge ${bCls}">${info}</span>
     </div>
     <div class="li-sub">Cuota ${c.nro} · ${esc(c.prestamoId)} · Venc: ${fmtDate(c.fechaVenc)}</div>
-    <div class="li-row" style="margin-top:8px">
+    <div class="li-row op-money-row" style="margin-top:8px">
       <div style="font-size:12px;color:var(--muted)">A cobrar</div>
       <div class="li-amt">${fmtMoney(c.monto)}</div>
     </div>
-    ${esCobrable ? `<div style="display:flex;gap:8px;margin-top:10px">
-      <button class="btn btn-gold btn-sm" style="flex:1" onclick="abrirPago('${esc(c.id)}')">💵 Marcar Pagada</button>
-      <button class="btn btn-ghost btn-sm" onclick="enviarWACuota('${esc(c.id)}')">💬 WA</button>
+    ${esCobrable ? `<div class="op-actions">
+      <button class="btn btn-gold btn-sm" style="flex:1" onclick="abrirPago('${esc(c.id)}')">Marcar pagada</button>
+      <button class="btn btn-ghost btn-sm" onclick="enviarWACuota('${esc(c.id)}')">WA</button>
     </div>` : ''}
   </div>`;
 }
@@ -3154,7 +3195,7 @@ function cuotaItemHTML(c, tipo) {
 /* ---- CLIENTES ---- */
 function situacionCrediticiaCliente(cliente, prestamos, cuotas, mapaPrestamos, hoy) {
   if (!['Activo', 'Bloqueado'].includes(cliente?.estado)) {
-    return { codigo:'inactivo', label:'Inactivo', badgeClass:'bg-muted', lineClass:'lmuted', prioridad:4 };
+    return { codigo:'inactivo', label:'Inactivo', badgeClass:'badge-muted', lineClass:'line-muted', prioridad:4 };
   }
 
   const prestamosCliente = (prestamos || []).filter(p => p.clienteId === cliente.id && !p._deleted);
@@ -3167,19 +3208,19 @@ function situacionCrediticiaCliente(cliente, prestamos, cuotas, mapaPrestamos, h
   });
 
   if (tieneAtraso) {
-    return { codigo:'atrasado', label:'Atrasado', badgeClass:'bg-red', lineClass:'lred', prioridad:1 };
+    return { codigo:'atrasado', label:'Atrasado', badgeClass:'badge-danger', lineClass:'line-danger', prioridad:1 };
   }
 
   const tienePrestamoActivo = prestamosCliente.some(p => p.estado === 'Activo');
   if (tienePrestamoActivo && cuotasCobrables.length) {
-    return { codigo:'credito_activo', label:'Crédito activo', badgeClass:'bg-blu', lineClass:'lblue', prioridad:2 };
+    return { codigo:'credito_activo', label:'Crédito activo', badgeClass:'badge-info', lineClass:'line-info', prioridad:2 };
   }
 
   if (!cuotasCobrables.length) {
-    return { codigo:'sin_deuda', label:'Sin deuda', badgeClass:'bg-grn', lineClass:'lgrn', prioridad:3 };
+    return { codigo:'sin_deuda', label:'Sin deuda', badgeClass:'badge-success', lineClass:'line-success', prioridad:3 };
   }
 
-  return { codigo:'credito_activo', label:'Crédito activo', badgeClass:'bg-blu', lineClass:'lblue', prioridad:2 };
+  return { codigo:'credito_activo', label:'Crédito activo', badgeClass:'badge-info', lineClass:'line-info', prioridad:2 };
 }
 
 async function renderClientes() {
@@ -3224,20 +3265,20 @@ function filterClientes(q) {
 }
 
 function cliItemHTML(c) {
-  const rMap = {Bajo:'bg-grn',Medio:'bg-yel',Alto:'bg-red'};
-  const eCls = c.estado === 'Bloqueado' ? 'bg-red' : (c.estado === 'Activo' ? 'bg-blu' : 'bg-muted');
+  const rMap = {Bajo:'badge-success',Medio:'badge-warning',Alto:'badge-danger'};
+  const eCls = c.estado === 'Bloqueado' ? 'badge-danger' : (c.estado === 'Activo' ? 'badge-success' : 'badge-muted');
   const estadoAdministrativo = c.estado === 'Activo' ? 'Habilitado' : (c.estado || 'Inactivo');
   const situacion = c._situacionCrediticia || {
     label: ['Activo', 'Bloqueado'].includes(c.estado) ? 'Sin deuda' : 'Inactivo',
-    badgeClass: ['Activo', 'Bloqueado'].includes(c.estado) ? 'bg-grn' : 'bg-muted',
-    lineClass: ['Activo', 'Bloqueado'].includes(c.estado) ? 'lgrn' : 'lmuted'
+    badgeClass: ['Activo', 'Bloqueado'].includes(c.estado) ? 'badge-success' : 'badge-muted',
+    lineClass: ['Activo', 'Bloqueado'].includes(c.estado) ? 'line-success' : 'line-muted'
   };
   const subInfo = [
     c.dni ? '🪪 ' + esc(c.dni) : '',
     c.telefono ? '📞 ' + esc(c.telefono) : '',
     c.direccion ? '📍 ' + esc(c.direccion) : ''
   ].filter(Boolean).join(' · ') || 'Sin datos';
-  return `<div class="li ${situacion.lineClass}" onclick="openClienteDetail('${esc(c.id)}')">
+  return `<div class="li op-card op-client ${situacion.lineClass}" onclick="openClienteDetail('${esc(c.id)}')">
     <div class="li-row">
       <div style="display:flex;gap:10px;align-items:center">
         <div class="ava" style="width:38px;height:38px;font-size:15px">${esc(c.nombre).charAt(0).toUpperCase()}</div>
@@ -3376,8 +3417,8 @@ function toggleLoan(id) {
 }
 
 function loanItemHTML(p, todasCuotas) {
-  const clsMap  = { Activo:'lgold', Atrasado:'lred', Pagado:'lgrn', Cancelado:'lblue' };
-  const badgeMap = { Activo:'bg-blu', Atrasado:'bg-red', Pagado:'bg-grn', Cancelado:'bg-muted' };
+  const clsMap  = { Activo:'line-info', Atrasado:'line-danger', Pendiente:'line-warning', Pagado:'line-success', Ejecutado:'line-violet', Cancelado:'line-muted' };
+  const badgeMap = { Activo:'badge-info', Atrasado:'badge-danger', Pendiente:'badge-warning', Pagado:'badge-success', Ejecutado:'badge-violet', Cancelado:'badge-muted' };
   const misCuotas = (todasCuotas||[]).filter(c=>c.prestamoId===p.id).sort((a,b)=>a.nro-b.nro);
   const pagadas = misCuotas.filter(c=>c.estado==='Pagado').length;
   const pct = misCuotas.length ? Math.round(pagadas/misCuotas.length*100) : 0;
@@ -3387,17 +3428,17 @@ function loanItemHTML(p, todasCuotas) {
 
   const cuotasHTML = misCuotas.map(c => {
     const stMap={Pagado:'cpag',Pendiente:'cpen',Atrasado:'catr'};
-    const bMap={Pagado:'bg-grn',Pendiente:'bg-yel',Atrasado:'bg-red'};
+    const bMap={Pagado:'badge-success',Pendiente:'badge-warning',Atrasado:'badge-danger',Ejecutada:'badge-muted',Ejecutado:'badge-muted',Cancelada:'badge-muted',Cancelado:'badge-muted'};
     const esCobrable = esCuotaCobrable(c, new Map([[p.id, p]]));
     const pagBtn = esCobrable
       ? `<div style="display:flex;gap:6px;margin-top:6px">
-          <button class="btn btn-grn btn-sm" style="flex:1" onclick="event.stopPropagation();abrirPago('${esc(c.id)}')">✅ Pagar</button>
-          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();enviarWACuota('${esc(c.id)}')">💬 WA</button>
+          <button class="btn btn-grn btn-sm" style="flex:1" onclick="event.stopPropagation();abrirPago('${esc(c.id)}')">Pagar</button>
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();enviarWACuota('${esc(c.id)}')">WA</button>
         </div>`
       : c.estado === 'Pagado'
         ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
           <span style="font-size:11px;color:var(--grn)">✅ ${fmtDate(c.fechaPago)} · ${esc(c.metodo||'')}</span>
-          <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px" onclick="event.stopPropagation();imprimirComprobante('${esc(c.id)}')">🎫 Ver ticket</button>
+          <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px" onclick="event.stopPropagation();imprimirComprobante('${esc(c.id)}')">Ver ticket</button>
         </div>`
         : `<div style="font-size:11px;color:var(--muted);margin-top:6px">Cerrada · ${esc(c.estado)}</div>`;
     return `<div class="ci ${stMap[c.estado]||'cpen'}" id="ci-${esc(c.id)}">
@@ -3410,35 +3451,35 @@ function loanItemHTML(p, todasCuotas) {
     </div>`;
   }).join('');
 
-  return `<div class="li ${clsMap[p.estado]||'lblue'}" style="cursor:default">
+  return `<div class="li op-card op-loan ${clsMap[p.estado]||'line-muted'}" style="cursor:default">
     <div class="loan-hdr li-row" onclick="toggleLoan('${esc(p.id)}')">
       <div style="flex:1;min-width:0">
         <div class="li-name">${esc(p.clienteNombre)}</div>
         <div class="li-sub">${p.id} · ${fmtDate(p.fecha)} · ${p.tipo}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-        <span class="badge ${badgeMap[p.estado]||'bg-muted'}">${p.estado}</span>
+        <span class="badge ${badgeMap[p.estado]||'badge-muted'}">${p.estado}</span>
         <span class="loan-toggle${isOpen?' on':''}" id="lt-${esc(p.id)}">▼</span>
       </div>
     </div>
-    <div class="chips" style="pointer-events:none">
-      <div class="chip">Prestado<b>${fmtMoney(p.monto)}</b></div>
-      <div class="chip">Total<b>${fmtMoney(p.total)}</b></div>
-      <div class="chip">Cuota<b>${fmtMoney(p.cuota)}</b></div>
-      <div class="chip">${p.nCuotas} cuotas<b>${
+    <div class="op-kpis">
+      <div class="op-kpi"><div class="op-kpi-label">Prestado</div><div class="op-kpi-value is-main">${fmtMoney(p.monto)}</div></div>
+      <div class="op-kpi"><div class="op-kpi-label">Total</div><div class="op-kpi-value">${fmtMoney(p.total)}</div></div>
+      <div class="op-kpi"><div class="op-kpi-label">Cuota</div><div class="op-kpi-value">${fmtMoney(p.cuota)}</div></div>
+      <div class="op-kpi"><div class="op-kpi-label">${p.nCuotas} cuotas</div><div class="op-kpi-value">${
         p.interesPorCuota != null
           ? `${p.interesPorCuota}%/${p.tipo==='Semanal'?'sem':'mes'}`
           : `+${Math.round(Number(p.interes||0)*100)}%`
-      }</b></div>
+      }</div></div>
     </div>
     <div class="pbar" style="margin-top:8px;pointer-events:none"><div class="pbar-fill ${pbarCls}" style="width:${pct}%"></div></div>
-    <div style="font-size:10px;color:var(--muted);margin-top:3px;text-align:right;pointer-events:none">${pagadas}/${misCuotas.length} pagadas (${pct}%)</div>
+    <div class="op-progress-meta">${pagadas}/${misCuotas.length} pagadas (${pct}%)</div>
     <div class="loan-cuotas${isOpen?' on':''}" id="lc-${esc(p.id)}">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <span style="font-size:12px;font-weight:700;color:var(--muted)">CUOTAS (${misCuotas.length})</span>
         <div style="display:flex;gap:6px">
           ${puedeEditar ? `<button class="btn btn-sm btn-gold" onclick="event.stopPropagation();solicitarEdicionPrestamo('${esc(p.id)}')">Editar préstamo</button>` : ''}
-          <button class="btn btn-sm btn-red" onclick="event.stopPropagation();confirmarBorrarPrestamo('${esc(p.id)}')">🗑️ Eliminar</button>
+          <button class="btn btn-sm btn-red" onclick="event.stopPropagation();confirmarBorrarPrestamo('${esc(p.id)}')">Eliminar</button>
         </div>
       </div>
       ${misCuotas.length ? cuotasHTML : '<div style="font-size:13px;color:var(--muted);text-align:center">Sin cuotas generadas</div>'}
@@ -3551,8 +3592,8 @@ async function renderCuotas() {
       ? `<span class="badge bg-grn" style="font-size:10px">${g.pagadas} pag.</span>` : '';
 
     const cuotasHTML = g.cuotas.map(c => {
-      const bMap = { Pagado:'bg-grn', Pendiente:'bg-yel', Atrasado:'bg-red' };
-      const lMap = { Pagado:'lgrn', Pendiente:'lgold', Atrasado:'lred' };
+      const bMap = { Pagado:'badge-success', Pendiente:'badge-warning', Atrasado:'badge-danger', Ejecutada:'badge-muted', Ejecutado:'badge-muted', Cancelada:'badge-muted', Cancelado:'badge-muted' };
+      const lMap = { Pagado:'line-success', Pendiente:'line-warning', Atrasado:'line-danger', Ejecutada:'line-muted', Ejecutado:'line-muted', Cancelada:'line-muted', Cancelado:'line-muted' };
       const atrTag = c._diasAtr > 0
         ? `<span class="badge bg-red" style="font-size:9px;margin-left:4px">${c._diasAtr}d</span>` : '';
       const pagBtn = esCuotaCobrable(c, prestamosPorId)
@@ -3567,7 +3608,7 @@ async function renderCuotas() {
            </div>`
           : `<div style="font-size:11px;color:var(--muted);margin-top:6px">Cerrada · ${esc(c.estado)}</div>`;
 
-      return `<div class="li ${lMap[c.estado]||'lgold'}" id="li-${esc(c.id)}" style="margin-bottom:8px">
+      return `<div class="li ${lMap[c.estado]||'line-muted'}" id="li-${esc(c.id)}" style="margin-bottom:8px">
         <div class="li-row">
           <div style="flex:1">
             <div style="font-size:13px;font-weight:700">Cuota ${c.nro}${atrTag}</div>
@@ -3575,7 +3616,7 @@ async function renderCuotas() {
           </div>
           <div style="text-align:right">
             <div class="li-amt">${fmtMoney(c.monto)}</div>
-            <span class="badge ${bMap[c.estado]||'bg-muted'}" style="font-size:10px">${c.estado}</span>
+            <span class="badge ${bMap[c.estado]||'badge-muted'}" style="font-size:10px">${c.estado}</span>
           </div>
         </div>
         ${pagBtn}
@@ -3904,8 +3945,8 @@ async function openClienteDetail(id) {
     await dbPut('clientes', { ...cliente, riesgo: scoring.autoRiesgo });
   }
 
-  const rMap = {Bajo:'bg-grn',Medio:'bg-yel',Alto:'bg-red'};
-  const eCls = cliente.estado === 'Bloqueado' ? 'bg-red' : (cliente.estado === 'Activo' ? 'bg-blu' : 'bg-muted');
+  const rMap = {Bajo:'badge-success',Medio:'badge-warning',Alto:'badge-danger'};
+  const eCls = cliente.estado === 'Bloqueado' ? 'badge-danger' : (cliente.estado === 'Activo' ? 'badge-success' : 'badge-muted');
   const estadoAdministrativo = cliente.estado === 'Activo' ? 'Habilitado' : (cliente.estado || 'Inactivo');
   // Contadores de créditos
   const prestamosVigentes = misPrestamos.filter(p => p.estado === 'Activo' || p.estado === 'Atrasado');
@@ -4400,7 +4441,7 @@ async function guardarEdicionPrestamo() {
 
 function cuotaDetailItemHTML(c, prestamo) {
   const stMap = {Pagado:'cpag',Pendiente:'cpen',Atrasado:'catr'};
-  const badgeMap = {Pagado:'bg-grn',Pendiente:'bg-yel',Atrasado:'bg-red'};
+  const badgeMap = {Pagado:'badge-success',Pendiente:'badge-warning',Atrasado:'badge-danger',Ejecutada:'badge-muted',Ejecutado:'badge-muted',Cancelada:'badge-muted',Cancelado:'badge-muted'};
   const estaCerrada = ESTADOS_CUOTA_NO_COBRABLE.includes(c.estado)
     || prestamo?._deleted
     || ESTADOS_PRESTAMO_NO_COBRABLE.includes(prestamo?.estado);
@@ -4423,7 +4464,7 @@ function cuotaDetailItemHTML(c, prestamo) {
       <div><div class="ci-n">Cuota ${c.nro}</div><div class="ci-info">Vence: ${fmtDate(c.fechaVenc)}</div></div>
       <div style="text-align:right">
         <div class="ci-amt">${fmtMoney(c.monto)}</div>
-        <span class="badge ${badgeMap[c.estado]||'bg-muted'}" style="font-size:10px;padding:2px 7px">${c.estado}</span>
+        <span class="badge ${badgeMap[c.estado]||'badge-muted'}" style="font-size:10px;padding:2px 7px">${c.estado}</span>
       </div>
     </div>
     ${pagBtn}
