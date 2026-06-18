@@ -3403,6 +3403,10 @@ function ordenarPrestamosPorPrioridad(a, b) {
   return new Date(b?.fecha || 0) - new Date(a?.fecha || 0);
 }
 
+function esPrestamoTipoVisible(p) {
+  return p && !p._deleted && p.estado !== 'Pagado' && p.estado !== 'Ejecutado' && p.estado !== 'Cancelado';
+}
+
 async function renderPrestamos() {
   const el = document.getElementById('pg-prestamos');
   const [listaCompleta, todasCuotas] = await Promise.all([dbAll('prestamos'), dbAll('cuotas')]);
@@ -3421,8 +3425,8 @@ async function renderPrestamos() {
   const atrasados  = listaCompleta.filter(p=>p.estado==='Atrasado').length;
   const pagados    = listaCompleta.filter(p=>p.estado==='Pagado').length;
   const cancelados = listaCompleta.filter(p=>p.estado==='Cancelado').length;
-  const semanales  = listaCompleta.filter(p=>p.tipo==='Semanal' && p.estado!=='Pagado' && p.estado!=='Cancelado').length;
-  const mensuales  = listaCompleta.filter(p=>p.tipo==='Mensual' && p.estado!=='Pagado' && p.estado!=='Cancelado').length;
+  const semanales  = listaCompleta.filter(p=>p.tipo==='Semanal' && esPrestamoTipoVisible(p)).length;
+  const mensuales  = listaCompleta.filter(p=>p.tipo==='Mensual' && esPrestamoTipoVisible(p)).length;
 
   el.innerHTML = `<div class="fadeIn">
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px" id="prest-filtros">
@@ -3473,7 +3477,7 @@ function filtrarPrestamos(filtro, btn) {
   let filtrada;
   if (filtro === 'activos') filtrada = lista.filter(p => p.estado !== 'Pagado' && p.estado !== 'Cancelado' && p.estado !== 'Ejecutado');
   else if (filtro === 'todos') filtrada = lista;
-  else if (filtro === 'Semanal' || filtro === 'Mensual') filtrada = lista.filter(p => p.tipo === filtro && p.estado !== 'Cancelado' && p.estado !== 'Ejecutado');
+  else if (filtro === 'Semanal' || filtro === 'Mensual') filtrada = lista.filter(p => p.tipo === filtro && esPrestamoTipoVisible(p));
   else filtrada = lista.filter(p => p.estado === filtro);
   filtrada.sort(ordenarPrestamosPorPrioridad);
   const listEl = document.getElementById('prest-list');
