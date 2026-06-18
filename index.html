@@ -242,6 +242,39 @@ input,select,textarea{font-family:'DM Sans',sans-serif}
 .sheet-title{font-size:18px;font-weight:700}
 .sheet-body{padding:16px 20px}
 
+/* PROFESSIONAL FORMS */
+.form-sheet{max-width:560px;margin:0 auto;background:linear-gradient(180deg,var(--surface-2),var(--bg2))}
+.form-sheet-body{display:grid;gap:14px;padding:18px 20px 20px}
+.form-sheet-body .field{margin-bottom:0}
+.form-section{display:grid;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:13px}
+.form-section-title{font-size:10px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.65px;margin-bottom:1px}
+.form-grid{display:grid;gap:10px}
+.form-grid-2,.form-grid-3{grid-template-columns:1fr}
+.form-help{font-size:11px;color:var(--muted);line-height:1.45;margin-top:5px}
+.form-alert{background:var(--redBg);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:12px;font-size:13px;line-height:1.5;color:var(--red)}
+.form-alert.is-info{background:var(--goldBg);border-color:rgba(59,130,246,.15);color:var(--muted)}
+.form-alert.is-warning{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.3);color:var(--muted)}
+.form-summary{background:var(--goldBg);border:1px solid rgba(59,130,246,.15);border-radius:12px;padding:14px}
+.form-summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center;margin-bottom:10px}
+.form-summary-label{font-size:10px;color:var(--muted)}
+.form-summary-value{font-size:16px;font-weight:900;font-family:'DM Mono',monospace;color:var(--money);overflow-wrap:anywhere}
+.form-summary-detail{font-size:12px;color:var(--muted);text-align:center;padding-top:8px;border-top:1px solid var(--border)}
+.form-footer{padding-top:2px}
+.form-actions{display:grid;grid-template-columns:1fr;gap:10px}
+.choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.choice-btn{min-height:48px;line-height:1.25}
+.form-delete-icon{font-size:40px;margin-bottom:8px;opacity:.9}
+.form-delete-title{font-size:18px;font-weight:900;margin-bottom:8px}
+.form-delete-msg{font-size:14px;color:var(--muted);line-height:1.5;margin-bottom:18px}
+@media (min-width:640px){
+  .form-sheet{bottom:24px;border-radius:20px;max-height:calc(100vh - 48px);border:1px solid var(--border);box-shadow:0 18px 50px rgba(15,23,42,.38)}
+  .form-sheet:not(.on){transform:translateY(calc(100% + 24px))}
+  .form-grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .form-grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .form-actions{grid-template-columns:1fr 1fr}
+  .form-footer .btn-full{width:100%}
+}
+
 /* FORM */
 .field{margin-bottom:14px}
 .lbl{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
@@ -250,7 +283,7 @@ input,select,textarea{font-family:'DM Sans',sans-serif}
 .inp::placeholder{color:var(--muted)}
 select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2394A3B8' viewBox='0 0 20 20'%3E%3Cpath d='M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-size:18px;background-position:calc(100% - 12px) center;padding-right:38px}
 .inp-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.form-section{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin:20px 0 10px;padding-bottom:7px;border-bottom:1px solid var(--border)}
+.legacy-form-section{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin:20px 0 10px;padding-bottom:7px;border-bottom:1px solid var(--border)}
 
 /* SECTION HEADER */
 .sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -435,6 +468,7 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 .cal-dot-y{background:var(--yel)}
 .cal-dot-r{background:var(--red)}
 .cal-dot-g{background:var(--grn)}
+.cal-dot-m{background:var(--muted)}
 .cal-detail-panel{background:var(--card);border-radius:10px;padding:12px 13px;margin-top:10px;border:1px solid var(--border)}
 
 /* CHART CARDS */
@@ -825,19 +859,19 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 <div class="overlay" id="overlay" onclick="closeSheet()"></div>
 
 <!-- SHEET: ADD CLIENT -->
-<div class="sheet" id="sh-cliente">
+<div class="sheet form-sheet" id="sh-cliente">
   <div class="sheet-handle"></div>
   <div class="sheet-hdr">
     <div class="sheet-title" id="sh-cli-title">👤 Nuevo Cliente</div>
     <button class="icon-btn" onclick="closeSheet()">✕</button>
   </div>
-  <div class="sheet-body">
+  <div class="sheet-body form-sheet-body">
     <input type="hidden" id="cli-edit-id">
     <div class="field">
       <label class="lbl">Nombre completo *</label>
       <input class="inp" id="cli-nombre" placeholder="Ej: Juan Pérez" autocomplete="off">
     </div>
-    <div class="inp-row">
+    <div class="form-grid form-grid-2">
       <div class="field">
         <label class="lbl">DNI</label>
         <input class="inp" id="cli-dni" type="text" inputmode="numeric" placeholder="12345678">
@@ -847,7 +881,7 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
         <input class="inp" id="cli-tel" type="tel" placeholder="3834…">
       </div>
     </div>
-    <div class="inp-row">
+    <div class="form-grid form-grid-3">
       <div class="field">
         <label class="lbl">Riesgo</label>
         <select class="inp" id="cli-riesgo">
@@ -872,18 +906,20 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
       <label class="lbl">Notas</label>
       <input class="inp" id="cli-notas" placeholder="Observaciones (opcional)">
     </div>
-    <button class="btn btn-gold btn-full" style="margin-top:8px" onclick="saveCliente()">💾 Guardar Cliente</button>
+    <div class="form-footer">
+      <button class="btn btn-gold btn-full" onclick="saveCliente()">Guardar Cliente</button>
+    </div>
   </div>
 </div>
 
 <!-- SHEET: ADD LOAN -->
-<div class="sheet" id="sh-prestamo">
+<div class="sheet form-sheet" id="sh-prestamo">
   <div class="sheet-handle"></div>
   <div class="sheet-hdr">
     <div class="sheet-title">💵 Nuevo Préstamo</div>
     <button class="icon-btn" onclick="closeSheet()">✕</button>
   </div>
-  <div class="sheet-body">
+  <div class="sheet-body form-sheet-body">
     <div class="field">
       <label class="lbl">Cliente *</label>
       <input type="hidden" id="pre-cliente">
@@ -897,7 +933,7 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
         <button class="ac-clear" onclick="limpiarClienteAC()" title="Cambiar">✕</button>
       </div>
     </div>
-    <div class="inp-row">
+    <div class="form-grid form-grid-2">
       <div class="field">
         <label class="lbl">Monto prestado ($) *</label>
         <input class="inp" id="pre-monto" type="number" placeholder="10000" min="1" oninput="calcPreview()">
@@ -906,12 +942,12 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
         <label class="lbl" id="pre-interes-lbl">Interés por cuota (%) *</label>
         <input class="inp" id="pre-interes" type="number" placeholder="8" min="0" max="100" step="0.1"
           oninput="calcPreview()">
-        <div style="font-size:11px;color:var(--muted);margin-top:5px" id="pre-interes-hint">
+        <div class="form-help" id="pre-interes-hint">
           Ej: 8% × 4 cuotas = 32% total
         </div>
       </div>
     </div>
-    <div class="inp-row">
+    <div class="form-grid form-grid-2">
       <div class="field">
         <label class="lbl">N° de cuotas *</label>
         <input class="inp" id="pre-ncuotas" type="number" placeholder="4" min="1" max="360"
@@ -939,39 +975,41 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
       <input class="inp" id="pre-notas" placeholder="Opcional">
     </div>
     <!-- PREVIEW MEJORADO -->
-    <div id="pre-preview" style="display:none;background:var(--goldBg);border:1px solid rgba(59,130,246,.15);border-radius:12px;padding:14px;margin-bottom:12px">
+    <div id="pre-preview" class="form-summary" style="display:none">
       <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;margin-bottom:8px">📊 Resumen</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;margin-bottom:10px">
-        <div><div style="font-size:10px;color:var(--muted)">Total a cobrar</div><div style="font-size:16px;font-weight:900;font-family:'DM Mono',monospace;color:var(--gold)" id="pv-total">$0</div></div>
-        <div><div style="font-size:10px;color:var(--muted)">Cuota</div><div style="font-size:16px;font-weight:900;font-family:'DM Mono',monospace;color:var(--grn)" id="pv-cuota">$0</div></div>
-        <div><div style="font-size:10px;color:var(--muted)">Ganancia</div><div style="font-size:16px;font-weight:900;font-family:'DM Mono',monospace;color:var(--yel)" id="pv-gan">$0</div></div>
+      <div class="form-summary-grid">
+        <div><div class="form-summary-label">Total a cobrar</div><div class="form-summary-value" style="color:var(--gold)" id="pv-total">$0</div></div>
+        <div><div class="form-summary-label">Cuota</div><div class="form-summary-value" style="color:var(--grn)" id="pv-cuota">$0</div></div>
+        <div><div class="form-summary-label">Ganancia</div><div class="form-summary-value" style="color:var(--yel)" id="pv-gan">$0</div></div>
       </div>
-      <div style="font-size:12px;color:var(--muted);text-align:center;padding-top:8px;border-top:1px solid var(--border)" id="pv-detalle"></div>
+      <div class="form-summary-detail" id="pv-detalle"></div>
     </div>
-    <button class="btn btn-gold btn-full" onclick="savePrestamo()">✅ Crear Préstamo + Cuotas</button>
+    <div class="form-footer">
+      <button class="btn btn-gold btn-full" onclick="savePrestamo()">Crear Préstamo + Cuotas</button>
+    </div>
   </div>
 </div>
 
 <!-- SHEET: PAY METHOD -->
-<div class="sheet" id="sh-pago">
+<div class="sheet form-sheet" id="sh-pago">
   <div class="sheet-handle"></div>
   <div class="sheet-hdr">
     <div>
       <div class="sheet-title">✅ Registrar Pago</div>
-      <div style="font-size:13px;color:var(--muted);margin-top:3px" id="sh-pago-info"></div>
+      <div class="form-help" id="sh-pago-info"></div>
     </div>
     <button class="icon-btn" onclick="closeSheet()">✕</button>
   </div>
-  <div class="sheet-body">
-    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">¿Cómo pagó?</div>
+  <div class="sheet-body form-sheet-body">
+    <div class="form-section-title">Método de pago</div>
     <input type="hidden" id="pago-cuota-id">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <button class="mbtn" onclick="confirmarPago('Efectivo')">💵<br><span style="font-size:12px">Efectivo</span></button>
-      <button class="mbtn" onclick="confirmarPago('Transferencia')">🏦<br><span style="font-size:12px">Transferencia</span></button>
-      <button class="mbtn" onclick="confirmarPago('MercadoPago')">📱<br><span style="font-size:12px">MercadoPago</span></button>
-      <button class="mbtn" onclick="confirmarPago('Otro')">➕<br><span style="font-size:12px">Otro</span></button>
+    <div class="choice-grid">
+      <button class="mbtn choice-btn" onclick="confirmarPago('Efectivo')">Efectivo</button>
+      <button class="mbtn choice-btn" onclick="confirmarPago('Transferencia')">Transferencia</button>
+      <button class="mbtn choice-btn" onclick="confirmarPago('MercadoPago')">MercadoPago</button>
+      <button class="mbtn choice-btn" onclick="confirmarPago('Otro')">Otro</button>
     </div>
-    <div class="field" style="margin-top:14px">
+    <div class="field">
       <label class="lbl">Fecha de pago</label>
       <input class="inp" id="pago-fecha" type="date">
     </div>
@@ -979,13 +1017,13 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 </div>
 
 <!-- SHEET: DELETE CONFIRM (clientes) -->
-<div class="sheet" id="sh-delete">
+<div class="sheet form-sheet" id="sh-delete">
   <div class="sheet-handle"></div>
-  <div class="sheet-body" style="text-align:center;padding-top:20px">
-    <div style="font-size:52px;margin-bottom:12px">🗑️</div>
-    <div style="font-size:18px;font-weight:800;margin-bottom:8px" id="del-title">¿Eliminar?</div>
-    <div style="font-size:14px;color:var(--muted);margin-bottom:24px" id="del-msg"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+  <div class="sheet-body form-sheet-body" style="text-align:center;padding-top:20px">
+    <div class="form-delete-icon">🗑️</div>
+    <div class="form-delete-title" id="del-title">¿Eliminar?</div>
+    <div class="form-delete-msg" id="del-msg"></div>
+    <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeSheet()">Cancelar</button>
       <button class="btn btn-red" id="del-confirm-btn">Eliminar</button>
     </div>
@@ -993,22 +1031,22 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 </div>
 
 <!-- SHEET: DELETE PRÉSTAMO (con motivo + contraseña) -->
-<div class="sheet" id="sh-delete-prestamo">
+<div class="sheet form-sheet" id="sh-delete-prestamo">
   <div class="sheet-handle"></div>
   <div class="sheet-hdr">
     <div class="sheet-title">🗑️ Eliminar Préstamo</div>
     <button class="icon-btn" onclick="closeSheet()">✕</button>
   </div>
-  <div class="sheet-body">
-    <div style="font-size:14px;color:var(--muted);margin-bottom:16px" id="dp-info"></div>
+  <div class="sheet-body form-sheet-body">
+    <div class="form-alert is-info" id="dp-info"></div>
 
     <div class="field">
       <label class="lbl">Motivo de eliminación *</label>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-        <button class="mbtn" id="dp-mot-pago"    onclick="selMotivo('pago')"    style="font-size:13px">✅ Se pagó completo</button>
-        <button class="mbtn" id="dp-mot-perdon"  onclick="selMotivo('perdon')"  style="font-size:13px">🏷️ Se ejecutó la prenda</button>
-        <button class="mbtn" id="dp-mot-error"   onclick="selMotivo('error')"   style="font-size:13px">✏️ Error de carga</button>
-        <button class="mbtn" id="dp-mot-otro"    onclick="selMotivo('otro')"    style="font-size:13px">📝 Otro motivo</button>
+      <div class="choice-grid" style="margin-bottom:8px">
+        <button class="mbtn choice-btn" id="dp-mot-pago"    onclick="selMotivo('pago')">Se pagó completo</button>
+        <button class="mbtn choice-btn" id="dp-mot-perdon"  onclick="selMotivo('perdon')">Se ejecutó la prenda</button>
+        <button class="mbtn choice-btn" id="dp-mot-error"   onclick="selMotivo('error')">Error de carga</button>
+        <button class="mbtn choice-btn" id="dp-mot-otro"    onclick="selMotivo('otro')">Otro motivo</button>
       </div>
       <input class="inp" id="dp-mot-texto" placeholder="Describí el motivo (opcional)" style="margin-top:4px">
     </div>
@@ -1027,9 +1065,9 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
       Las cuotas ya pagadas se conservan en el historial y balance.<br>
       Las cuotas pendientes se marcarán como eliminadas.
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeSheet()">Cancelar</button>
-      <button class="btn btn-red" onclick="confirmarBorrarPrestamoFinal()">🗑️ Eliminar</button>
+      <button class="btn btn-red" onclick="confirmarBorrarPrestamoFinal()">Eliminar</button>
     </div>
   </div>
 </div>
@@ -1114,14 +1152,16 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 </div>
 
 <!-- SHEET: PIN ADMINISTRADOR LOCAL -->
-<div class="sheet" id="sh-pin-admin">
+<div class="sheet form-sheet" id="sh-pin-admin">
   <div class="sheet-handle"></div>
   <div class="sheet-hdr">
     <div class="sheet-title" id="pin-admin-title">PIN administrador</div>
     <button class="icon-btn" onclick="closeSheet()">×</button>
   </div>
-  <div class="sheet-body">
-    <div id="pin-admin-info" style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:16px"></div>
+  <div class="sheet-body form-sheet-body">
+    <div id="pin-admin-info" class="form-help"></div>
+    <div class="form-section">
+      <div class="form-section-title">Seguridad local</div>
     <div class="field">
       <label class="lbl">PIN *</label>
       <div class="pass-wrap">
@@ -1137,11 +1177,12 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
         placeholder="Repetí el PIN" autocomplete="off"
         onkeydown="if(event.key==='Enter') confirmarPinAdmin()">
     </div>
+    </div>
     <div class="login-err" id="pin-admin-error" style="margin-bottom:12px"></div>
-    <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:14px">
+    <div class="form-help">
       El PIN se protege localmente con PBKDF2 y no se guarda en texto plano ni se envía a Firebase.
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeSheet()">Cancelar</button>
       <button class="btn btn-gold" id="pin-admin-submit" onclick="confirmarPinAdmin()">Validar</button>
     </div>
@@ -1149,7 +1190,7 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 </div>
 
 <!-- SHEET: EDICION SEGURA DE PRESTAMO -->
-<div class="sheet" id="sh-editar-prestamo">
+<div class="sheet form-sheet" id="sh-editar-prestamo">
   <div class="sheet-handle"></div>
   <div class="sheet-hdr">
     <div>
@@ -1158,10 +1199,12 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
     </div>
     <button class="icon-btn" onclick="closeSheet()">×</button>
   </div>
-  <div class="sheet-body">
+  <div class="sheet-body form-sheet-body">
     <div id="edit-pre-warning" style="display:none;background:var(--redBg);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:12px;font-size:13px;line-height:1.5;color:var(--red);margin-bottom:14px"></div>
     <div id="edit-pre-info" style="background:var(--goldBg);border:1px solid rgba(59,130,246,.15);border-radius:12px;padding:12px;font-size:12px;line-height:1.5;color:var(--muted);margin-bottom:14px"></div>
-    <div class="inp-row">
+    <div class="form-section">
+      <div class="form-section-title">Datos financieros</div>
+    <div class="form-grid form-grid-2">
       <div class="field">
         <label class="lbl">Monto prestado</label>
         <input class="inp" id="edit-pre-monto" type="number" min="1" disabled>
@@ -1171,7 +1214,10 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
         <input class="inp" id="edit-pre-interes" type="number" min="0" max="100" step="0.1" disabled>
       </div>
     </div>
-    <div class="inp-row">
+    </div>
+    <div class="form-section">
+      <div class="form-section-title">Plan y garantía</div>
+    <div class="form-grid form-grid-3">
       <div class="field">
         <label class="lbl">N° de cuotas</label>
         <input class="inp" id="edit-pre-ncuotas" type="number" min="1" max="360" disabled>
@@ -1196,8 +1242,9 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
       <label class="lbl">Notas</label>
       <input class="inp" id="edit-pre-notas" disabled>
     </div>
+    </div>
     <div class="login-err" id="edit-pre-error" style="margin-bottom:12px"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeSheet()">Cancelar</button>
       <button class="btn btn-gold" id="edit-pre-save" onclick="guardarEdicionPrestamo()">Guardar cambios</button>
     </div>
@@ -5017,23 +5064,51 @@ async function renderGraficos() {
 let calYear  = new Date().getFullYear();
 let calMonth = new Date().getMonth();
 let calSelDay = null;
+let calFiltro = 'cobrables';
 
 async function renderCalendario() {
   const el = document.getElementById('pg-calendario');
   el.innerHTML = '<div class="loader"><div class="spin"></div></div>';
   const [cuotas, prestamos] = await Promise.all([dbAll('cuotas'), dbAll('prestamos')]);
   const hoy = today();
+  const mapaPrestamos = prestamosMap(prestamos);
 
   // Build map: 'YYYY-MM-DD' -> [cuotas]
   const map = {};
   cuotas.forEach(c => {
+    if (!esCuotaVisibleAgenda(c, mapaPrestamos)) return;
     const v = parseDate(c.fechaVenc); if (!v) return;
     const key = v.toISOString().split('T')[0];
     if (!map[key]) map[key] = [];
     map[key].push(c);
   });
 
-  buildCalendario(el, map, hoy, prestamosMap(prestamos));
+  buildCalendario(el, map, hoy, mapaPrestamos);
+}
+
+function esCuotaVisibleAgenda(c, mapaPrestamos) {
+  if (!c || c._deleted) return false;
+  const prestamo = mapaPrestamos?.get(c.prestamoId);
+  if (prestamo?._deleted) return false;
+  if (calFiltro === 'pagadas') return c.estado === 'Pagado';
+  if (calFiltro === 'todas') return true;
+  return esCuotaCobrable(c, mapaPrestamos);
+}
+
+function calDotClass(c) {
+  if (c.estado === 'Pagado') return 'cal-dot-g';
+  if (c.estado === 'Atrasado') return 'cal-dot-r';
+  if (c.estado === 'Pendiente') return 'cal-dot-y';
+  if (esEstadoCuotaCerrado(c.estado)) return 'cal-dot-m';
+  return 'cal-dot-y';
+}
+
+function agendaEstadoBadge(c) {
+  if (c.estado === 'Pagado') return 'bg-grn';
+  if (c.estado === 'Atrasado') return 'bg-red';
+  if (c.estado === 'Pendiente') return 'bg-yel';
+  if (esEstadoCuotaCerrado(c.estado)) return 'bg-muted';
+  return 'bg-muted';
 }
 
 function buildCalendario(el, map, hoy, prestamosPorId) {
@@ -5048,6 +5123,16 @@ function buildCalendario(el, map, hoy, prestamosPorId) {
 
   // Days grid
   let days = '';
+  const hayCerradas = Object.values(map).some(qs => qs.some(c => esEstadoCuotaCerrado(c.estado) && c.estado !== 'Pagado'));
+  const calLeyenda = calFiltro === 'cobrables'
+    ? `<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--yel);margin-right:3px"></span>Vence</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:3px"></span>Atrasada</span>`
+    : calFiltro === 'pagadas'
+      ? `<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--grn);margin-right:3px"></span>Pagada</span>`
+      : `<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--yel);margin-right:3px"></span>Vence</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:3px"></span>Atrasada</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--grn);margin-right:3px"></span>Pagada</span>
+      ${hayCerradas?`<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:3px"></span>Cerrada</span>`:''}`;
   // Blanks before first day
   for (let i = 0; i < startDow; i++) days += `<div class="cal-day other-month"></div>`;
 
@@ -5064,8 +5149,7 @@ function buildCalendario(el, map, hoy, prestamosPorId) {
     else if (hayPen) cls += ' has-venc';
 
     const dots = qs.map(c=>{
-      const dc = c.estado==='Pagado'?'cal-dot-g':c.estado==='Atrasado'?'cal-dot-r':'cal-dot-y';
-      return `<div class="cal-dot ${dc}"></div>`;
+      return `<div class="cal-dot ${calDotClass(c)}"></div>`;
     }).slice(0,4).join('');
 
     days += `<div class="${cls}" onclick="selCalDay('${key}')">
@@ -5081,7 +5165,6 @@ function buildCalendario(el, map, hoy, prestamosPorId) {
     detail = `<div class="cal-detail-panel fadeIn">
       <div style="font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:10px">${fmtDate(calSelDay)} — ${qs.length} cuota${qs.length>1?'s':''}</div>
       ${qs.map(c=>{
-        const bMap={Pagado:'bg-grn',Pendiente:'bg-yel',Atrasado:'bg-red'};
         const btn = esCuotaCobrable(c, prestamosPorId)
           ? `<div style="display:flex;gap:6px">
               <button class="btn btn-grn btn-sm" onclick="abrirPago('${esc(c.id)}')">✅ Pagar</button>
@@ -5097,7 +5180,7 @@ function buildCalendario(el, map, hoy, prestamosPorId) {
           </div>
           <div style="text-align:right">
             <div style="font-size:14px;font-weight:900;font-family:'DM Mono',monospace;color:var(--money)">${fmtMoney(c.monto)}</div>
-            <span class="badge ${bMap[c.estado]||'bg-muted'}" style="font-size:10px">${c.estado}</span>
+            <span class="badge ${agendaEstadoBadge(c)}" style="font-size:10px">${esc(c.estado || 'Sin estado')}</span>
           </div>
           ${btn}
         </div>`;
@@ -5106,6 +5189,11 @@ function buildCalendario(el, map, hoy, prestamosPorId) {
   }
 
   el.innerHTML = `<div class="fadeIn">
+    <div class="ftabs">
+      <button class="ftab ${calFiltro==='cobrables'?'on':''}" onclick="setCalFiltro('cobrables')">Cobrables</button>
+      <button class="ftab ${calFiltro==='todas'?'on':''}" onclick="setCalFiltro('todas')">Todas</button>
+      <button class="ftab ${calFiltro==='pagadas'?'on':''}" onclick="setCalFiltro('pagadas')">Pagadas</button>
+    </div>
     <div class="cal-nav">
       <button class="cal-nav-btn" onclick="calMove(-1)">‹</button>
       <div class="cal-month">${monthNames[calMonth]} ${calYear}</div>
@@ -5115,11 +5203,15 @@ function buildCalendario(el, map, hoy, prestamosPorId) {
     <div class="cal-grid">${days}</div>
     ${detail}
     <div style="display:flex;gap:10px;margin-top:12px;font-size:11px;color:var(--muted);justify-content:center">
-      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--yel);margin-right:3px"></span>Vence</span>
-      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:3px"></span>Atrasada</span>
-      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--grn);margin-right:3px"></span>Pagada</span>
+      ${calLeyenda}
     </div>
   </div>`;
+}
+
+async function setCalFiltro(filtro) {
+  calFiltro = filtro;
+  calSelDay = null;
+  await renderCalendario();
 }
 
 function calMove(dir) {
