@@ -13,6 +13,9 @@ import {
 import {
   openSheetPrestamo,
   savePrestamo,
+  abrirRenovacionPrestamo,
+  calcularPreviewRenovacion,
+  confirmarRenovacionPrestamo,
   confirmarBorrarPrestamo,
   selMotivo,
   confirmarBorrarPrestamoFinal
@@ -28,6 +31,9 @@ window.borrarCliente          = borrarCliente;
 // Bridge prestamos (5b)
 window.openSheetPrestamo            = openSheetPrestamo;
 window.savePrestamo                 = savePrestamo;
+window.abrirRenovacionPrestamo      = abrirRenovacionPrestamo;
+window.calcularPreviewRenovacion    = calcularPreviewRenovacion;
+window.confirmarRenovacionPrestamo  = confirmarRenovacionPrestamo;
 window.confirmarBorrarPrestamo      = confirmarBorrarPrestamo;
 window.selMotivo                    = selMotivo;
 window.confirmarBorrarPrestamoFinal = confirmarBorrarPrestamoFinal;

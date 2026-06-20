@@ -127,6 +127,249 @@ export async function savePrestamo() {
   await window.renderPage('prestamos');
 }
 
+function getRenovacionInputs() {
+  const cuotaId = document.getElementById('ren-cuota')?.value || '';
+  const montoNominal = Number(document.getElementById('ren-monto')?.value || 0);
+  const interesPorCuota = Number(document.getElementById('ren-interes')?.value || 0);
+  const nCuotas = Number.parseInt(document.getElementById('ren-ncuotas')?.value || '0', 10);
+  const tipo = document.getElementById('ren-tipo')?.value || 'Mensual';
+  const fechaRaw = document.getElementById('ren-fecha')?.value || '';
+  return { cuotaId, montoNominal, interesPorCuota, nCuotas, tipo, fechaRaw };
+}
+
+function setRenovacionError(message) {
+  const err = document.getElementById('ren-error');
+  if (!err) return;
+  err.textContent = message || '';
+  err.classList.toggle('on', !!message);
+}
+
+function maxCuotaNumero(cuotas) {
+  let maxN = 0;
+  (cuotas || []).forEach(c => {
+    const m = String(c.id || '').match(/^C-(\d+)$/);
+    if (m) maxN = Math.max(maxN, Number(m[1]));
+  });
+  return maxN;
+}
+
+export async function abrirRenovacionPrestamo(prestamoId) {
+  const [prestamo, cuotas] = await Promise.all([
+    window.dbGet('prestamos', prestamoId),
+    window.dbAll('cuotas')
+  ]);
+  if (!prestamo || prestamo._deleted) return window.toast('Prestamo no encontrado');
+  if (!['Activo', 'Atrasado'].includes(prestamo.estado)) {
+    return window.toast('Solo se pueden renovar prestamos activos o atrasados');
+  }
+
+  const clienteActual = await window.dbGet('clientes', prestamo.clienteId);
+  if (clienteActual?.estado === 'Bloqueado') {
+    return window.toast('Cliente bloqueado. No puede recibir nuevos prestamos.');
+  }
+
+  const mapaPrestamos = new Map([[prestamo.id, prestamo]]);
+  const cuotasCobrables = cuotas
+    .filter(c => c.prestamoId === prestamo.id && window.esCuotaCobrable(c, mapaPrestamos))
+    .sort((a, b) => Number(a.nro || 0) - Number(b.nro || 0));
+  if (!cuotasCobrables.length) {
+    return window.toast('Este prestamo no tiene cuotas cobrables para compensar');
+  }
+
+  window._renovacionPrestamoId = prestamo.id;
+  document.getElementById('ren-origen').innerHTML =
+    `<b>${window.esc(prestamo.clienteNombre || '')}</b> · ${window.esc(prestamo.id)} · ${window.fmtMoney(prestamo.monto)}`;
+  document.getElementById('ren-cuota').innerHTML = cuotasCobrables.map(c =>
+    `<option value="${window.esc(c.id)}">Cuota ${window.esc(c.nro)} · ${window.fmtMoney(c.monto)} · vence ${window.fmtDate(c.fechaVenc)}</option>`
+  ).join('');
+  document.getElementById('ren-monto').value = prestamo.monto || '';
+  document.getElementById('ren-interes').value = prestamo.interesPorCuota != null
+    ? prestamo.interesPorCuota
+    : window.round2(Number(prestamo.interes || 0) * 100 / Math.max(Number(prestamo.nCuotas || 1), 1));
+  document.getElementById('ren-ncuotas').value = prestamo.nCuotas || '';
+  document.getElementById('ren-tipo').value = prestamo.tipo || 'Mensual';
+  document.getElementById('ren-fecha').value = new Date().toISOString().split('T')[0];
+  document.getElementById('ren-prenda').value = prestamo.prenda || '';
+  document.getElementById('ren-notas').value = `Renovacion de ${prestamo.id}`;
+  setRenovacionError('');
+  calcularPreviewRenovacion();
+  window.openSheet('sh-renovar-prestamo');
+}
+
+export function calcularPreviewRenovacion() {
+  const prestamoId = window._renovacionPrestamoId;
+  const cuotaId = document.getElementById('ren-cuota')?.value;
+  const preview = document.getElementById('ren-preview');
+  if (!preview || !prestamoId || !cuotaId) return;
+
+  const { montoNominal, interesPorCuota, nCuotas } = getRenovacionInputs();
+  window.dbGet('cuotas', cuotaId).then(cuota => {
+    if (!cuota) return;
+    const montoCompensado = Number(cuota.monto || 0);
+    const montoEntregado = montoNominal - montoCompensado;
+    if (!montoNominal || !nCuotas || !Number.isFinite(interesPorCuota)) {
+      preview.style.display = 'none';
+      return;
+    }
+    const { total, cuotaMonto, ganancia } =
+      window.prestamoService.calcularPlanPagos(montoNominal, interesPorCuota, nCuotas);
+    document.getElementById('ren-pv-total').textContent = window.fmtMoney(total);
+    document.getElementById('ren-pv-cuota').textContent = window.fmtMoney(cuotaMonto);
+    document.getElementById('ren-pv-gan').textContent = window.fmtMoney(ganancia);
+    document.getElementById('ren-pv-detalle').textContent =
+      `Compensa ${window.fmtMoney(montoCompensado)} · Entrega real ${window.fmtMoney(montoEntregado)}`;
+    preview.style.display = '';
+  }).catch(() => { preview.style.display = 'none'; });
+}
+
+export async function confirmarRenovacionPrestamo() {
+  const btn = document.getElementById('ren-save');
+  const prestamoOrigenId = window._renovacionPrestamoId;
+  if (!prestamoOrigenId || btn?.disabled) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Renovando...'; }
+  setRenovacionError('');
+
+  try {
+    const { cuotaId, montoNominal, interesPorCuota, nCuotas, tipo, fechaRaw } = getRenovacionInputs();
+    window.prestamoService.validarDatosPrestamo({
+      clienteId: 'renovacion',
+      monto: montoNominal,
+      tasaPorCuota: interesPorCuota,
+      nCuotas,
+      fecha: fechaRaw
+    });
+    if (!['Mensual', 'Semanal'].includes(tipo)) throw new Error('Selecciona una frecuencia valida');
+
+    const [prestamoOrigen, cuotaCompensada, prestamos, cuotasTodas] = await Promise.all([
+      window.dbGet('prestamos', prestamoOrigenId),
+      window.dbGet('cuotas', cuotaId),
+      window.dbAll('prestamos'),
+      window.dbAll('cuotas')
+    ]);
+    if (!prestamoOrigen || prestamoOrigen._deleted) throw new Error('Prestamo origen no encontrado');
+    if (!['Activo', 'Atrasado'].includes(prestamoOrigen.estado)) throw new Error('Solo se pueden renovar prestamos activos o atrasados');
+
+    const cliente = await window.dbGet('clientes', prestamoOrigen.clienteId);
+    if (cliente?.estado === 'Bloqueado') throw new Error('Cliente bloqueado. No puede recibir nuevos prestamos.');
+
+    const mapaPrestamos = new Map([[prestamoOrigen.id, prestamoOrigen]]);
+    if (!cuotaCompensada || cuotaCompensada.prestamoId !== prestamoOrigenId || !window.esCuotaCobrable(cuotaCompensada, mapaPrestamos)) {
+      throw new Error('Selecciona una cuota cobrable completa');
+    }
+
+    const montoCompensado = Number(cuotaCompensada.monto || 0);
+    const montoEntregado = window.round2(montoNominal - montoCompensado);
+    if (montoEntregado < 0) throw new Error('El monto entregado no puede ser negativo');
+
+    const fecha = new Date(fechaRaw + 'T12:00:00');
+    if (Number.isNaN(fecha.getTime())) throw new Error('Ingresa una fecha valida');
+    const { interesTotal, total, cuotaMonto, ganancia } =
+      window.prestamoService.calcularPlanPagos(montoNominal, interesPorCuota, nCuotas);
+
+    const preId = window.nextId('PR', prestamos);
+    const nowISO = new Date().toISOString();
+    const nuevoPrestamo = {
+      id: preId,
+      clienteId: prestamoOrigen.clienteId,
+      clienteNombre: prestamoOrigen.clienteNombre,
+      fecha: fecha.toISOString(),
+      monto: montoNominal,
+      interes: interesTotal,
+      interesPorCuota,
+      tipo,
+      nCuotas,
+      total,
+      cuota: cuotaMonto,
+      ganancia,
+      estado: 'Activo',
+      notas: document.getElementById('ren-notas').value.trim(),
+      prenda: document.getElementById('ren-prenda').value.trim(),
+      origen: 'renovacion',
+      prestamoOrigenId,
+      renovacionTipo: 'descuento_cuota',
+      montoNominal,
+      montoEntregado,
+      montoCompensado,
+      cuotasCompensadas: [cuotaId],
+      creadoEn: nowISO,
+      updatedAt: nowISO
+    };
+
+    const cuotasNuevas = window.prestamoService.generarCuotas({
+      prestamoId: preId,
+      clienteId: prestamoOrigen.clienteId,
+      clienteNombre: prestamoOrigen.clienteNombre,
+      fechaInicio: fecha,
+      tipo,
+      nCuotas,
+      cuotaMonto,
+      primerNumeroId: maxCuotaNumero(cuotasTodas) + 1,
+      nowISO
+    });
+
+    const cuotaActualizada = {
+      ...cuotaCompensada,
+      estado: 'Pagado',
+      metodo: 'Renovación',
+      origenPago: 'renovacion_descuento',
+      montoEfectivo: 0,
+      montoCompensado,
+      prestamoRenovacionId: preId,
+      fechaPago: nowISO,
+      updatedAt: nowISO
+    };
+
+    const cuotasOrigenActualizadas = cuotasTodas.map(c => c.id === cuotaId ? cuotaActualizada : c);
+    const quedanCobrables = cuotasOrigenActualizadas.some(c =>
+      c.prestamoId === prestamoOrigenId && window.esCuotaCobrable(c, mapaPrestamos)
+    );
+    const quedanAtrasadas = cuotasOrigenActualizadas.some(c =>
+      c.prestamoId === prestamoOrigenId && window.esCuotaCobrable(c, mapaPrestamos) && c.estado === 'Atrasado'
+    );
+    const prestamoOrigenActualizado = quedanCobrables
+      ? {
+          ...prestamoOrigen,
+          estado: quedanAtrasadas ? 'Atrasado' : 'Activo',
+          prestamoRenovacionId: preId,
+          renovadoEn: nowISO,
+          updatedAt: nowISO
+        }
+      : {
+          ...prestamoOrigen,
+          estado: 'Pagado',
+          cerradoPor: 'renovacion',
+          prestamoRenovacionId: preId,
+          renovadoEn: nowISO,
+          updatedAt: nowISO
+        };
+
+    await window.dbPut('prestamos', nuevoPrestamo);
+    for (const c of cuotasNuevas) await window.dbPut('cuotas', c);
+    await window.dbPut('cuotas', cuotaActualizada);
+    await window.dbPut('prestamos', prestamoOrigenActualizado);
+
+    await window.addToSyncQueue('prestamos', preId, nuevoPrestamo, 'upsert');
+    for (const c of cuotasNuevas) await window.addToSyncQueue('cuotas', c.id, c, 'upsert');
+    await window.addToSyncQueue('cuotas', cuotaId, cuotaActualizada, 'upsert');
+    await window.addToSyncQueue('prestamos', prestamoOrigenId, prestamoOrigenActualizado, 'upsert');
+
+    await window.logBitacora('renovacion',
+      `Renovacion: ${prestamoOrigenId} -> ${preId} · Nominal ${window.fmtMoney(montoNominal)} · Compensado ${window.fmtMoney(montoCompensado)} · Entregado ${window.fmtMoney(montoEntregado)}`,
+      prestamoOrigen.clienteId
+    );
+
+    window.closeSheet();
+    window.toast('Prestamo renovado correctamente');
+    window.pushInmediato();
+    await window.updateBadges();
+    await window.openPrestamoDetail(preId);
+  } catch (e) {
+    setRenovacionError(e.message || 'No se pudo renovar el prestamo');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Crear renovacion'; }
+  }
+}
+
 export async function confirmarBorrarPrestamo(id) {
   const p = await window.dbGet('prestamos', id);
   if (!p) return;

@@ -990,6 +990,82 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
   </div>
 </div>
 
+<!-- SHEET: RENOVAR PRESTAMO -->
+<div class="sheet form-sheet" id="sh-renovar-prestamo">
+  <div class="sheet-handle"></div>
+  <div class="sheet-hdr">
+    <div>
+      <div class="sheet-title">Renovar prestamo</div>
+      <div class="form-help" id="ren-origen"></div>
+    </div>
+    <button class="icon-btn" onclick="closeSheet()">✕</button>
+  </div>
+  <div class="sheet-body form-sheet-body">
+    <div class="form-section">
+      <div class="form-section-title">Compensacion</div>
+      <div class="field">
+        <label class="lbl">Cuota a compensar *</label>
+        <select class="inp" id="ren-cuota" onchange="calcularPreviewRenovacion()"></select>
+        <div class="form-help">La cuota seleccionada se marca como pagada por renovacion. No hay compensacion parcial.</div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">Nuevo prestamo</div>
+      <div class="form-grid form-grid-2">
+        <div class="field">
+          <label class="lbl">Monto nominal nuevo *</label>
+          <input class="inp" id="ren-monto" type="number" min="1" placeholder="400000" oninput="calcularPreviewRenovacion()">
+        </div>
+        <div class="field">
+          <label class="lbl">Interes por cuota (%) *</label>
+          <input class="inp" id="ren-interes" type="number" min="0" max="100" step="0.1" placeholder="8" oninput="calcularPreviewRenovacion()">
+        </div>
+      </div>
+      <div class="form-grid form-grid-3">
+        <div class="field">
+          <label class="lbl">N° de cuotas *</label>
+          <input class="inp" id="ren-ncuotas" type="number" min="1" max="360" placeholder="4" oninput="calcularPreviewRenovacion()">
+        </div>
+        <div class="field">
+          <label class="lbl">Frecuencia</label>
+          <select class="inp" id="ren-tipo" onchange="calcularPreviewRenovacion()">
+            <option value="Mensual">Mensual</option>
+            <option value="Semanal">Semanal</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="lbl">Fecha inicial</label>
+          <input class="inp" id="ren-fecha" type="date">
+        </div>
+      </div>
+      <div class="field">
+        <label class="lbl">Prenda / Garantia</label>
+        <input class="inp" id="ren-prenda" placeholder="Garantia del nuevo prestamo">
+      </div>
+      <div class="field">
+        <label class="lbl">Notas</label>
+        <input class="inp" id="ren-notas" placeholder="Notas de renovacion">
+      </div>
+    </div>
+
+    <div id="ren-preview" class="form-summary" style="display:none">
+      <div class="form-section-title">Preview del nuevo prestamo</div>
+      <div class="form-summary-grid">
+        <div><div class="form-summary-label">Total nuevo</div><div class="form-summary-value" style="color:var(--gold)" id="ren-pv-total">$0</div></div>
+        <div><div class="form-summary-label">Cuota nueva</div><div class="form-summary-value" style="color:var(--grn)" id="ren-pv-cuota">$0</div></div>
+        <div><div class="form-summary-label">Ganancia</div><div class="form-summary-value" style="color:var(--yel)" id="ren-pv-gan">$0</div></div>
+      </div>
+      <div class="form-summary-detail" id="ren-pv-detalle"></div>
+    </div>
+    <div class="login-err" id="ren-error" style="margin-bottom:12px"></div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeSheet()">Cancelar</button>
+      <button class="btn btn-gold" id="ren-save" onclick="confirmarRenovacionPrestamo()">Crear renovacion</button>
+    </div>
+  </div>
+</div>
+
 <!-- SHEET: PAY METHOD -->
 <div class="sheet form-sheet" id="sh-pago">
   <div class="sheet-handle"></div>
@@ -2314,9 +2390,25 @@ const PAGES = ['dashboard','alertas','hoy','atrasadas','clientes','prestamos','c
 const NAV_PAGES = PAGES;
 var curPage = 'dashboard'; // var (no let) — se lee desde modulos UI via window.curPage
 let pageStack = [];
+let currentRoute = { page: 'dashboard' };
+
+function sameRoute(a, b) {
+  return a && b && a.page === b.page && String(a.id || '') === String(b.id || '');
+}
+
+function getCurrentRoute() {
+  return currentRoute?.page ? { ...currentRoute } : { page: curPage };
+}
+
+function syncHeaderState() {
+  const mostrarVolver = pageStack.length > 0;
+  document.getElementById('back-btn').style.display = mostrarVolver ? 'flex' : 'none';
+}
 
 function goPage(id) {
   pageStack = [];
+  currentRoute = { page: id };
+  if (id === 'prestamos') loanExpanded = null;
   closeMasMenu();
   document.querySelectorAll('.page').forEach(p => p.classList.remove('on'));
   document.querySelectorAll('.nb').forEach(b => b.classList.remove('on'));
@@ -2329,23 +2421,48 @@ function goPage(id) {
   document.getElementById('back-btn').style.display = 'none';
   document.getElementById('hdr-add-btn').style.display = 'none';
   updateFab(id);
+  syncHeaderState();
   renderPage(id);
 }
 
-function goDetail(id) {
-  pageStack.push(curPage);
+function goDetail(id, opciones = {}) {
+  const opts = opciones || {};
+  const nextRoute = { page: id };
+  if (opts.id) nextRoute.id = opts.id;
+  if (opts.push !== false) {
+    const prevRoute = getCurrentRoute();
+    if (!sameRoute(prevRoute, nextRoute)) pageStack.push(prevRoute);
+  }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('on'));
   document.getElementById('pg-' + id).classList.add('on');
   curPage = id;
-  document.getElementById('back-btn').style.display = 'flex';
+  currentRoute = nextRoute;
   document.getElementById('hdr-add-btn').style.display = 'none';
   document.getElementById('fab').style.display = 'none';
+  syncHeaderState();
 }
 
-function goBack() {
+async function openRoute(route) {
+  if (!route?.page) return;
+  if (route.page === 'cliente-detail' && route.id) {
+    await openClienteDetail(route.id, { push: false });
+    return;
+  }
+  if (route.page === 'prestamo-detail' && route.id) {
+    await openPrestamoDetail(route.id, { push: false });
+    return;
+  }
+  goPage(route.page);
+}
+
+async function goBack() {
   if (pageStack.length) {
     const prev = pageStack.pop();
-    goPage(prev);
+    await openRoute(prev);
+  } else {
+    if (curPage === 'prestamo-detail') goPage('prestamos');
+    else if (curPage === 'cliente-detail') goPage('clientes');
+    else syncHeaderState();
   }
 }
 
@@ -2406,6 +2523,8 @@ async function renderPage(id) {
     cobros: '💰 Cobros'
   };
   document.getElementById('hdr-title').textContent = titles[id] || '💰 PrestControl';
+
+  syncHeaderState();
 
   switch(id) {
     case 'dashboard' : await renderDashboard();  break;
@@ -3153,15 +3272,15 @@ async function renderCobros() {
 
   let html = '<div class="fadeIn">';
 
-  if (listaHoy.length) {
-    html += `<div style="font-size:12px;font-weight:800;color:var(--yel);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📅 Cobrar hoy — ${fmtMoney(totalHoy)}</div>`;
-    html += `<button class="btn btn-gold btn-full" style="margin-bottom:12px" onclick="marcarTodasCobrosHoy()">⚡ Marcar TODAS como Pagadas</button>`;
-    html += listaHoy.map(c => cuotaItemHTML(c, 'hoy')).join('');
+  if (listaAtr.length) {
+    html += `<div style="font-size:12px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px">⚠️ Atrasadas — ${fmtMoney(totalAtr)}</div>`;
+    html += listaAtr.map(c => cuotaItemHTML(c, 'atr')).join('');
   }
 
-  if (listaAtr.length) {
-    html += `<div style="font-size:12px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.5px;margin:${listaHoy.length?'20px':'0px'} 0 8px">⚠️ Atrasadas — ${fmtMoney(totalAtr)}</div>`;
-    html += listaAtr.map(c => cuotaItemHTML(c, 'atr')).join('');
+  if (listaHoy.length) {
+    html += `<div style="font-size:12px;font-weight:800;color:var(--yel);text-transform:uppercase;letter-spacing:.5px;margin:${listaAtr.length?'20px':'0px'} 0 8px">📅 Cobrar hoy — ${fmtMoney(totalHoy)}</div>`;
+    html += `<button class="btn btn-gold btn-full" style="margin-bottom:12px" onclick="marcarTodasCobrosHoy()">⚡ Marcar TODAS como Pagadas</button>`;
+    html += listaHoy.map(c => cuotaItemHTML(c, 'hoy')).join('');
   }
 
   if (!listaHoy.length && !listaAtr.length) {
@@ -3387,6 +3506,7 @@ function cliItemHTML(c) {
 
 /* ---- PRÉSTAMOS ---- */
 let loanExpanded = null; // id del préstamo actualmente expandido
+let clientePrestamoExpanded = null;
 const PRIORIDAD_ESTADO_PRESTAMO = {
   Atrasado: 1,
   Activo: 2,
@@ -3509,6 +3629,28 @@ function toggleLoan(id) {
   }
 }
 
+function toggleClienteLoan(id) {
+  const body = document.getElementById('cl-loan-body-' + id);
+  const icon = document.getElementById('cl-loan-toggle-' + id);
+  if (!body) return;
+  const isOpen = body.classList.contains('on');
+  if (clientePrestamoExpanded && clientePrestamoExpanded !== id) {
+    const prevBody = document.getElementById('cl-loan-body-' + clientePrestamoExpanded);
+    const prevIcon = document.getElementById('cl-loan-toggle-' + clientePrestamoExpanded);
+    if (prevBody) prevBody.classList.remove('on');
+    if (prevIcon) prevIcon.classList.remove('on');
+  }
+  if (isOpen) {
+    body.classList.remove('on');
+    if (icon) icon.classList.remove('on');
+    clientePrestamoExpanded = null;
+  } else {
+    body.classList.add('on');
+    if (icon) icon.classList.add('on');
+    clientePrestamoExpanded = id;
+  }
+}
+
 function loanItemHTML(p, todasCuotas) {
   const clsMap  = { Activo:'line-info', Atrasado:'line-danger', Pendiente:'line-warning', Pagado:'line-success', Ejecutado:'line-violet', Cancelado:'line-muted' };
   const badgeMap = { Activo:'badge-info', Atrasado:'badge-danger', Pendiente:'badge-warning', Pagado:'badge-success', Ejecutado:'badge-violet', Cancelado:'badge-muted' };
@@ -3518,11 +3660,13 @@ function loanItemHTML(p, todasCuotas) {
   const pbarCls = pct===100 ? 'pg' : p.estado==='Atrasado' ? 'pr' : 'py';
   const isOpen = loanExpanded === p.id;
   const puedeEditar = !p._deleted && ['Activo', 'Atrasado'].includes(p.estado);
+  const mapaPrestamoActual = new Map([[p.id, p]]);
+  const puedeRenovar = puedeEditar && misCuotas.some(c => esCuotaCobrable(c, mapaPrestamoActual));
 
   const cuotasHTML = misCuotas.map(c => {
     const stMap={Pagado:'cpag',Pendiente:'cpen',Atrasado:'catr'};
     const bMap={Pagado:'badge-success',Pendiente:'badge-warning',Atrasado:'badge-danger',Ejecutada:'badge-muted',Ejecutado:'badge-muted',Cancelada:'badge-muted',Cancelado:'badge-muted'};
-    const esCobrable = esCuotaCobrable(c, new Map([[p.id, p]]));
+    const esCobrable = esCuotaCobrable(c, mapaPrestamoActual);
     const pagBtn = esCobrable
       ? `<div style="display:flex;gap:6px;margin-top:6px">
           <button class="btn btn-grn btn-sm" style="flex:1" onclick="event.stopPropagation();abrirPago('${esc(c.id)}')">Pagar</button>
@@ -3568,9 +3712,10 @@ function loanItemHTML(p, todasCuotas) {
     <div class="pbar" style="margin-top:8px;pointer-events:none"><div class="pbar-fill ${pbarCls}" style="width:${pct}%"></div></div>
     <div class="op-progress-meta">${pagadas}/${misCuotas.length} pagadas (${pct}%)</div>
     <div class="loan-cuotas${isOpen?' on':''}" id="lc-${esc(p.id)}">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
         <span style="font-size:12px;font-weight:700;color:var(--muted)">CUOTAS (${misCuotas.length})</span>
-        <div style="display:flex;gap:6px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+          ${puedeRenovar ? `<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();abrirRenovacionPrestamo('${esc(p.id)}')">Renovar préstamo</button>` : ''}
           ${puedeEditar ? `<button class="btn btn-sm btn-gold" onclick="event.stopPropagation();solicitarEdicionPrestamo('${esc(p.id)}')">Editar préstamo</button>` : ''}
           <button class="btn btn-sm btn-red" onclick="event.stopPropagation();confirmarBorrarPrestamo('${esc(p.id)}')">Eliminar</button>
         </div>
@@ -4008,9 +4153,11 @@ async function renderConfig() {
 /* =====================================================
    CLIENTE DETAIL
 ===================================================== */
-async function openClienteDetail(id) {
+async function openClienteDetail(id, opciones = {}) {
   document.getElementById('pg-cliente-detail').innerHTML = '<div class="loader"><div class="spin"></div></div>';
-  goDetail('cliente-detail');
+  const opts = opciones || {};
+  if (opts.push !== false) clientePrestamoExpanded = null;
+  goDetail('cliente-detail', { id, push: opts.push !== false });
   document.getElementById('hdr-title').textContent = '👤 Detalle Cliente';
 
   const [cliente, prestamos, cuotas] = await Promise.all([
@@ -4094,15 +4241,64 @@ async function openClienteDetail(id) {
     <div class="sec-hdr"><div class="sec-title">Préstamos (${misPrestamos.length})</div></div>
     ${misPrestamos.length ? misPrestamos.map(p => {
       const estadoUI = prestamoEstadoUI(p.estado);
+      const cuotasPrestamo = misCuotas.filter(c => c.prestamoId === p.id);
+      const cuotasOrdenadas = [...cuotasPrestamo].sort((a,b) => Number(a.nro||0) - Number(b.nro||0));
+      const pagadasPrestamo = cuotasPrestamo.filter(c => c.estado === 'Pagado').length;
+      const pctPrestamo = cuotasPrestamo.length ? Math.round(pagadasPrestamo / cuotasPrestamo.length * 100) : 0;
+      const pbarCls = pctPrestamo === 100 ? 'pg' : p.estado === 'Atrasado' ? 'pr' : 'py';
+      const isOpen = clientePrestamoExpanded === p.id;
+      const cuotaBadgeMap = {Pagado:'badge-success',Pendiente:'badge-warning',Atrasado:'badge-danger',Ejecutada:'badge-muted',Ejecutado:'badge-muted',Cancelada:'badge-muted',Cancelado:'badge-muted'};
+      const puedeRenovar = !p._deleted && ['Activo', 'Atrasado'].includes(p.estado)
+        && cuotasPrestamo.some(c => esCuotaCobrable(c, new Map([[p.id, p]])));
+      const cuotasMini = cuotasOrdenadas.length
+        ? cuotasOrdenadas.map(c => {
+          const esCobrable = esCuotaCobrable(c, new Map([[p.id, p]]));
+          const accionesCuota = esCobrable
+            ? `<div style="display:flex;gap:6px;margin-top:6px">
+                <button class="btn btn-grn btn-sm" style="flex:1" onclick="event.stopPropagation();marcarPagada('${esc(c.id)}')">Marcar pagada</button>
+                <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();enviarWACuota('${esc(c.id)}')">WA</button>
+              </div>`
+            : '';
+          return `
+          <div class="ci" style="margin-top:6px">
+            <div class="ci-row">
+              <div>
+                <div class="ci-n">Cuota ${esc(c.nro || '—')}</div>
+                <div class="ci-info">Vence: ${fmtDate(c.fechaVenc)}</div>
+              </div>
+              <div style="text-align:right">
+                <div class="ci-amt">${fmtMoney(c.monto)}</div>
+                <span class="badge ${cuotaBadgeMap[c.estado]||'badge-muted'}" style="font-size:10px;padding:2px 7px">${esc(c.estado || '—')}</span>
+              </div>
+            </div>
+            ${accionesCuota}
+          </div>`;
+        }).join('')
+        : '<div style="font-size:13px;color:var(--muted);text-align:center;padding:8px">Sin cuotas generadas</div>';
       return `
-      <div class="li ${estadoUI.lineClass}" onclick="openPrestamoDetail('${esc(p.id)}')">
+      <div class="li op-card op-loan ${estadoUI.lineClass}" style="cursor:pointer" onclick="toggleClienteLoan('${esc(p.id)}')">
         <div class="li-row">
           <div><div class="li-name">${p.id}</div><div class="li-sub">${fmtDate(p.fecha)} · ${p.tipo} · ${p.nCuotas} cuotas</div></div>
-          <span class="badge ${estadoUI.badgeClass}">${p.estado}</span>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <span class="badge ${estadoUI.badgeClass}">${p.estado}</span>
+            <span class="loan-toggle${isOpen?' on':''}" id="cl-loan-toggle-${esc(p.id)}">▼</span>
+          </div>
         </div>
         <div class="chips">
           <div class="chip">Total<b>${fmtMoney(p.total)}</b></div>
           <div class="chip">Cuota<b>${fmtMoney(p.cuota)}</b></div>
+        </div>
+        <div class="pbar" style="margin-top:8px;pointer-events:none"><div class="pbar-fill ${pbarCls}" style="width:${pctPrestamo}%"></div></div>
+        <div class="op-progress-meta">${pagadasPrestamo}/${cuotasPrestamo.length} pagadas (${pctPrestamo}%)</div>
+        <div class="loan-cuotas${isOpen?' on':''}" id="cl-loan-body-${esc(p.id)}">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+            <span style="font-size:12px;font-weight:700;color:var(--muted)">DETALLE RAPIDO</span>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn btn-sm btn-gold" onclick="event.stopPropagation();openPrestamoDetail('${esc(p.id)}')">Ver detalle</button>
+              ${puedeRenovar ? `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();abrirRenovacionPrestamo('${esc(p.id)}')">Renovar préstamo</button>` : ''}
+            </div>
+          </div>
+          ${cuotasMini}
         </div>
       </div>`;
     }).join('') : '<div style="font-size:13px;color:var(--muted);text-align:center;padding:16px">Sin préstamos</div>'}
@@ -4126,9 +4322,12 @@ async function openClienteDetail(id) {
 /* =====================================================
    PRÉSTAMO DETAIL
 ===================================================== */
-async function openPrestamoDetail(id, mantenerNavegacion = false) {
+async function openPrestamoDetail(id, opciones = {}) {
   document.getElementById('pg-prestamo-detail').innerHTML = '<div class="loader"><div class="spin"></div></div>';
-  if (!mantenerNavegacion) goDetail('prestamo-detail');
+  const opts = typeof opciones === 'boolean'
+    ? { push: opciones ? false : true }
+    : (opciones || {});
+  goDetail('prestamo-detail', { id, push: opts.push !== false });
   document.getElementById('hdr-title').textContent = '💵 Detalle Préstamo';
 
   const [prestamo, todasCuotas] = await Promise.all([
@@ -4137,7 +4336,7 @@ async function openPrestamoDetail(id, mantenerNavegacion = false) {
 
   if (!prestamo) { toast('Préstamo no encontrado'); goBack(); return; }
 
-  const cuotas = todasCuotas.filter(c => c.prestamoId === id)
+  const cuotas = todasCuotas.filter(c => c.prestamoId === prestamo.id)
     .sort((a,b) => a.nro - b.nro);
 
   const pagadas   = cuotas.filter(c=>c.estado==='Pagado').length;
@@ -4145,6 +4344,8 @@ async function openPrestamoDetail(id, mantenerNavegacion = false) {
   const pbarCls   = pct===100 ? 'pg' : prestamo.estado==='Atrasado' ? 'pr' : 'py';
   const estadoUI  = prestamoEstadoUI(prestamo.estado);
   const puedeEditar = !prestamo._deleted && ['Activo', 'Atrasado'].includes(prestamo.estado);
+  const mapaPrestamoActual = new Map([[prestamo.id, prestamo]]);
+  const puedeRenovar = puedeEditar && cuotas.some(c => esCuotaCobrable(c, mapaPrestamoActual));
 
   const el = document.getElementById('pg-prestamo-detail');
   el.innerHTML = `<div class="fadeIn">
@@ -4172,6 +4373,7 @@ async function openPrestamoDetail(id, mantenerNavegacion = false) {
     </div>
     <button class="btn btn-red btn-full" style="margin-bottom:10px" onclick="confirmarBorrarPrestamo('${esc(id)}')">🗑️ Eliminar préstamo</button>
     <button class="btn btn-ghost btn-full" style="margin-bottom:14px" onclick="imprimirComprobantePrestamo('${esc(id)}')">🖨️ Comprobante del Préstamo</button>
+    ${puedeRenovar ? `<button class="btn btn-ghost btn-full" style="margin-bottom:14px" onclick="abrirRenovacionPrestamo('${esc(prestamo.id)}')">Renovar préstamo</button>` : ''}
     ${puedeEditar ? `<button class="btn btn-gold btn-full" style="margin-bottom:14px" onclick="solicitarEdicionPrestamo('${esc(id)}')">Editar préstamo</button>` : ''}
 
     <div class="sec-hdr"><div class="sec-title">Cuotas (${cuotas.length})</div></div>
@@ -4712,6 +4914,10 @@ async function abrirPago(cuotaId) {
   openSheet('sh-pago');
 }
 
+function marcarPagada(cuotaId) {
+  return abrirPago(cuotaId);
+}
+
 async function confirmarPago(metodo) {
   const cuotaId  = document.getElementById('pago-cuota-id').value;
   const fechaPago = document.getElementById('pago-fecha').value;
@@ -4753,6 +4959,9 @@ async function confirmarPago(metodo) {
     await renderPage(curPage);
   } else if (curPage === 'prestamo-detail') {
     await openPrestamoDetail(c.prestamoId);
+  } else if (curPage === 'cliente-detail') {
+    const clienteId = currentRoute?.id || c.clienteId;
+    if (clienteId) await openClienteDetail(clienteId, { push: false });
   } else if (curPage === 'inicio') {
     await renderPage('inicio');
   }
