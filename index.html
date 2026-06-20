@@ -242,6 +242,47 @@ input,select,textarea{font-family:'DM Sans',sans-serif}
 .sheet-title{font-size:18px;font-weight:700}
 .sheet-body{padding:16px 20px}
 
+/* PROFESSIONAL RECEIPTS */
+.receipt-sheet{background:#f8fafc;color:#0f172a}
+.receipt-sheet .sheet-hdr{color:#0f172a}
+.receipt-paper{background:#fff;border:1px solid #dbe3ee;border-radius:14px;padding:18px;box-shadow:0 8px 24px rgba(15,23,42,.08)}
+.receipt-head{padding-bottom:16px;border-bottom:2px solid #2563eb}
+.receipt-head-grid{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:start}
+.receipt-head-left{min-width:0;text-align:left}
+.receipt-head-right{text-align:right}
+.receipt-brand{font-size:12px;font-weight:900;color:#2563eb;letter-spacing:.8px;text-transform:uppercase}
+.receipt-kicker{font-size:13px;font-weight:900;color:#0f172a;letter-spacing:.55px;text-transform:uppercase;line-height:1.3}
+.receipt-subtitle{margin-top:4px;font-size:11px;color:#64748b}
+.receipt-amount{margin-top:16px;font:900 clamp(28px,9vw,38px)/1.15 'DM Mono',monospace;color:#0f172a;text-align:center;overflow-wrap:anywhere}
+.receipt-date{margin-top:4px;font-size:11px;color:#475569;line-height:1.4;white-space:nowrap}
+.receipt-details{margin-top:14px;border:1px solid #dbe3ee;border-radius:10px;overflow:hidden}
+.receipt-row{display:flex;justify-content:space-between;gap:18px;padding:11px 13px;background:#fff}
+.receipt-row+.receipt-row{border-top:1px solid #e2e8f0}
+.receipt-label{font-size:12px;color:#64748b}
+.receipt-value{min-width:0;font-size:13px;font-weight:800;color:#0f172a;text-align:right;overflow-wrap:anywhere}
+.receipt-status{margin-top:14px;border:1.5px solid #15803d;border-radius:9px;padding:9px;text-align:center;color:#166534;font-size:13px;font-weight:900;letter-spacing:1.5px}
+.receipt-note{margin-top:12px;padding:11px 13px;border-left:3px solid #94a3b8;background:#f8fafc;color:#334155;font-size:12px;line-height:1.5}
+.receipt-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.receipt-close{margin-top:10px}
+.receipt-meta{text-align:center;font-size:10px;color:#64748b;margin-top:12px}
+@media (max-width:380px){
+  .receipt-paper{padding:14px}
+  .receipt-head-grid{grid-template-columns:1fr;gap:10px}
+  .receipt-head-right{text-align:left}
+  .receipt-row{flex-direction:column;gap:3px}
+  .receipt-value{text-align:left}
+  .receipt-actions{grid-template-columns:1fr}
+}
+@media print{
+  @page{margin:10mm}
+  body{background:#fff!important;padding:0!important}
+  body>*:not(#sheet-comprobante){display:none!important}
+  #sheet-comprobante{display:block!important;position:static!important;transform:none!important;max-width:none!important;max-height:none!important;overflow:visible!important;padding:0!important;border:0!important;box-shadow:none!important;background:#fff!important}
+  #sheet-comprobante .sheet-handle,#sheet-comprobante .sheet-hdr,.receipt-actions,.receipt-close{display:none!important}
+  #sheet-comprobante .sheet-body{padding:0!important}
+  .receipt-paper{border:1px solid #94a3b8;box-shadow:none;break-inside:avoid}
+}
+
 /* PROFESSIONAL FORMS */
 .form-sheet{max-width:560px;margin:0 auto;background:linear-gradient(180deg,var(--surface-2),var(--bg2))}
 .form-sheet-body{display:grid;gap:14px;padding:18px 20px 20px}
@@ -673,7 +714,7 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 
 <!-- COMPROBANTE SHEET -->
 <div class="overlay" id="overlay-comprobante" onclick="closeSheet()" style="z-index:350"></div>
-<div class="sheet" id="sheet-comprobante" style="z-index:360;max-width:480px;margin:0 auto">
+<div class="sheet receipt-sheet" id="sheet-comprobante" style="z-index:360;max-width:480px;margin:0 auto">
   <div class="sheet-handle"></div>
   <div class="sheet-hdr">
     <div class="sheet-title">🧾 Comprobante</div>
@@ -5013,37 +5054,40 @@ async function mostrarComprobanteApp(cuotaId) {
   if (!sheetEl || !bodyEl) return;
 
   bodyEl.innerHTML = `
-    <!-- Header azul estilo banco -->
-    <div style="background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:12px;padding:22px 18px;margin-bottom:16px;text-align:center">
-      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Comprobante de Pago</div>
-      <div style="font-size:36px;font-weight:900;color:#fff;font-family:'DM Mono',monospace;letter-spacing:-1px">${fmtMoney(cuota.monto)}</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.8);margin-top:6px">${fechaPago}</div>
-    </div>
-
-    <!-- Datos del comprobante -->
-    <div style="background:var(--card);border-radius:12px;border:1px solid var(--border);overflow:hidden;margin-bottom:14px">
-      ${[
-        ['👤 Cliente',   cuota.clienteNombre || '—'],
-        ['🧾 Préstamo',  cuota.prestamoId || '—'],
-        ['📋 Cuota',     `${cuota.nro} de ${prestamo?.nCuotas || '?'}`],
-        ['📅 Vencía',    fmtDate(cuota.fechaVenc)],
-        ['💳 Método',    cuota.metodo || 'Efectivo'],
-        ['✅ Cuotas OK', `${cuotasPagadas} de ${prestamo?.nCuotas || '?'} pagadas`],
-      ].map(([label, value], i) => `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;${i>0?'border-top:1px solid var(--border)':''}">
-          <span style="font-size:13px;color:var(--muted)">${label}</span>
-          <span style="font-size:13px;font-weight:700;color:var(--txt)">${value}</span>
+    <div class="receipt-paper">
+      <div class="receipt-head">
+        <div class="receipt-head-grid">
+          <div class="receipt-head-left">
+            <div class="receipt-kicker">Comprobante de pago</div>
+            <div class="receipt-subtitle">Constancia de pago</div>
+          </div>
+          <div class="receipt-head-right">
+            <div class="receipt-brand">PrestControl</div>
+            <div class="receipt-date">${fechaPago}</div>
+          </div>
         </div>
-      `).join('')}
+        <div class="receipt-amount">${fmtMoney(cuota.monto)}</div>
+      </div>
+      <div class="receipt-details">
+        ${[
+          ['Cliente', cuota.clienteNombre || '—'],
+          ['Préstamo', cuota.prestamoId || '—'],
+          ['Cuota', `${cuota.nro} de ${prestamo?.nCuotas || '?'}`],
+          ['Vencimiento', fmtDate(cuota.fechaVenc)],
+          ['Método', cuota.metodo || 'Efectivo'],
+          ['Cuotas pagadas', `${cuotasPagadas} de ${prestamo?.nCuotas || '?'}`],
+        ].map(([label, value]) => `
+          <div class="receipt-row">
+            <span class="receipt-label">${label}</span>
+            <span class="receipt-value">${value}</span>
+          </div>
+        `).join('')}
+      </div>
+      <div class="receipt-status">PAGADO</div>
+      ${cuota.notas ? `<div class="receipt-note"><b>Observaciones</b><br>${esc(cuota.notas)}</div>` : ''}
     </div>
 
-    <!-- Sello PAGADO -->
-    <div style="border:2px solid var(--grn);border-radius:10px;padding:10px;text-align:center;margin-bottom:16px;background:var(--grnBg)">
-      <span style="font-size:14px;font-weight:900;color:var(--grn);letter-spacing:2px">✅ PAGADO</span>
-    </div>
-
-    <!-- Botones -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+    <div class="receipt-actions">
       <button class="btn btn-grn" onclick="window.open('${waURL}','_blank')" style="gap:6px">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347"/></svg>
         WhatsApp
@@ -5052,8 +5096,8 @@ async function mostrarComprobanteApp(cuotaId) {
         🖨️ PDF
       </button>
     </div>
-    <button class="btn btn-ghost btn-full" onclick="closeSheet()">Cerrar</button>
-    <div style="text-align:center;font-size:11px;color:var(--muted);margin-top:10px">PrestControl · Sistema de Gestión</div>
+    <button class="btn btn-ghost btn-full receipt-close" onclick="closeSheet()">Cerrar</button>
+    <div class="receipt-meta">PrestControl · Comprobante generado digitalmente</div>
   `;
 
   // Abrir sheet
@@ -6578,35 +6622,38 @@ async function imprimirComprobante(cuotaId) {
   const prestamo = await dbGet('prestamos', cuota.prestamoId);
 
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: 'a6' }); // A6 = tamaño recibo
-
+  const doc = new jsPDF({ unit: 'mm', format: 'a6' });
   const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
   let y = 10;
 
-  // Header
-  doc.setFillColor(10, 15, 31);
-  doc.rect(0, 0, W, 28, 'F');
-  doc.setTextColor(192, 38, 211);
-  doc.setFontSize(16); doc.setFont('helvetica', 'bold');
-  doc.text('COMPROBANTE DE PAGO', W/2, 12, { align: 'center' });
-  doc.setTextColor(148, 163, 184);
-  doc.setFontSize(8); doc.setFont('helvetica', 'normal');
-  doc.text('Sistema de Gestión de Préstamos', W/2, 20, { align: 'center' });
-  doc.text(new Date().toLocaleDateString('es-AR', { weekday:'long', year:'numeric', month:'long', day:'numeric' }), W/2, 25, { align: 'center' });
+  const titulo = 'COMPROBANTE DE PAGO';
+  const marca = 'PRESTCONTROL';
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  const anchoMarca = doc.getTextWidth(marca);
+  doc.setFontSize(14);
+  const tituloLineas = doc.splitTextToSize(titulo, W - 20 - anchoMarca - 7);
+  doc.setTextColor(15, 23, 42);
+  doc.text(tituloLineas, 10, 14);
+  doc.setTextColor(37, 99, 235);
+  doc.setFontSize(9); doc.text(marca, W-10, 14, { align: 'right' });
+  const metaY = 21 + (tituloLineas.length - 1) * 5;
+  doc.setTextColor(71, 85, 105);
+  doc.setFontSize(7.5); doc.setFont('helvetica', 'normal');
+  doc.text('Constancia de pago', 10, metaY);
+  doc.text(new Date().toLocaleDateString('es-AR'), W-10, metaY, { align: 'right' });
+  doc.setDrawColor(37, 99, 235); doc.setLineWidth(0.7);
+  doc.line(10, metaY + 5, W-10, metaY + 5);
+  y = metaY + 13;
 
-  y = 35;
-  // Línea divisoria
-  doc.setDrawColor(192, 38, 211);
-  doc.setLineWidth(0.5);
-  doc.line(8, y, W-8, y);
-  y += 7;
-
-  const addRow = (label, value, colorVal = [30, 30, 30]) => {
-    doc.setTextColor(100, 116, 139); doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+  const addRow = (label, value) => {
+    const valueLines = doc.splitTextToSize(String(value || '—'), W - 48);
+    doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'normal');
     doc.text(label, 10, y);
-    doc.setTextColor(...colorVal); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-    doc.text(String(value || '—'), W-10, y, { align: 'right' });
-    y += 7;
+    doc.setTextColor(15, 23, 42); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+    doc.text(valueLines, W-10, y, { align: 'right' });
+    y += Math.max(7, valueLines.length * 4.2 + 2);
   };
 
   addRow('Cliente',        cuota.clienteNombre || '—');
@@ -6616,22 +6663,33 @@ async function imprimirComprobante(cuotaId) {
   addRow('Fecha de pago',  fmtDate(cuota.fechaPago));
   addRow('Método',         cuota.metodo || '—');
 
-  y += 2;
-  doc.setDrawColor(100, 100, 100); doc.setLineWidth(0.3);
-  doc.line(8, y, W-8, y);
-  y += 8;
+  y += 3;
+  doc.setDrawColor(148, 163, 184); doc.setLineWidth(0.35);
+  doc.roundedRect(10, y, W-20, 21, 2, 2, 'S');
+  doc.setTextColor(71, 85, 105); doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+  doc.text('MONTO PAGADO', W/2, y+7, { align: 'center' });
+  doc.setTextColor(15, 23, 42); doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+  doc.text(fmtMoney(cuota.monto), W/2, y+16, { align: 'center' });
+  y += 28;
 
-  // Monto destacado
-  doc.setFillColor(192, 38, 211, 0.1);
-  doc.roundedRect(8, y-5, W-16, 14, 3, 3, 'F');
-  doc.setTextColor(148, 163, 184); doc.setFontSize(8); doc.setFont('helvetica', 'normal');
-  doc.text('MONTO PAGADO', W/2, y+1, { align: 'center' });
-  doc.setTextColor(103, 232, 249); doc.setFontSize(18); doc.setFont('helvetica', 'bold');
-  doc.text(fmtMoney(cuota.monto), W/2, y+9, { align: 'center' });
-  y += 20;
+  doc.setDrawColor(21, 128, 61); doc.setTextColor(22, 101, 52);
+  doc.setLineWidth(0.45); doc.roundedRect(10, y, W-20, 9, 2, 2, 'S');
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+  doc.text('PAGADO', W/2, y+6, { align: 'center' });
+  y += 15;
 
-  // Footer
-  doc.setTextColor(100, 100, 100); doc.setFontSize(7); doc.setFont('helvetica', 'italic');
+  if (cuota.notas) {
+    const notas = doc.splitTextToSize(String(cuota.notas), W-20);
+    if (y + notas.length * 4 > H-12) { doc.addPage(); y = 14; }
+    doc.setTextColor(71, 85, 105); doc.setFontSize(7.5); doc.setFont('helvetica', 'bold');
+    doc.text('OBSERVACIONES', 10, y);
+    doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'normal');
+    doc.text(notas, 10, y+5);
+    y += notas.length * 4 + 9;
+  }
+
+  if (y > H-10) { doc.addPage(); y = 14; }
+  doc.setTextColor(71, 85, 105); doc.setFontSize(7); doc.setFont('helvetica', 'italic');
   doc.text('Este comprobante es válido como constancia de pago.', W/2, y, { align: 'center' });
 
   doc.save(`comprobante_${cuota.clienteNombre?.replace(/\s/g,'_')}_C${cuota.nro}_${cuota.prestamoId}.pdf`);
@@ -6651,68 +6709,90 @@ async function imprimirComprobantePrestamo(prestamoId) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a5' });
   const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
   let y = 10;
 
-  // Header
-  doc.setFillColor(10, 15, 31);
-  doc.rect(0, 0, W, 30, 'F');
-  doc.setTextColor(192, 38, 211);
+  doc.setTextColor(15, 23, 42);
   doc.setFontSize(16); doc.setFont('helvetica', 'bold');
-  doc.text('RESUMEN DE PRÉSTAMO', W/2, 13, { align: 'center' });
-  doc.setTextColor(148, 163, 184);
+  doc.text('RESUMEN DE PRÉSTAMO', 10, 15);
+  doc.setTextColor(37, 99, 235);
+  doc.setFontSize(9); doc.text('PRESTCONTROL', W-10, 15, { align:'right' });
+  doc.setTextColor(71, 85, 105);
   doc.setFontSize(8); doc.setFont('helvetica', 'normal');
-  doc.text(`Generado: ${new Date().toLocaleDateString('es-AR')}`, W/2, 21, { align: 'center' });
-  doc.text(`Préstamo: ${prestamo.id}`, W/2, 27, { align: 'center' });
+  doc.text(`Préstamo ${prestamo.id}`, 10, 22);
+  doc.text(`Generado ${new Date().toLocaleDateString('es-AR')}`, W-10, 22, { align:'right' });
+  doc.setDrawColor(37, 99, 235); doc.setLineWidth(0.7);
+  doc.line(10, 28, W-10, 28);
+  y = 37;
 
-  y = 38;
-  doc.setDrawColor(192, 38, 211); doc.setLineWidth(0.5);
-  doc.line(8, y, W-8, y);
-  y += 7;
-
-  const row = (lbl, val, color=[248,250,252]) => {
-    doc.setTextColor(148,163,184); doc.setFontSize(8); doc.setFont('helvetica','normal');
+  const row = (lbl, val, color=[15,23,42]) => {
+    const valueLines = doc.splitTextToSize(String(val ?? '—'), W - 58);
+    doc.setTextColor(71,85,105); doc.setFontSize(8); doc.setFont('helvetica','normal');
     doc.text(lbl, 10, y);
     doc.setTextColor(...color); doc.setFontSize(9); doc.setFont('helvetica','bold');
-    doc.text(String(val), W-10, y, { align:'right' });
-    y += 6.5;
+    doc.text(valueLines, W-10, y, { align:'right' });
+    y += Math.max(6.5, valueLines.length * 4.2 + 1.5);
   };
 
   row('Cliente',       prestamo.clienteNombre || '—');
   row('Fecha',         fmtDate(prestamo.fecha));
-  row('Monto prestado', fmtMoney(prestamo.monto), [103,232,249]);
+  row('Monto prestado', fmtMoney(prestamo.monto), [29,78,216]);
   row('Interés',       `${Math.round(Number(prestamo.interes||0)*100)}%`);
   row('N° de cuotas',  `${prestamo.nCuotas} (${prestamo.tipo})`);
-  row('Cuota',         fmtMoney(prestamo.cuota), [34,197,94]);
-  row('Total a cobrar', fmtMoney(prestamo.total), [251,191,36]);
-  row('Ganancia',      fmtMoney(prestamo.ganancia), [34,197,94]);
+  row('Cuota',         fmtMoney(prestamo.cuota));
+  row('Total a cobrar', fmtMoney(prestamo.total), [29,78,216]);
+  row('Ganancia',      fmtMoney(prestamo.ganancia));
   row('Estado',        prestamo.estado);
 
+  const addNote = (label, value) => {
+    if (!value) return;
+    const lines = doc.splitTextToSize(String(value), W-20);
+    if (y + lines.length * 4 + 8 > H-12) { doc.addPage(); y = 14; }
+    doc.setTextColor(71,85,105); doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+    doc.text(label, 10, y);
+    doc.setTextColor(30,41,59); doc.setFont('helvetica','normal');
+    doc.text(lines, 10, y+4.5);
+    y += lines.length * 4 + 8;
+  };
+  addNote('PRENDA / GARANTÍA', prestamo.prenda);
+  addNote('OBSERVACIONES', prestamo.notas);
+
+  const drawTableHeader = () => {
+    doc.setTextColor(71,85,105); doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+    doc.text('N°', 10, y);
+    doc.text('Vencimiento', 22, y);
+    doc.text('Monto', 88, y, { align:'right' });
+    doc.text('Estado', 94, y);
+    doc.text('Pago', W-10, y, { align:'right' });
+    y += 3;
+    doc.setDrawColor(148,163,184); doc.setLineWidth(0.25);
+    doc.line(10, y, W-10, y);
+    y += 5;
+  };
+
   y += 3;
-  doc.setDrawColor(100,100,100); doc.setLineWidth(0.3);
-  doc.line(8, y, W-8, y);
-  y += 6;
-
-  // Tabla de cuotas
-  doc.setTextColor(148,163,184); doc.setFontSize(8); doc.setFont('helvetica','bold');
-  doc.text('N°', 10, y); doc.text('Vencimiento', 28, y);
-  doc.text('Monto', 80, y); doc.text('Estado', 108, y); doc.text('Pago', 138, y);
-  y += 4;
-  doc.setLineWidth(0.2); doc.line(8, y, W-8, y);
-  y += 4;
-
-  const stColor = { Pagado:[34,197,94], Pendiente:[251,191,36], Atrasado:[239,68,68] };
+  if (y > H-20) { doc.addPage(); y = 14; }
+  drawTableHeader();
+  const stColor = { Pagado:[21,128,61], Pendiente:[161,98,7], Atrasado:[185,28,28] };
 
   for (const c of cuotas) {
-    if (y > 185) { doc.addPage(); y = 15; }
-    const col = stColor[c.estado] || [148,163,184];
-    doc.setTextColor(30,30,30); doc.setFontSize(7.5); doc.setFont('helvetica','normal');
+    if (y > H-14) {
+      doc.addPage();
+      y = 14;
+      doc.setTextColor(15,23,42); doc.setFontSize(10); doc.setFont('helvetica','bold');
+      doc.text(`PRÉSTAMO ${prestamo.id} · CUOTAS`, 10, y);
+      y += 8;
+      drawTableHeader();
+    }
+    const col = stColor[c.estado] || [71,85,105];
+    doc.setTextColor(15,23,42); doc.setFontSize(7.2); doc.setFont('helvetica','normal');
     doc.text(String(c.nro), 10, y);
-    doc.text(fmtDate(c.fechaVenc), 28, y);
-    doc.text(fmtMoney(c.monto), 80, y);
+    doc.text(fmtDate(c.fechaVenc), 22, y);
+    doc.text(fmtMoney(c.monto), 88, y, { align:'right' });
     doc.setTextColor(...col);
-    doc.text(c.estado, 108, y);
-    doc.setTextColor(148,163,184);
-    doc.text(c.fechaPago ? fmtDate(c.fechaPago) : '—', 138, y);
+    doc.text(c.estado, 94, y);
+    doc.setTextColor(71,85,105);
+    doc.text(c.fechaPago ? fmtDate(c.fechaPago) : '—', W-10, y, { align:'right' });
     y += 6;
   }
 
