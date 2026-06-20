@@ -4025,20 +4025,21 @@ async function renderConfig() {
   const el = document.getElementById('pg-config');
   const waPhone  = await getConfig('waPhone')  || '';
   const waApikey = await getConfig('waApikey') || '';
-  const notifPerm = Notification.permission || 'default';
+  const notifSoportada = 'Notification' in window;
+  const notifPerm = notifSoportada ? Notification.permission : 'unsupported';
   const authCred = await authGetCred();
 
   el.innerHTML = `<div class="fadeIn">
     <div class="cfg-section">🔔 Notificaciones del sistema</div>
     <div class="card" style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px">
-      Recibí alertas automáticas cuando tengas cuotas que vencen hoy o atrasadas. Funciona aunque tengas la app cerrada.
+      Recibí alertas locales sobre cuotas vencidas, que vencen hoy o durante los próximos 7 días mientras PrestControl está en ejecución.
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <div>
         <div style="font-size:14px;font-weight:700">Estado: <span style="color:${notifPerm==='granted'?'var(--grn)':notifPerm==='denied'?'var(--red)':'var(--muted)'}">${notifPerm==='granted'?'✅ Activas':notifPerm==='denied'?'🚫 Bloqueadas':'⏳ Sin configurar'}</span></div>
         <div style="font-size:11px;color:var(--muted);margin-top:3px">Revisión automática cada 30 minutos</div>
       </div>
-      ${notifPerm!=='granted'?`<button class="btn btn-gold btn-sm" onclick="pedirPermiso()">Activar</button>`:`<button class="btn btn-ghost btn-sm" onclick="checkNotificaciones()">Probar</button>`}
+      ${notifPerm!=='granted'?`<button class="btn btn-gold btn-sm" onclick="pedirPermiso()" ${!notifSoportada?'disabled':''}>Activar</button>`:`<button class="btn btn-ghost btn-sm" onclick="probarNotificacion()">Probar</button>`}
     </div>
 
     <div class="cfg-section">📱 Notificaciones WhatsApp</div>
@@ -5561,36 +5562,95 @@ async function initNotificaciones() {
   scheduleNotificaciones();
 }
 
+let notifIntervalId = null;
+let notifInicioTimeoutId = null;
+
 function scheduleNotificaciones() {
+  if (notifIntervalId !== null) return;
   // Revisar cada 30 minutos
-  setInterval(async () => {
-    if (document.hidden) await checkNotificaciones();
+  notifIntervalId = setInterval(async () => {
+    if (DB && appDesbloqueada) await checkNotificaciones();
   }, 30 * 60 * 1000);
   // También al iniciar
-  setTimeout(checkNotificaciones, 3000);
+  notifInicioTimeoutId = setTimeout(() => {
+    notifInicioTimeoutId = null;
+    if (DB && appDesbloqueada) checkNotificaciones();
+  }, 3000);
+}
+
+function detenerNotificaciones() {
+  if (notifIntervalId !== null) clearInterval(notifIntervalId);
+  if (notifInicioTimeoutId !== null) clearTimeout(notifInicioTimeoutId);
+  notifIntervalId = null;
+  notifInicioTimeoutId = null;
+}
+
+async function mostrarNotificacion(titulo, opciones = {}) {
+  const opcionesFinales = {
+    icon: './icons/icon-192.png',
+    badge: './icons/icon-192.png',
+    ...opciones
+  };
+
+  if ('serviceWorker' in navigator) {
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (registration?.showNotification) {
+      await registration.showNotification(titulo, opcionesFinales);
+      return;
+    }
+  }
+
+  new Notification(titulo, opcionesFinales);
 }
 
 async function checkNotificaciones() {
-  if (Notification.permission !== 'granted') return;
-  const cuotas = await dbAll('cuotas');
+  if (!DB || !('Notification' in window) || Notification.permission !== 'granted') return;
+  const [cuotas, prestamos] = await Promise.all([dbAll('cuotas'), dbAll('prestamos')]);
+  const prestamosPorId = prestamosMap(prestamos);
   const hoy = today();
-  let vencenHoy = 0, atrasadas = 0;
+  const limite7 = new Date(hoy);
+  limite7.setDate(limite7.getDate() + 7);
+  let vencenHoy = 0, atrasadas = 0, proximas7 = 0;
   cuotas.forEach(c => {
-    if (c.estado === 'Pagado') return;
+    if (!esCuotaCobrable(c, prestamosPorId)) return;
     const v = parseDate(c.fechaVenc); if (!v) return;
     const dias = Math.floor((hoy - v) / 86400000);
     if (v.getTime() === hoy.getTime()) vencenHoy++;
     else if (dias > 0) atrasadas++;
+    else if (v <= limite7) proximas7++;
   });
   const lastNotif = await getConfig('lastNotifDate');
   const todayStr = hoy.toISOString().split('T')[0];
   if (lastNotif === todayStr) return; // ya notificamos hoy
-  if (vencenHoy === 0 && atrasadas === 0) return;
+  if (vencenHoy === 0 && atrasadas === 0 && proximas7 === 0) return;
   let msg = '';
-  if (vencenHoy > 0) msg += `📅 ${vencenHoy} cuota${vencenHoy>1?'s':''} vencen hoy. `;
   if (atrasadas > 0) msg += `⚠️ ${atrasadas} cuota${atrasadas>1?'s':''} atrasada${atrasadas>1?'s':''}.`;
-  new Notification('💰 PrestControl', { body: msg, icon: '' });
+  if (vencenHoy > 0) msg += ` 📅 ${vencenHoy} cuota${vencenHoy>1?'s':''} ${vencenHoy>1?'vencen':'vence'} hoy.`;
+  if (proximas7 > 0) msg += ` 🔔 ${proximas7} cuota${proximas7>1?'s':''} ${proximas7>1?'vencen':'vence'} en los próximos 7 días.`;
+  await mostrarNotificacion('💰 PrestControl', {
+    body: msg.trim(),
+    tag: `prestcontrol-resumen-${todayStr}`,
+    data: { url: './' }
+  });
   await setConfig('lastNotifDate', todayStr);
+}
+
+async function probarNotificacion() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') {
+    toast('⚠️ Activá las notificaciones primero');
+    return;
+  }
+  try {
+    await mostrarNotificacion('💰 PrestControl · Prueba', {
+      body: 'Las notificaciones locales están funcionando correctamente.',
+      tag: `prestcontrol-prueba-${Date.now()}`,
+      data: { url: './' }
+    });
+    toast('✅ Notificación de prueba enviada');
+  } catch (error) {
+    console.error('[PWA] Error al mostrar la notificación de prueba:', error);
+    toast('❌ No se pudo mostrar la notificación');
+  }
 }
 
 async function pedirPermiso() {
@@ -6276,6 +6336,7 @@ async function guardarMaestra() {
 }
 
 function cerrarSesion() {
+  detenerNotificaciones();
   appDesbloqueada  = false;
   currentUser      = null;
   DB               = null;

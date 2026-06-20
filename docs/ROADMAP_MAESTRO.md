@@ -286,6 +286,19 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 ## Pendiente de Etapa 6
 - Definir e implementar notificaciones push reales con la aplicación cerrada.
 
+## 6.2 — Notificación local coherente
+
+**Estado:** CERRADO
+
+## Cerrado
+- Notificaciones locales basadas en la regla canónica `esCuotaCobrable()`.
+- Resumen de cuotas vencidas, que vencen hoy y durante los próximos 7 días.
+- Un único intervalo activo, cancelado al cerrar sesión.
+- Prueba manual independiente de cuotas reales y de `lastNotifDate`.
+- Visualización mediante el service worker cuando está disponible.
+- Apertura o enfoque de PrestControl al tocar una notificación.
+- Sin Push API, Firebase Messaging, VAPID ni backend.
+
 ---
 
 # ETAPA 7 — COMANDOS POR VOZ
@@ -356,7 +369,7 @@ Crear módulo propio de empeños: prenda, tasación, dueño / cliente, valor pre
 # ESTADO ACTUAL
 
 **Etapa actual:** ETAPA 6 — Notificaciones PWA  
-**Último bloque cerrado:** ETAPA 6.1 — Base PWA real  
+**Último bloque cerrado:** ETAPA 6.2 — Notificación local coherente  
 **Próximo bloque recomendado:** Definir alcance de notificaciones push reales
 
 ---
