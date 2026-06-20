@@ -1,7 +1,29 @@
 /* =====================================================
    PWA — SERVICE WORKER + MANIFEST ROBUSTO
 ===================================================== */
-function instalarPWA() {
+async function instalarPWA() {
+  if (!('serviceWorker' in navigator)) {
+    console.info('[PWA] Service Worker no soportado por este navegador.');
+    return;
+  }
+  if (location.protocol === 'file:') {
+    console.info('[PWA] Service Worker omitido bajo file://.');
+    return;
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.register('./sw.js', {
+      scope: './',
+      updateViaCache: 'none'
+    });
+    console.info('[PWA] Service Worker registrado:', registration.scope);
+  } catch (error) {
+    console.error('[PWA] No se pudo registrar el Service Worker:', error);
+  }
+  return;
+
+  // Implementación dinámica anterior desactivada. Se conserva temporalmente
+  // debajo de este return para mantener alineada esta copia modular no activa.
   // Manifest mejorado
   const manifest = {
     name: 'PrestControl',
@@ -35,7 +57,7 @@ self.addEventListener('fetch', e => {
 });`;
     const swBlob = new Blob([swCode], { type:'application/javascript' });
     const swUrl  = URL.createObjectURL(swBlob);
-    navigator.serviceWorker.register(swUrl).catch(() => {});
+    console.info('[PWA] Registro blob legacy desactivado:', swUrl);
   }
 }
 
@@ -81,4 +103,3 @@ async function refreshApp() {
     }, 800);
   }
 }
-
