@@ -372,6 +372,17 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 - La limpieza flexible se aplica sólo antes de evaluar destinos conocidos.
 - Búsqueda de clientes y bloqueo de acciones riesgosas permanecen intactos.
 
+## 7.6 — Clientes y bitácora
+
+**Estado:** CERRADO
+
+## Cerrado
+- Variantes con artículos e intención para Clientes verificadas sin reglas redundantes.
+- “Bitácora” y “bitacora” incorporadas como sinónimos de Historial.
+- “Ver bitácora” y “abrime bitácora” navegan a Historial.
+- Movimientos, registros e historial mantienen la misma ruta real.
+- Búsqueda de clientes y bloqueo financiero permanecen intactos.
+
 ---
 
 # ETAPA 8 — WHATSAPP / COBRANZA
@@ -436,8 +447,8 @@ Crear módulo propio de empeños: prenda, tasación, dueño / cliente, valor pre
 # ESTADO ACTUAL
 
 **Etapa actual:** ETAPA 7 — Comandos por voz  
-**Último bloque cerrado:** ETAPA 7.5 — Detección de intención flexible  
-**Próximo bloque recomendado:** Validar Etapa 7.5 con reconocimiento real en navegadores compatibles
+**Último bloque cerrado:** ETAPA 7.6 — Clientes y bitácora  
+**Próximo bloque recomendado:** Validar Etapa 7.6 con reconocimiento real en navegadores compatibles
 
 ---
 
