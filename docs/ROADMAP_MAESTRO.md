@@ -361,6 +361,17 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 - La limpieza de navegación y la extracción de nombres permanecen separadas para no dañar nombres reales.
 - Acciones financieras o irreversibles continúan bloqueadas.
 
+## 7.5 — Detección de intención flexible
+
+**Estado:** CERRADO
+
+## Cerrado
+- “Vamos”, “abrí” y “mostrámelo” reconocidos como palabras de intención.
+- Destinos detectados aunque falten conectores entre intención y vista.
+- Variantes como “vamos agenda”, “vamos préstamos” y “vamos atrasados” navegan correctamente.
+- La limpieza flexible se aplica sólo antes de evaluar destinos conocidos.
+- Búsqueda de clientes y bloqueo de acciones riesgosas permanecen intactos.
+
 ---
 
 # ETAPA 8 — WHATSAPP / COBRANZA
@@ -425,8 +436,8 @@ Crear módulo propio de empeños: prenda, tasación, dueño / cliente, valor pre
 # ESTADO ACTUAL
 
 **Etapa actual:** ETAPA 7 — Comandos por voz  
-**Último bloque cerrado:** ETAPA 7.4 — Comprensión de frases naturales  
-**Próximo bloque recomendado:** Validar Etapa 7.4 con reconocimiento real en navegadores compatibles
+**Último bloque cerrado:** ETAPA 7.5 — Detección de intención flexible  
+**Próximo bloque recomendado:** Validar Etapa 7.5 con reconocimiento real en navegadores compatibles
 
 ---
 

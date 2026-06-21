@@ -3720,8 +3720,8 @@ async function resolverClienteVoz(nombre) {
 
 function limpiarIntencionNavegacionVoz(comando) {
   const relleno = new Set([
-    'quiero', 'quisiera', 'ver', 'mostrar', 'mostrame', 'mostrarme',
-    'abrir', 'abrime', 'ir', 'anda', 'a', 'al', 'la', 'el', 'los', 'las',
+    'quiero', 'quisiera', 'ver', 'mostrar', 'mostrame', 'mostrarme', 'mostramelo',
+    'abrir', 'abri', 'abrime', 'ir', 'anda', 'vamos', 'a', 'al', 'la', 'el', 'los', 'las',
     'de', 'del', 'por', 'favor'
   ]);
   return comando.split(' ').filter(palabra => !relleno.has(palabra)).join(' ').trim();
