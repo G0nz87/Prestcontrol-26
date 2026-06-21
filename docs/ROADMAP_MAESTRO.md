@@ -335,6 +335,19 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 - Órdenes de pago, renovación, cancelación o escritura bloqueadas con confirmación manual.
 - Frases desconocidas respondidas con ayuda simple.
 
+## 7.3 — Sinónimos y búsqueda natural
+
+**Estado:** CERRADO
+
+## Cerrado
+- Sinónimos para atrasos, agenda, historial, configuración, clientes, préstamos, cobros y alertas.
+- Gráficos, estadísticas y números abren la pestaña real de Gráficos del dashboard.
+- Resumen, dashboard e inicio restauran la vista global del dashboard.
+- Nuevas expresiones de cliente: busca, buscame, encontrame, encuentra a, buscar a y abrime.
+- Acentos, singular, plural y palabras de relleno normalizados.
+- Rutas inexistentes sustituidas únicamente por vistas reales equivalentes.
+- Acciones de escritura continúan bloqueadas.
+
 ---
 
 # ETAPA 8 — WHATSAPP / COBRANZA
@@ -399,8 +412,8 @@ Crear módulo propio de empeños: prenda, tasación, dueño / cliente, valor pre
 # ESTADO ACTUAL
 
 **Etapa actual:** ETAPA 7 — Comandos por voz  
-**Último bloque cerrado:** ETAPA 7.2 — Voz como super atajo natural  
-**Próximo bloque recomendado:** Validar Etapa 7.2 con reconocimiento real en navegadores compatibles
+**Último bloque cerrado:** ETAPA 7.3 — Sinónimos y búsqueda natural  
+**Próximo bloque recomendado:** Validar Etapa 7.3 con reconocimiento real en navegadores compatibles
 
 ---
 

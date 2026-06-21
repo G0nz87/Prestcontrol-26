@@ -3759,16 +3759,37 @@ async function procesarComandoVoz(transcript) {
     'clientes': ['clientes', 'Clientes'],
     'prestamo': ['prestamos', 'Préstamos'],
     'prestamos': ['prestamos', 'Préstamos'],
+    'credito': ['prestamos', 'Préstamos'],
+    'creditos': ['prestamos', 'Préstamos'],
     'cobro': ['cobros', 'Cobros'],
     'cobros': ['cobros', 'Cobros'],
+    'cobrar': ['cobros', 'Cobros'],
+    'hoy': ['cobros', 'Cobros'],
     'alerta': ['alertas', 'Alertas'],
     'alertas': ['alertas', 'Alertas'],
+    'aviso': ['alertas', 'Alertas'],
+    'avisos': ['alertas', 'Alertas'],
     'inicio': ['dashboard', 'Inicio'],
     'principal': ['dashboard', 'Inicio'],
     'dashboard': ['dashboard', 'Inicio'],
+    'grafico': ['dashboard', 'Inicio'],
+    'graficos': ['dashboard', 'Inicio'],
+    'estadistica': ['dashboard', 'Inicio'],
+    'estadisticas': ['dashboard', 'Inicio'],
+    'numero': ['dashboard', 'Inicio'],
+    'numeros': ['dashboard', 'Inicio'],
+    'resumen': ['dashboard', 'Inicio'],
     'cuota': ['cuotas', 'Cuotas'],
     'cuotas': ['cuotas', 'Cuotas'],
+    'agenda': ['calendario', 'Agenda'],
+    'calendario': ['calendario', 'Agenda'],
+    'historial': ['historial', 'Historial'],
+    'movimiento': ['historial', 'Historial'],
+    'movimientos': ['historial', 'Historial'],
+    'registro': ['historial', 'Historial'],
+    'registros': ['historial', 'Historial'],
     'configuracion': ['config', 'Configuración'],
+    'config': ['config', 'Configuración'],
     'ajustes': ['config', 'Configuración']
   };
 
@@ -3786,7 +3807,7 @@ async function procesarComandoVoz(transcript) {
     return { accion: 'navegar', page: 'cobros' };
   }
 
-  if (/^(?:cuotas? )?(?:atrasadas?|vencidas?)$/.test(comandoSimple)) {
+  if (/^(?:cuotas? )?(?:atrasos?|atrasadas?|atrasados?|vencidas?)$/.test(comandoSimple)) {
     await goPage('atrasadas');
     toast('✅ Abriendo cuotas atrasadas');
     return { accion: 'navegar', page: 'atrasadas' };
@@ -3798,6 +3819,20 @@ async function procesarComandoVoz(transcript) {
     return { accion: 'navegar', page: 'hoy' };
   }
 
+  if (/^(?:graficos?|estadisticas?|numeros?)$/.test(comandoSimple)) {
+    dashTab = 'graficos';
+    await goPage('dashboard');
+    toast('✅ Abriendo gráficos');
+    return { accion: 'navegar-dashboard', page: 'dashboard', tab: 'graficos' };
+  }
+
+  if (/^(?:resumen|dashboard|inicio|principal)$/.test(comandoSimple)) {
+    dashTab = 'global';
+    await goPage('dashboard');
+    toast('✅ Abriendo Inicio');
+    return { accion: 'navegar-dashboard', page: 'dashboard', tab: 'global' };
+  }
+
   if (destinos[comandoSimple]) {
     const [page, label] = destinos[comandoSimple];
     await goPage(page);
@@ -3805,7 +3840,7 @@ async function procesarComandoVoz(transcript) {
     return { accion: 'navegar', page };
   }
 
-  const clienteMatch = comando.match(/^(?:buscar cliente|abrir cliente|cliente|buscame|busca(?:r)?(?: cliente)?|mostrame|mostrarme|mostrar|ver|abrir|quiero ver(?: cliente)?)\s+(.+)$/);
+  const clienteMatch = comando.match(/^(?:buscar(?: a| cliente)?|buscame|busca(?: cliente)?|encontrame|encontra(?:me)?(?: a)?|encuentra(?:me)?(?: a)?|abrime|abrir(?: cliente)?|abre|cliente|mostrame|mostrarme|mostrar|ver|quiero ver(?: cliente)?)\s+(.+)$/);
   if (clienteMatch) {
     return resolverClienteVoz(clienteMatch[1]);
   }
