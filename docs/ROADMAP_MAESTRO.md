@@ -321,6 +321,20 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 - Reconocimiento detenido al cerrar sesión, bloquearse por inactividad u ocultarse la app.
 - Sin pagos, cuotas, renovaciones, cancelaciones ni guardado automático por voz.
 
+## 7.2 — Voz como super atajo natural
+
+**Estado:** CERRADO
+
+## Cerrado
+- Nombres directos y frases naturales para buscar clientes.
+- Apertura automática sólo con una coincidencia clara.
+- Resultados ambiguos conservados para selección manual.
+- Navegación sin exigir el prefijo “ir a”.
+- Atajos para préstamos activos, cobros de hoy, cuotas atrasadas y vencimientos de hoy.
+- Tolerancia a acentos, mayúsculas, singular, plural y palabras de relleno.
+- Órdenes de pago, renovación, cancelación o escritura bloqueadas con confirmación manual.
+- Frases desconocidas respondidas con ayuda simple.
+
 ---
 
 # ETAPA 8 — WHATSAPP / COBRANZA
@@ -385,8 +399,8 @@ Crear módulo propio de empeños: prenda, tasación, dueño / cliente, valor pre
 # ESTADO ACTUAL
 
 **Etapa actual:** ETAPA 7 — Comandos por voz  
-**Último bloque cerrado:** ETAPA 7.1 — Comandos mínimos y seguros  
-**Próximo bloque recomendado:** Validar Etapa 7.1 en navegadores compatibles antes de definir 7.2
+**Último bloque cerrado:** ETAPA 7.2 — Voz como super atajo natural  
+**Próximo bloque recomendado:** Validar Etapa 7.2 con reconocimiento real en navegadores compatibles
 
 ---
 

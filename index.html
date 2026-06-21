@@ -3688,63 +3688,134 @@ function iniciarComandoVoz() {
   }
 }
 
-async function mostrarBusquedaClienteVoz(nombre) {
+async function buscarCoincidenciasClienteVoz(nombre) {
+  const buscado = normalizarTextoVoz(nombre);
+  if (!buscado) return [];
+  const clientes = await dbAll('clientes');
+  return clientes.filter(cliente => normalizarTextoVoz(cliente.nombre).includes(buscado));
+}
+
+async function mostrarBusquedaClienteVoz(nombre, coincidencias = null) {
   await goPage('clientes');
   const input = document.querySelector('#pg-clientes .srch');
   if (input) input.value = nombre;
   filterClientes(nombre);
 
-  const buscado = normalizarTextoVoz(nombre);
-  return (document.getElementById('pg-clientes')._data || [])
-    .filter(cliente => normalizarTextoVoz(cliente.nombre).includes(buscado));
+  return coincidencias || buscarCoincidenciasClienteVoz(nombre);
+}
+
+async function resolverClienteVoz(nombre) {
+  const coincidencias = await buscarCoincidenciasClienteVoz(nombre);
+  if (coincidencias.length === 1) {
+    await openClienteDetail(coincidencias[0].id);
+    return { accion: 'abrir-cliente', clienteId: coincidencias[0].id };
+  }
+
+  await mostrarBusquedaClienteVoz(nombre, coincidencias);
+  toast(coincidencias.length
+    ? `⚠️ Hay ${coincidencias.length} coincidencias; elegí el cliente manualmente`
+    : '⚠️ Cliente no encontrado');
+  return { accion: coincidencias.length ? 'cliente-ambiguo' : 'cliente-no-encontrado', coincidencias: coincidencias.length };
+}
+
+function quitarRellenoComandoVoz(comando) {
+  return comando
+    .replace(/^(?:quiero\s+ver|mostrame|mostrarme|mostrar|ver|abrir)\s+/, '')
+    .trim();
+}
+
+function comandoVozRequiereConfirmacion(comando) {
+  return /\b(?:pagar|pagame|pago|pagos|renovar|cancelar|eliminar|borrar|guardar|editar|modificar)\b/.test(comando) ||
+    /\bregistrar\s+(?:un|una)?\s*(?:pago|cuota|prestamo)\b/.test(comando) ||
+    /\bmarcar\b.*\bpagad[ao]s?\b/.test(comando) ||
+    /\bcobrar\b.*\b(?:cuota|cliente)\b/.test(comando) ||
+    /\bcrear\s+(?:un\s+)?(?:prestamo|cuota)\b/.test(comando) ||
+    /\b(?:nuevo|nueva)\s+(?:prestamo|cuota)\b/.test(comando) ||
+    /\bcambiar\b.*\b(?:importe|monto|estado)\b/.test(comando);
 }
 
 async function procesarComandoVoz(transcript) {
   const comando = normalizarTextoVoz(transcript);
-  const destinos = {
-    'ir a cobros': ['cobros', 'Cobros'],
-    'ir a prestamos': ['prestamos', 'Préstamos'],
-    'ir a clientes': ['clientes', 'Clientes'],
-    'ir a alertas': ['alertas', 'Alertas']
-  };
-
-  if (destinos[comando]) {
-    const [page, label] = destinos[comando];
-    await goPage(page);
-    toast(`✅ Abriendo ${label}`);
-    return { accion: 'navegar', page };
+  if (!comando) {
+    toast('⚠️ No se entendió el comando');
+    return { accion: 'no-reconocido' };
   }
 
-  if (comando === 'crear cliente') {
+  if (/^(?:crear(?: un)?|nuevo) cliente$/.test(comando)) {
     await goPage('clientes');
     openSheetCliente();
     toast('✅ Formulario de nuevo cliente abierto');
     return { accion: 'crear-cliente' };
   }
 
-  const buscarMatch = comando.match(/^buscar cliente (.+)$/);
-  if (buscarMatch) {
-    const coincidencias = await mostrarBusquedaClienteVoz(buscarMatch[1]);
-    toast(coincidencias.length
-      ? `🔍 ${coincidencias.length} cliente${coincidencias.length!==1?'s':''} encontrado${coincidencias.length!==1?'s':''}`
-      : '⚠️ No se encontraron clientes');
-    return { accion: 'buscar-cliente', coincidencias: coincidencias.length };
+  if (comandoVozRequiereConfirmacion(comando)) {
+    toast('Ese comando requiere confirmación manual.');
+    return { accion: 'requiere-confirmacion' };
   }
 
-  const abrirMatch = comando.match(/^abrir cliente (.+)$/);
-  if (abrirMatch) {
-    const coincidencias = await mostrarBusquedaClienteVoz(abrirMatch[1]);
-    if (coincidencias.length === 1) {
-      await openClienteDetail(coincidencias[0].id);
-      return { accion: 'abrir-cliente', clienteId: coincidencias[0].id };
-    }
-    toast(coincidencias.length
-      ? `⚠️ Hay ${coincidencias.length} coincidencias; elegí el cliente manualmente`
-      : '⚠️ Cliente no encontrado');
-    return { accion: 'cliente-ambiguo', coincidencias: coincidencias.length };
+  const comandoSimple = quitarRellenoComandoVoz(comando.replace(/^ir\s+a\s+/, ''));
+  const destinos = {
+    'cliente': ['clientes', 'Clientes'],
+    'clientes': ['clientes', 'Clientes'],
+    'prestamo': ['prestamos', 'Préstamos'],
+    'prestamos': ['prestamos', 'Préstamos'],
+    'cobro': ['cobros', 'Cobros'],
+    'cobros': ['cobros', 'Cobros'],
+    'alerta': ['alertas', 'Alertas'],
+    'alertas': ['alertas', 'Alertas'],
+    'inicio': ['dashboard', 'Inicio'],
+    'principal': ['dashboard', 'Inicio'],
+    'dashboard': ['dashboard', 'Inicio'],
+    'cuota': ['cuotas', 'Cuotas'],
+    'cuotas': ['cuotas', 'Cuotas'],
+    'configuracion': ['config', 'Configuración'],
+    'ajustes': ['config', 'Configuración']
+  };
+
+  if (/^prestamos? activos?$/.test(comandoSimple)) {
+    await goPage('prestamos');
+    const btnActivos = document.querySelector('#prest-filtros .pf-btn');
+    filtrarPrestamos('activos', btnActivos);
+    toast('✅ Mostrando préstamos activos');
+    return { accion: 'filtrar-prestamos', filtro: 'activos' };
   }
 
-  toast('⚠️ Comando no reconocido');
+  if (/^cobros?(?: de)? hoy$/.test(comandoSimple)) {
+    await goPage('cobros');
+    toast('✅ Abriendo Cobros de hoy');
+    return { accion: 'navegar', page: 'cobros' };
+  }
+
+  if (/^(?:cuotas? )?(?:atrasadas?|vencidas?)$/.test(comandoSimple)) {
+    await goPage('atrasadas');
+    toast('✅ Abriendo cuotas atrasadas');
+    return { accion: 'navegar', page: 'atrasadas' };
+  }
+
+  if (/^(?:cuotas? )?vencen hoy$/.test(comandoSimple)) {
+    await goPage('hoy');
+    toast('✅ Abriendo cuotas que vencen hoy');
+    return { accion: 'navegar', page: 'hoy' };
+  }
+
+  if (destinos[comandoSimple]) {
+    const [page, label] = destinos[comandoSimple];
+    await goPage(page);
+    toast(`✅ Abriendo ${label}`);
+    return { accion: 'navegar', page };
+  }
+
+  const clienteMatch = comando.match(/^(?:buscar cliente|abrir cliente|cliente|buscame|busca(?:r)?(?: cliente)?|mostrame|mostrarme|mostrar|ver|abrir|quiero ver(?: cliente)?)\s+(.+)$/);
+  if (clienteMatch) {
+    return resolverClienteVoz(clienteMatch[1]);
+  }
+
+  const coincidenciasDirectas = await buscarCoincidenciasClienteVoz(comando);
+  if (coincidenciasDirectas.length) {
+    return resolverClienteVoz(comando);
+  }
+
+  toast('⚠️ No reconocí el comando. Probá con un nombre, clientes, cobros o préstamos.');
   return { accion: 'no-reconocido' };
 }
 
