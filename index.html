@@ -5390,6 +5390,7 @@ async function mostrarComprobanteApp(cuotaId) {
   }) : new Date().toLocaleDateString('es-AR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
 
   const telefono = cliente?.telefono || prestamo?.clienteTelefono || '';
+  const telefonoWA = normalizarTelefonoWA(telefono);
   const cuotasPagadas = prestamo ? (await dbAll('cuotas')).filter(c => c.prestamoId === prestamo.id && c.estado === 'Pagado').length : '-';
 
   // Texto para WhatsApp
@@ -5408,8 +5409,8 @@ async function mostrarComprobanteApp(cuotaId) {
     `_PrestControl_`
   );
 
-  const waURL = telefono
-    ? `https://wa.me/54${telefono.replace(/\D/g,'')}?text=${msgWA}`
+  const waURL = telefonoWA
+    ? `https://wa.me/${telefonoWA}?text=${msgWA}`
     : `https://wa.me/?text=${msgWA}`;
 
   // Construir sheet del comprobante
