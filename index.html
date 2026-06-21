@@ -2684,9 +2684,10 @@ async function calcularAlertas() {
     sync: { errores: [], mensaje: 'Sin errores de sincronización' }
   };
 
-  const [cuotas, clientes, syncOps] = await Promise.all([
+  const [cuotas, clientes, prestamos, syncOps] = await Promise.all([
     dbAll('cuotas'),
     dbAll('clientes').catch(() => []),
+    dbAll('prestamos').catch(() => []),
     getSyncQueuePending().catch(() => [])
   ]);
   const hoy = today();
@@ -2694,8 +2695,9 @@ async function calcularAlertas() {
   limite7.setDate(limite7.getDate() + 7);
   const clientesMap = {};
   clientes.forEach(c => { clientesMap[c.id] = c; });
+  const prestamosPorId = prestamosMap(prestamos);
 
-  const activas = cuotas.filter(c => c.estado !== 'Pagado' && c.estado !== 'Ejecutada' && !c._deleted);
+  const activas = cuotas.filter(c => esCuotaCobrable(c, prestamosPorId));
   const vencidas = [];
   const venceHoy = [];
   const proximos7 = [];
@@ -2706,6 +2708,7 @@ async function calcularAlertas() {
     const item = {
       ...c,
       clienteNombre: c.clienteNombre || clientesMap[c.clienteId]?.nombre || '—',
+      _esCobrable: true,
       _dias: Math.floor((hoy - v) / 86400000)
     };
     if (v < hoy) vencidas.push(item);
@@ -2747,7 +2750,7 @@ async function calcularAlertas() {
 function alertaCuotaHTML(c, tipo) {
   const cls = tipo === 'red' ? 'lred' : 'lgold';
   const badge = tipo === 'red' ? 'bg-red' : 'bg-yel';
-  const esCobrable = !ESTADOS_CUOTA_NO_COBRABLE.includes(c.estado);
+  const esCobrable = c._esCobrable === true;
   const detalle = tipo === 'red'
     ? `${c._dias} día${c._dias!==1?'s':''} de atraso`
     : `Vence ${fmtDate(c.fechaVenc)}`;
@@ -6142,12 +6145,13 @@ async function testWA() {
 }
 
 async function enviarResumenWA() {
-  const cuotas = await dbAll('cuotas');
+  const [cuotas, prestamos] = await Promise.all([dbAll('cuotas'), dbAll('prestamos')]);
   const hoy = today();
   const vHoy = [], atrasadas = [];
+  const prestamosPorId = prestamosMap(prestamos);
 
   cuotas.forEach(c => {
-    if (c.estado === 'Pagado') return;
+    if (!esCuotaCobrable(c, prestamosPorId)) return;
     const v = parseDate(c.fechaVenc); if (!v) return;
     const dias = Math.floor((hoy - v) / 86400000);
     const item = `• ${c.clienteNombre} (C${c.nro}): ${fmtMoney(c.monto)}`;
@@ -7646,17 +7650,104 @@ function periodoLabel(key) {
 /* =====================================================
    WHATSAPP DIRECTO — desde cliente / cuota
 ===================================================== */
+function normalizarTelefonoWA(valor) {
+  let telefono = String(valor || '').replace(/\D/g, '');
+  if (telefono.startsWith('00')) telefono = telefono.slice(2);
+  if (telefono.startsWith('0')) telefono = telefono.slice(1);
+  if (telefono.startsWith('54')) return telefono;
+  return telefono ? `54${telefono}` : '';
+}
+
+function motivoCuotaNoCobrableWA(cuota, prestamo) {
+  if (!cuota || cuota._deleted) return 'La cuota no está disponible';
+  const estadoCuota = {
+    Pagado: 'pagada', Ejecutada: 'ejecutada', Ejecutado: 'ejecutada',
+    Cancelada: 'cancelada', Cancelado: 'cancelada'
+  }[cuota.estado];
+  if (estadoCuota) return `La cuota está ${estadoCuota}`;
+  if (!prestamo || prestamo._deleted) return 'El préstamo asociado no está disponible';
+  const estadoPrestamo = { Pagado: 'pagado', Ejecutado: 'ejecutado', Cancelado: 'cancelado' }[prestamo.estado];
+  if (estadoPrestamo) return `El préstamo está ${estadoPrestamo}`;
+  return 'La cuota no está habilitada para cobranza';
+}
+
+async function obtenerContextoWhatsAppCuota(cuotaId) {
+  const cuota = await dbGet('cuotas', cuotaId);
+  if (!cuota) { toast('⚠️ Cuota no encontrada'); return null; }
+
+  const prestamo = cuota.prestamoId ? await dbGet('prestamos', cuota.prestamoId) : null;
+  const clienteId = cuota.clienteId || prestamo?.clienteId;
+  const cliente = clienteId ? await dbGet('clientes', clienteId) : null;
+
+  if (!cliente?.nombre || cliente._deleted) { toast('⚠️ La cuota no tiene un cliente válido'); return null; }
+  if (!prestamo) { toast('⚠️ La cuota no tiene un préstamo válido'); return null; }
+
+  const mapaPrestamos = new Map([[cuota.prestamoId, prestamo]]);
+  if (!esCuotaCobrable(cuota, mapaPrestamos)) {
+    toast(`⚠️ ${motivoCuotaNoCobrableWA(cuota, prestamo)}. No se abrió WhatsApp`);
+    return null;
+  }
+
+  const telefono = normalizarTelefonoWA(cliente.telefono);
+  if (!telefono) { toast('⚠️ El cliente no tiene un teléfono válido'); return null; }
+  if (cuota.nro === undefined || cuota.nro === null || cuota.nro === '') {
+    toast('⚠️ La cuota no tiene número'); return null;
+  }
+  if (cuota.monto === undefined || cuota.monto === null || cuota.monto === '' || !Number.isFinite(Number(cuota.monto))) {
+    toast('⚠️ La cuota no tiene un monto válido'); return null;
+  }
+
+  const vencimiento = parseDate(cuota.fechaVenc);
+  if (!vencimiento) { toast('⚠️ La cuota no tiene una fecha de vencimiento válida'); return null; }
+
+  return { cuota, cliente, prestamo, telefono, vencimiento };
+}
+
+function crearMensajeWhatsAppCuota({ cuota, cliente, prestamo, vencimiento }) {
+  const hoy = today();
+  const diferencia = vencimiento.getTime() - hoy.getTime();
+  const cuotaTexto = prestamo?.nCuotas
+    ? `cuota ${cuota.nro} de ${prestamo.nCuotas}`
+    : `cuota ${cuota.nro}`;
+  const prestamoTexto = cuota.prestamoId
+    ? ` correspondiente al préstamo ${cuota.prestamoId}`
+    : '';
+
+  let mensaje = `Hola ${cliente.nombre}.\n`;
+  if (diferencia < 0) {
+    mensaje += `Tu ${cuotaTexto} por ${fmtMoney(cuota.monto)}${prestamoTexto} registra atraso.\n`;
+    mensaje += `Vencía el ${fmtDate(cuota.fechaVenc)}.\n`;
+    mensaje += 'Por favor comunicate para regularizarla.';
+  } else if (diferencia === 0) {
+    mensaje += `Te recuerdo que hoy vence tu ${cuotaTexto} por ${fmtMoney(cuota.monto)}${prestamoTexto}.`;
+  } else {
+    mensaje += `Te recuerdo que tu ${cuotaTexto} por ${fmtMoney(cuota.monto)}${prestamoTexto} vence el ${fmtDate(cuota.fechaVenc)}.`;
+  }
+  return mensaje;
+}
+
 async function abrirWACliente(clienteId) {
   const [cliente, prestamos, cuotas] = await Promise.all([
     dbGet('clientes', clienteId), dbAll('prestamos'), dbAll('cuotas')
   ]);
-  if (!cliente) { toast('Cliente no encontrado'); return; }
-  if (!cliente.telefono) { toast('⚠️ El cliente no tiene teléfono'); return; }
+  if (!cliente?.nombre || cliente._deleted) { toast('Cliente no encontrado'); return; }
+  const telefono = normalizarTelefonoWA(cliente.telefono);
+  if (!telefono) { toast('⚠️ El cliente no tiene un teléfono válido'); return; }
 
-  const hoy    = today();
-  const misCuo = cuotas.filter(c => c.clienteId === clienteId && c.estado !== 'Pagado');
+  const hoy = today();
+  const prestamosPorId = prestamosMap(prestamos);
+  const misCuo = cuotas.filter(c => c.clienteId === clienteId && esCuotaCobrable(c, prestamosPorId));
+  if (!misCuo.length) { toast('ℹ️ El cliente no tiene cuotas cobrables'); return; }
+  const datosCompletos = misCuo.every(c =>
+    c.nro !== undefined && c.nro !== null && c.nro !== ''
+    && c.monto !== undefined && c.monto !== null && c.monto !== '' && Number.isFinite(Number(c.monto))
+    && parseDate(c.fechaVenc)
+  );
+  if (!datosCompletos) { toast('⚠️ Hay cuotas cobrables con datos incompletos. No se abrió WhatsApp'); return; }
   const vHoy   = misCuo.filter(c => { const v=parseDate(c.fechaVenc); return v && v.getTime()===hoy.getTime(); });
   const atr    = misCuo.filter(c => { const v=parseDate(c.fechaVenc); return v && v<hoy; });
+  const prox   = misCuo.filter(c => { const v=parseDate(c.fechaVenc); return v && v>hoy; })
+    .sort((a,b) => parseDate(a.fechaVenc) - parseDate(b.fechaVenc));
 
   let msg = `Hola ${cliente.nombre.split(' ')[0]} 👋\n`;
 
@@ -7671,50 +7762,23 @@ async function abrirWACliente(clienteId) {
       msg += `  • Cuota ${c.nro} · ${fmtMoney(c.monto)} · ${dias}d de atraso\n`;
     });
   }
-  if (!vHoy.length && !atr.length) {
-    msg += `\nTe recordamos que tenés cuotas pendientes con nosotros 🙏`;
+  if (prox.length) {
+    msg += `\n📅 *Próximos vencimientos:*\n`;
+    prox.slice(0,3).forEach(c => {
+      msg += `  • Cuota ${c.nro} · ${fmtMoney(c.monto)} · ${fmtDate(c.fechaVenc)}\n`;
+    });
   }
   msg += `\n_PrestControl_`;
 
-  const tel = cliente.telefono.replace(/\D/g,'');
-  const url = `https://wa.me/${tel}?text=${encodeURIComponent(msg)}`;
+  const url = `https://wa.me/${telefono}?text=${encodeURIComponent(msg)}`;
   window.open(url, '_blank');
 }
 
 async function enviarWACuota(cuotaId) {
-  const c = await dbGet('cuotas', cuotaId);
-  if (!c) return;
-  const [cliente, prestamo] = await Promise.all([
-    dbGet('clientes', c.clienteId),
-    dbGet('prestamos', c.prestamoId)
-  ]);
-  if (!cliente?.telefono) { toast('⚠️ El cliente no tiene teléfono'); return; }
-
-  const vencimiento = parseDate(c.fechaVenc);
-  if (!vencimiento) { toast('⚠️ La cuota no tiene una fecha de vencimiento válida'); return; }
-
-  const hoy = today();
-  const diferencia = vencimiento.getTime() - hoy.getTime();
-  const cuotaTexto = prestamo?.nCuotas
-    ? `cuota ${c.nro} de ${prestamo.nCuotas}`
-    : `cuota ${c.nro}`;
-  const prestamoTexto = c.prestamoId
-    ? ` correspondiente al préstamo ${c.prestamoId}`
-    : '';
-
-  let msg = `Hola ${cliente.nombre}.\n`;
-  if (diferencia < 0) {
-    msg += `Tu ${cuotaTexto} por ${fmtMoney(c.monto)}${prestamoTexto} registra atraso.\n`;
-    msg += `Vencía el ${fmtDate(c.fechaVenc)}.\n`;
-    msg += `Por favor comunicate para regularizarla.`;
-  } else if (diferencia === 0) {
-    msg += `Te recuerdo que hoy vence tu ${cuotaTexto} por ${fmtMoney(c.monto)}${prestamoTexto}.`;
-  } else {
-    msg += `Te recuerdo que tu ${cuotaTexto} por ${fmtMoney(c.monto)}${prestamoTexto} vence el ${fmtDate(c.fechaVenc)}.`;
-  }
-
-  const tel = cliente.telefono.replace(/\D/g,'');
-  const url = `https://wa.me/${tel}?text=${encodeURIComponent(msg)}`;
+  const contexto = await obtenerContextoWhatsAppCuota(cuotaId);
+  if (!contexto) return;
+  const msg = crearMensajeWhatsAppCuota(contexto);
+  const url = `https://wa.me/${contexto.telefono}?text=${encodeURIComponent(msg)}`;
   window.open(url, '_blank');
 }
 
