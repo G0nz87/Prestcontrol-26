@@ -363,6 +363,13 @@ export async function confirmarRenovacionPrestamo() {
     window.pushInmediato();
     await window.updateBadges();
     await window.openPrestamoDetail(preId);
+    try {
+      if (typeof window.mostrarComprobanteApp !== 'function') throw new Error('Comprobante no disponible');
+      await window.mostrarComprobanteApp(cuotaId);
+    } catch (comprobanteError) {
+      console.warn('No se pudo abrir el comprobante de la cuota compensada:', comprobanteError);
+      window.toast('Renovacion creada. No se pudo abrir el comprobante');
+    }
   } catch (e) {
     setRenovacionError(e.message || 'No se pudo renovar el prestamo');
   } finally {
