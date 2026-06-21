@@ -348,6 +348,19 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 - Rutas inexistentes sustituidas únicamente por vistas reales equivalentes.
 - Acciones de escritura continúan bloqueadas.
 
+## 7.4 — Comprensión de frases naturales
+
+**Estado:** CERRADO
+
+## Cerrado
+- Navegación detectada antes de interpretar una frase como nombre de cliente.
+- Artículos, conectores y expresiones de cortesía eliminados sólo para navegación.
+- Prefijos de búsqueda limpian correctamente “a”, “al” y “a la”.
+- Frases como “quiero ver los préstamos” y “quiero ver a la agenda” resuelven su vista real.
+- “Buscame a”, “encontrame a”, “busca a” y “quiero buscar a” conservan únicamente el nombre.
+- La limpieza de navegación y la extracción de nombres permanecen separadas para no dañar nombres reales.
+- Acciones financieras o irreversibles continúan bloqueadas.
+
 ---
 
 # ETAPA 8 — WHATSAPP / COBRANZA
@@ -412,8 +425,8 @@ Crear módulo propio de empeños: prenda, tasación, dueño / cliente, valor pre
 # ESTADO ACTUAL
 
 **Etapa actual:** ETAPA 7 — Comandos por voz  
-**Último bloque cerrado:** ETAPA 7.3 — Sinónimos y búsqueda natural  
-**Próximo bloque recomendado:** Validar Etapa 7.3 con reconocimiento real en navegadores compatibles
+**Último bloque cerrado:** ETAPA 7.4 — Comprensión de frases naturales  
+**Próximo bloque recomendado:** Validar Etapa 7.4 con reconocimiento real en navegadores compatibles
 
 ---
 

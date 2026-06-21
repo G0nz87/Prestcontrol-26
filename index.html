@@ -3718,10 +3718,27 @@ async function resolverClienteVoz(nombre) {
   return { accion: coincidencias.length ? 'cliente-ambiguo' : 'cliente-no-encontrado', coincidencias: coincidencias.length };
 }
 
-function quitarRellenoComandoVoz(comando) {
-  return comando
-    .replace(/^(?:quiero\s+ver|mostrame|mostrarme|mostrar|ver|abrir)\s+/, '')
-    .trim();
+function limpiarIntencionNavegacionVoz(comando) {
+  const relleno = new Set([
+    'quiero', 'quisiera', 'ver', 'mostrar', 'mostrame', 'mostrarme',
+    'abrir', 'abrime', 'ir', 'anda', 'a', 'al', 'la', 'el', 'los', 'las',
+    'de', 'del', 'por', 'favor'
+  ]);
+  return comando.split(' ').filter(palabra => !relleno.has(palabra)).join(' ').trim();
+}
+
+function extraerNombreClienteVoz(comando) {
+  const frase = comando.replace(/^por favor\s+/, '').replace(/\s+por favor$/, '').trim();
+  const patrones = [
+    /^(?:quiero|quisiera)\s+(?:buscar|encontrar|ver|abrir|mostrar)\s+(?:(?:a la|al|a)\s+)?(?:cliente\s+)?(.+)$/,
+    /^(?:buscame|busca|buscar|encontrame|encontrar|encontra|encuentrame|encuentra|abrime|abrir|abre|mostrame|mostrarme|mostrar|ver)\s+(?:(?:a la|al|a)\s+)?(?:cliente\s+)?(.+)$/,
+    /^cliente\s+(.+)$/
+  ];
+  for (const patron of patrones) {
+    const match = frase.match(patron);
+    if (match?.[1]) return match[1].trim();
+  }
+  return '';
 }
 
 function comandoVozRequiereConfirmacion(comando) {
@@ -3753,7 +3770,7 @@ async function procesarComandoVoz(transcript) {
     return { accion: 'requiere-confirmacion' };
   }
 
-  const comandoSimple = quitarRellenoComandoVoz(comando.replace(/^ir\s+a\s+/, ''));
+  const comandoSimple = limpiarIntencionNavegacionVoz(comando);
   const destinos = {
     'cliente': ['clientes', 'Clientes'],
     'clientes': ['clientes', 'Clientes'],
@@ -3840,9 +3857,9 @@ async function procesarComandoVoz(transcript) {
     return { accion: 'navegar', page };
   }
 
-  const clienteMatch = comando.match(/^(?:buscar(?: a| cliente)?|buscame|busca(?: cliente)?|encontrame|encontra(?:me)?(?: a)?|encuentra(?:me)?(?: a)?|abrime|abrir(?: cliente)?|abre|cliente|mostrame|mostrarme|mostrar|ver|quiero ver(?: cliente)?)\s+(.+)$/);
-  if (clienteMatch) {
-    return resolverClienteVoz(clienteMatch[1]);
+  const nombreCliente = extraerNombreClienteVoz(comando);
+  if (nombreCliente) {
+    return resolverClienteVoz(nombreCliente);
   }
 
   const coincidenciasDirectas = await buscarCoincidenciasClienteVoz(comando);
