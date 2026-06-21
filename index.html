@@ -5635,20 +5635,87 @@ async function checkNotificaciones() {
   await setConfig('lastNotifDate', todayStr);
 }
 
+function probarNotificacionDirecta(titulo, opciones) {
+  return new Promise((resolve, reject) => {
+    let notification;
+    const timeoutId = setTimeout(() => {
+      notification?.close();
+      reject(new Error('Notification API no confirmó el evento show en 5 segundos'));
+    }, 5000);
+
+    try {
+      notification = new Notification(titulo, opciones);
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+      notification.onshow = () => {
+        clearTimeout(timeoutId);
+        resolve(notification);
+      };
+      notification.onerror = () => {
+        clearTimeout(timeoutId);
+        reject(new Error('Notification API emitió un error al mostrar la prueba'));
+      };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      reject(error);
+    }
+  });
+}
+
+async function probarNotificacionPorSW(titulo, opciones) {
+  if (!('serviceWorker' in navigator)) {
+    throw new Error('Service Worker no disponible');
+  }
+
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (!registration?.active || !registration.showNotification) {
+    throw new Error('Service Worker activo no disponible');
+  }
+
+  await registration.showNotification(titulo, opciones);
+  const registradas = await registration.getNotifications({ tag: opciones.tag });
+  if (!registradas.some(notification => notification.tag === opciones.tag)) {
+    throw new Error('El Service Worker no confirmó la notificación mediante getNotifications()');
+  }
+}
+
 async function probarNotificacion() {
-  if (!('Notification' in window) || Notification.permission !== 'granted') {
+  const permiso = 'Notification' in window ? Notification.permission : 'unsupported';
+  console.info('[PWA][NotifTest] permiso:', permiso);
+  if (permiso !== 'granted') {
+    console.warn('[PWA][NotifTest] permiso faltante:', permiso);
     toast('⚠️ Activá las notificaciones primero');
     return;
   }
+
+  const titulo = '💰 PrestControl · Prueba';
+  const opciones = {
+    body: 'Las notificaciones locales están funcionando correctamente.',
+    icon: './icons/icon-192.png',
+    badge: './icons/icon-192.png',
+    tag: `prestcontrol-prueba-${Date.now()}`,
+    data: { url: './' },
+    requireInteraction: true,
+    silent: false
+  };
+
   try {
-    await mostrarNotificacion('💰 PrestControl · Prueba', {
-      body: 'Las notificaciones locales están funcionando correctamente.',
-      tag: `prestcontrol-prueba-${Date.now()}`,
-      data: { url: './' }
-    });
-    toast('✅ Notificación de prueba enviada');
-  } catch (error) {
-    console.error('[PWA] Error al mostrar la notificación de prueba:', error);
+    await probarNotificacionDirecta(titulo, opciones);
+    console.info('[PWA][NotifTest] fallback Notification OK (evento show confirmado)');
+    toast('✅ Notificación mostrada por el navegador');
+    return;
+  } catch (notificationError) {
+    console.warn('[PWA][NotifTest] Notification API directa no confirmó; probando Service Worker:', notificationError);
+  }
+
+  try {
+    await probarNotificacionPorSW(titulo, opciones);
+    console.info('[PWA][NotifTest] SW showNotification OK (tag confirmado)');
+    toast('✅ Notificación registrada por la PWA');
+  } catch (swError) {
+    console.error('[PWA][NotifTest] error real; ningún camino pudo confirmar la notificación:', swError);
     toast('❌ No se pudo mostrar la notificación');
   }
 }
