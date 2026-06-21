@@ -303,7 +303,23 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 
 # ETAPA 7 — COMANDOS POR VOZ
 
-**Estado:** PENDIENTE
+**Estado:** EN PROGRESO
+
+## 7.1 — Comandos mínimos y seguros
+
+**Estado:** CERRADO
+
+## Cerrado
+- Botón de micrófono visible únicamente con soporte de Web Speech API.
+- Reconocimiento manual de una frase en español de Argentina (`es-AR`).
+- Navegación por voz a Cobros, Préstamos, Clientes y Alertas.
+- Búsqueda de clientes reutilizando el filtro existente.
+- Apertura automática de cliente sólo ante una coincidencia única.
+- Coincidencias ambiguas mostradas para selección manual.
+- “Crear cliente” abre únicamente el formulario vacío.
+- Errores de soporte, permiso, micrófono, red y frase no reconocida informados en UI.
+- Reconocimiento detenido al cerrar sesión, bloquearse por inactividad u ocultarse la app.
+- Sin pagos, cuotas, renovaciones, cancelaciones ni guardado automático por voz.
 
 ---
 
@@ -368,9 +384,9 @@ Crear módulo propio de empeños: prenda, tasación, dueño / cliente, valor pre
 
 # ESTADO ACTUAL
 
-**Etapa actual:** ETAPA 6 — Notificaciones PWA  
-**Último bloque cerrado:** ETAPA 6.2 — Notificación local coherente  
-**Próximo bloque recomendado:** Definir alcance de notificaciones push reales
+**Etapa actual:** ETAPA 7 — Comandos por voz  
+**Último bloque cerrado:** ETAPA 7.1 — Comandos mínimos y seguros  
+**Próximo bloque recomendado:** Validar Etapa 7.1 en navegadores compatibles antes de definir 7.2
 
 ---
 

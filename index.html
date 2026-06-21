@@ -95,6 +95,8 @@ input,select,textarea{font-family:'DM Sans',sans-serif}
 .hdr-actions{display:flex;gap:8px}
 .icon-btn{width:40px;height:40px;background:var(--card2);border:1px solid var(--border);color:var(--txt);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:.2s}
 .icon-btn:active{background:var(--card)}
+.voice-btn.listening{color:#fff;background:var(--red);border-color:var(--red);animation:voice-pulse 1s ease-in-out infinite}
+@keyframes voice-pulse{50%{box-shadow:0 0 0 5px rgba(239,68,68,.18)}}
 .hdr-alert-btn{position:relative}
 .hdr-badge{position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:9px;font-weight:800;min-width:16px;height:16px;border-radius:8px;padding:0 4px;display:none;align-items:center;justify-content:center}
 .hdr-badge.on{display:flex}
@@ -888,6 +890,7 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
   <div class="hdr-actions" style="gap:6px">
     <span id="usr-badge" onclick="toggleUserMenu()" title="Menú de usuario">👤 —</span>
     <button class="icon-btn hdr-alert-btn" onclick="goPage('alertas')" title="Alertas">🔔<span class="hdr-badge" id="alertas-badge">0</span></button>
+    <button class="icon-btn voice-btn" id="voice-btn" onclick="iniciarComandoVoz()" title="Comando por voz" aria-label="Iniciar comando por voz" aria-pressed="false" style="display:none">🎙️</button>
     <button class="icon-btn" id="hdr-add-btn" onclick="openFab()" title="Agregar" style="display:none">＋</button>
     <button class="icon-btn" onclick="refreshApp()" title="Actualizar" id="refresh-btn">🔄</button>
     <button class="icon-btn" onclick="goBack()" id="back-btn" style="display:none">←</button>
@@ -2529,7 +2532,7 @@ function goPage(id) {
   document.getElementById('hdr-add-btn').style.display = 'none';
   updateFab(id);
   syncHeaderState();
-  renderPage(id);
+  return renderPage(id);
 }
 
 function goDetail(id, opciones = {}) {
@@ -3568,15 +3571,181 @@ async function renderClientes() {
 
 function filterClientes(q) {
   const el = document.getElementById('pg-clientes');
-  const ql = q.toLowerCase();
+  const ql = normalizarTextoVoz(q);
   const lista = (el._data||[]).filter(c =>
-    c.nombre.toLowerCase().includes(ql) ||
+    normalizarTextoVoz(c.nombre).includes(ql) ||
     (c.dni||'').includes(q) ||
     (c.telefono||'').includes(q) ||
-    (c.direccion||'').toLowerCase().includes(ql)
+    normalizarTextoVoz(c.direccion||'').includes(ql)
   );
   const ct = document.getElementById('cli-list');
   if (ct) ct.innerHTML = lista.length ? lista.map(cliItemHTML).join('') : emptyHTML('🔍','Sin resultados','');
+}
+
+/* =====================================================
+   COMANDOS POR VOZ — ETAPA 7.1
+===================================================== */
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+let voiceRecognition = null;
+let voiceListening = false;
+
+function normalizarTextoVoz(texto = '') {
+  return String(texto)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9ñ\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function initComandosVoz() {
+  const btn = document.getElementById('voice-btn');
+  if (!btn) return;
+  btn.style.display = SpeechRecognitionAPI ? 'flex' : 'none';
+}
+
+function setVoiceListening(active) {
+  voiceListening = active;
+  const btn = document.getElementById('voice-btn');
+  if (!btn) return;
+  btn.classList.toggle('listening', active);
+  btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  btn.title = active ? 'Escuchando… Tocá para cancelar' : 'Comando por voz';
+}
+
+function detenerComandosVoz() {
+  if (voiceRecognition && voiceListening) {
+    try { voiceRecognition.abort(); } catch (error) {}
+  }
+  voiceRecognition = null;
+  setVoiceListening(false);
+}
+
+function iniciarComandoVoz() {
+  if (!SpeechRecognitionAPI) {
+    toast('⚠️ El navegador no soporta comandos por voz');
+    return;
+  }
+  if (!appDesbloqueada || !DB) {
+    toast('⚠️ Desbloqueá PrestControl para usar comandos por voz');
+    return;
+  }
+  if (voiceListening) {
+    detenerComandosVoz();
+    return;
+  }
+
+  const recognition = new SpeechRecognitionAPI();
+  voiceRecognition = recognition;
+  recognition.lang = 'es-AR';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    setVoiceListening(true);
+    toast('🎙️ Escuchando un comando…');
+  };
+  recognition.onresult = event => {
+    const transcript = event.results?.[0]?.[0]?.transcript?.trim() || '';
+    if (!transcript) {
+      toast('⚠️ No se entendió el comando');
+      return;
+    }
+    console.info('[Voz] Reconocido:', transcript);
+    procesarComandoVoz(transcript).catch(error => {
+      console.error('[Voz] Error al procesar el comando:', error);
+      toast('❌ No se pudo ejecutar el comando de voz');
+    });
+  };
+  recognition.onerror = event => {
+    if (event.error === 'aborted') return;
+    const mensajes = {
+      'not-allowed': '⚠️ Permiso de micrófono rechazado',
+      'service-not-allowed': '⚠️ Reconocimiento de voz bloqueado',
+      'audio-capture': '⚠️ No se detectó un micrófono disponible',
+      'no-speech': '⚠️ No se detectó ninguna frase',
+      'network': '⚠️ El reconocimiento de voz necesita conexión'
+    };
+    console.warn('[Voz] Error de reconocimiento:', event.error);
+    toast(mensajes[event.error] || '⚠️ No se pudo reconocer el comando');
+  };
+  recognition.onend = () => {
+    if (voiceRecognition === recognition) {
+      voiceRecognition = null;
+      setVoiceListening(false);
+    }
+  };
+
+  try {
+    recognition.start();
+  } catch (error) {
+    voiceRecognition = null;
+    setVoiceListening(false);
+    console.error('[Voz] No se pudo iniciar:', error);
+    toast('❌ No se pudo iniciar el micrófono');
+  }
+}
+
+async function mostrarBusquedaClienteVoz(nombre) {
+  await goPage('clientes');
+  const input = document.querySelector('#pg-clientes .srch');
+  if (input) input.value = nombre;
+  filterClientes(nombre);
+
+  const buscado = normalizarTextoVoz(nombre);
+  return (document.getElementById('pg-clientes')._data || [])
+    .filter(cliente => normalizarTextoVoz(cliente.nombre).includes(buscado));
+}
+
+async function procesarComandoVoz(transcript) {
+  const comando = normalizarTextoVoz(transcript);
+  const destinos = {
+    'ir a cobros': ['cobros', 'Cobros'],
+    'ir a prestamos': ['prestamos', 'Préstamos'],
+    'ir a clientes': ['clientes', 'Clientes'],
+    'ir a alertas': ['alertas', 'Alertas']
+  };
+
+  if (destinos[comando]) {
+    const [page, label] = destinos[comando];
+    await goPage(page);
+    toast(`✅ Abriendo ${label}`);
+    return { accion: 'navegar', page };
+  }
+
+  if (comando === 'crear cliente') {
+    await goPage('clientes');
+    openSheetCliente();
+    toast('✅ Formulario de nuevo cliente abierto');
+    return { accion: 'crear-cliente' };
+  }
+
+  const buscarMatch = comando.match(/^buscar cliente (.+)$/);
+  if (buscarMatch) {
+    const coincidencias = await mostrarBusquedaClienteVoz(buscarMatch[1]);
+    toast(coincidencias.length
+      ? `🔍 ${coincidencias.length} cliente${coincidencias.length!==1?'s':''} encontrado${coincidencias.length!==1?'s':''}`
+      : '⚠️ No se encontraron clientes');
+    return { accion: 'buscar-cliente', coincidencias: coincidencias.length };
+  }
+
+  const abrirMatch = comando.match(/^abrir cliente (.+)$/);
+  if (abrirMatch) {
+    const coincidencias = await mostrarBusquedaClienteVoz(abrirMatch[1]);
+    if (coincidencias.length === 1) {
+      await openClienteDetail(coincidencias[0].id);
+      return { accion: 'abrir-cliente', clienteId: coincidencias[0].id };
+    }
+    toast(coincidencias.length
+      ? `⚠️ Hay ${coincidencias.length} coincidencias; elegí el cliente manualmente`
+      : '⚠️ Cliente no encontrado');
+    return { accion: 'cliente-ambiguo', coincidencias: coincidencias.length };
+  }
+
+  toast('⚠️ Comando no reconocido');
+  return { accion: 'no-reconocido' };
 }
 
 function cliItemHTML(c) {
@@ -6404,6 +6573,7 @@ async function guardarMaestra() {
 
 function cerrarSesion() {
   detenerNotificaciones();
+  detenerComandosVoz();
   appDesbloqueada  = false;
   currentUser      = null;
   DB               = null;
@@ -7006,6 +7176,7 @@ function resetInactividad() {
 }
 
 function bloquearPorInactividad() {
+  detenerComandosVoz();
   appDesbloqueada = false;
   document.getElementById('lock-err').classList.remove('on');
   document.getElementById('lock-pass').value = '';
@@ -8192,11 +8363,13 @@ async function init() {
   instalarPWA();
   await initGlobalDB();
   updateHdrDate();
+  initComandosVoz();
   initNotificaciones();
   iniciarWatchdogInactividad();
 
   // Sincronizar al volver a la pestaña/app (cambio de dispositivo)
   document.addEventListener('visibilitychange', () => {
+    if (document.hidden) detenerComandosVoz();
     if (!document.hidden && appDesbloqueada && _fbUser) {
       _pullFromFirebase().then(() => {
         if (drivePendingSync) driveSave();
