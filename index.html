@@ -5464,7 +5464,7 @@ async function mostrarComprobanteApp(cuotaId) {
       const clienteId = cuota.clienteId || prestamo?.clienteId;
       const clienteActual = clienteId ? await dbGet('clientes', clienteId) : null;
       const telefonoWA = normalizarTelefonoWA(clienteActual?.telefono);
-      if (!clienteActual || clienteActual._deleted || !telefonoWA || telefonoWA.startsWith('54549')) {
+      if (!clienteActual || clienteActual._deleted || !telefonoWA) {
         toast('No se encontró el teléfono actualizado del cliente.');
         return;
       }
@@ -7662,6 +7662,7 @@ function periodoLabel(key) {
 function normalizarTelefonoWA(valor) {
   let telefono = String(valor || '').replace(/\D/g, '');
   if (telefono.startsWith('00')) telefono = telefono.slice(2);
+  while (telefono.startsWith('54549')) telefono = telefono.slice(2);
   if (telefono.startsWith('0')) telefono = telefono.slice(1);
   if (telefono.startsWith('54')) return telefono;
   return telefono ? `54${telefono}` : '';
