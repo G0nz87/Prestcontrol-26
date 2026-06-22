@@ -5390,7 +5390,7 @@ async function mostrarComprobanteApp(cuotaId) {
   }) : new Date().toLocaleDateString('es-AR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
 
   const telefono = cliente?.telefono || prestamo?.clienteTelefono || '';
-  const telefonoWA = normalizarTelefonoWA(telefono);
+  const telefonoWA = normalizarTelefonoMovilArgentinaWA(telefono);
   const cuotasPagadas = prestamo ? (await dbAll('cuotas')).filter(c => c.prestamoId === prestamo.id && c.estado === 'Pagado').length : '-';
 
   // Texto para WhatsApp
@@ -5468,14 +5468,6 @@ async function mostrarComprobanteApp(cuotaId) {
   const btnWAComprobante = bodyEl.querySelector('[data-wa-comprobante]');
   if (btnWAComprobante) {
     btnWAComprobante.addEventListener('click', () => {
-      const debugWA = {
-        telefonoCliente: cliente?.telefono || '',
-        telefonoFallbackPrestamo: prestamo?.clienteTelefono || '',
-        telefonoFinalNormalizado: telefonoWA,
-        urlFinal: waURL
-      };
-      console.info('[WA COMPROBANTE DEBUG]', JSON.stringify(debugWA, null, 2));
-      toast(`WA comprobante: ${telefonoWA || 'sin teléfono'}`);
       window.open(waURL, '_blank');
     });
   }
@@ -7672,6 +7664,25 @@ function normalizarTelefonoWA(valor) {
   if (telefono.startsWith('0')) telefono = telefono.slice(1);
   if (telefono.startsWith('54')) return telefono;
   return telefono ? `54${telefono}` : '';
+}
+
+function normalizarTelefonoMovilArgentinaWA(valor) {
+  let telefono = String(valor || '').replace(/\D/g, '');
+  if (telefono.startsWith('00')) telefono = telefono.slice(2);
+
+  while (telefono.startsWith('54549')) telefono = telefono.slice(2);
+  if (telefono.startsWith('549')) return telefono;
+  if (telefono.startsWith('54')) telefono = telefono.slice(2);
+  if (telefono.startsWith('0')) telefono = telefono.slice(1);
+
+  if (telefono.length === 12) {
+    const posicion15 = [2, 3, 4].find(pos => telefono.slice(pos, pos + 2) === '15');
+    if (posicion15 !== undefined) {
+      telefono = telefono.slice(0, posicion15) + telefono.slice(posicion15 + 2);
+    }
+  }
+
+  return telefono ? `549${telefono}` : '';
 }
 
 function motivoCuotaNoCobrableWA(cuota, prestamo) {
