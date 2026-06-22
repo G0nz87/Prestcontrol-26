@@ -7708,23 +7708,18 @@ function crearMensajeWhatsAppCuota({ cuota, cliente, prestamo, vencimiento }) {
   const hoy = today();
   const diferencia = vencimiento.getTime() - hoy.getTime();
   const cuotaTexto = prestamo?.nCuotas
-    ? `cuota ${cuota.nro} de ${prestamo.nCuotas}`
-    : `cuota ${cuota.nro}`;
-  const prestamoTexto = cuota.prestamoId
-    ? ` correspondiente al préstamo ${cuota.prestamoId}`
-    : '';
+    ? `cuota N° ${cuota.nro} de ${prestamo.nCuotas}`
+    : `cuota N° ${cuota.nro}`;
+  const monto = fmtMoney(cuota.monto);
+  const fechaVencimiento = fmtDate(cuota.fechaVenc);
 
-  let mensaje = `Hola ${cliente.nombre}.\n`;
   if (diferencia < 0) {
-    mensaje += `Tu ${cuotaTexto} por ${fmtMoney(cuota.monto)}${prestamoTexto} registra atraso.\n`;
-    mensaje += `Vencía el ${fmtDate(cuota.fechaVenc)}.\n`;
-    mensaje += 'Por favor comunicate para regularizarla.';
-  } else if (diferencia === 0) {
-    mensaje += `Te recuerdo que hoy vence tu ${cuotaTexto} por ${fmtMoney(cuota.monto)}${prestamoTexto}.`;
-  } else {
-    mensaje += `Te recuerdo que tu ${cuotaTexto} por ${fmtMoney(cuota.monto)}${prestamoTexto} vence el ${fmtDate(cuota.fechaVenc)}.`;
+    return `Hola ${cliente.nombre}, te escribo para recordarte que la ${cuotaTexto} de tu préstamo venció el ${fechaVencimiento} por un importe de ${monto}.\n\nSi ya abonaste, podés ignorar este mensaje.`;
   }
-  return mensaje;
+  if (diferencia === 0) {
+    return `Hola ${cliente.nombre}, te recuerdo que hoy (${fechaVencimiento}) vence la ${cuotaTexto} de tu préstamo por ${monto}.`;
+  }
+  return `Hola ${cliente.nombre}, te aviso que el ${fechaVencimiento} vence la ${cuotaTexto} de tu préstamo por ${monto}, así lo tenés presente.`;
 }
 
 async function abrirWACliente(clienteId) {
