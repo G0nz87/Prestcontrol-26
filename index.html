@@ -5469,6 +5469,11 @@ async function mostrarComprobanteApp(cuotaId) {
         return;
       }
       const waURL = `https://wa.me/${telefonoWA}?text=${msgWA}`;
+      if (!waURL.startsWith('https://wa.me/') || waURL.includes('wa.me/54549') || waURL.includes('api.whatsapp.com')) {
+        console.error('[WA COMPROBANTE] URL inválida bloqueada:', waURL);
+        toast('No se pudo generar un enlace válido de WhatsApp.');
+        return;
+      }
       window.open(waURL, '_blank');
     });
   }
