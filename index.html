@@ -5383,14 +5383,11 @@ async function mostrarComprobanteApp(cuotaId) {
   const cuota = await dbGet('cuotas', cuotaId);
   if (!cuota) return;
   const prestamo = await dbGet('prestamos', cuota.prestamoId);
-  const cliente  = await dbGet('clientes', cuota.clienteId || prestamo?.clienteId);
 
   const fechaPago = cuota.fechaPago ? new Date(cuota.fechaPago).toLocaleDateString('es-AR', {
     weekday:'long', year:'numeric', month:'long', day:'numeric'
   }) : new Date().toLocaleDateString('es-AR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
 
-  const telefono = cliente?.telefono || '';
-  const telefonoWA = normalizarTelefonoWA(telefono);
   const cuotasPagadas = prestamo ? (await dbAll('cuotas')).filter(c => c.prestamoId === prestamo.id && c.estado === 'Pagado').length : '-';
 
   // Texto para WhatsApp
@@ -5408,10 +5405,6 @@ async function mostrarComprobanteApp(cuotaId) {
     `✅ Cuotas pagadas: ${cuotasPagadas} de ${prestamo?.nCuotas || '?'}\n` +
     `_PrestControl_`
   );
-
-  const waURL = telefonoWA
-    ? `https://wa.me/${telefonoWA}?text=${msgWA}`
-    : `https://wa.me/?text=${msgWA}`;
 
   // Construir sheet del comprobante
   const sheetEl = document.getElementById('sheet-comprobante');
@@ -5467,11 +5460,15 @@ async function mostrarComprobanteApp(cuotaId) {
 
   const btnWAComprobante = bodyEl.querySelector('[data-wa-comprobante]');
   if (btnWAComprobante) {
-    btnWAComprobante.addEventListener('click', () => {
-      if (!telefonoWA) {
-        toast('⚠️ El cliente no tiene un teléfono válido');
+    btnWAComprobante.addEventListener('click', async () => {
+      const clienteId = cuota.clienteId || prestamo?.clienteId;
+      const clienteActual = clienteId ? await dbGet('clientes', clienteId) : null;
+      const telefonoWA = normalizarTelefonoWA(clienteActual?.telefono);
+      if (!clienteActual || clienteActual._deleted || !telefonoWA || telefonoWA.startsWith('54549')) {
+        toast('No se encontró el teléfono actualizado del cliente.');
         return;
       }
+      const waURL = `https://wa.me/${telefonoWA}?text=${msgWA}`;
       window.open(waURL, '_blank');
     });
   }
