@@ -5460,14 +5460,8 @@ async function mostrarComprobanteApp(cuotaId) {
 
   const btnWAComprobante = bodyEl.querySelector('[data-wa-comprobante]');
   if (btnWAComprobante) {
-    btnWAComprobante.addEventListener('click', async () => {
-      const clienteId = cuota.clienteId || prestamo?.clienteId;
-      const clienteActual = clienteId ? await dbGet('clientes', clienteId) : null;
-      if (!clienteActual || clienteActual._deleted) {
-        toast('No se encontró el teléfono actualizado del cliente.');
-        return;
-      }
-      abrirWhatsAppSeguro(clienteActual.telefono, msgWA);
+    btnWAComprobante.addEventListener('click', () => {
+      enviarWACuota(cuotaId, { permitirPagada: true, mensaje: msgWA });
     });
   }
 
@@ -7698,7 +7692,7 @@ function motivoCuotaNoCobrableWA(cuota, prestamo) {
   return 'La cuota no está habilitada para cobranza';
 }
 
-async function obtenerContextoWhatsAppCuota(cuotaId) {
+async function obtenerContextoWhatsAppCuota(cuotaId, opciones = {}) {
   const cuota = await dbGet('cuotas', cuotaId);
   if (!cuota) { toast('⚠️ Cuota no encontrada'); return null; }
 
@@ -7710,7 +7704,8 @@ async function obtenerContextoWhatsAppCuota(cuotaId) {
   if (!prestamo) { toast('⚠️ La cuota no tiene un préstamo válido'); return null; }
 
   const mapaPrestamos = new Map([[cuota.prestamoId, prestamo]]);
-  if (!esCuotaCobrable(cuota, mapaPrestamos)) {
+  const permitirPagada = opciones.permitirPagada === true && cuota.estado === 'Pagado';
+  if (!permitirPagada && !esCuotaCobrable(cuota, mapaPrestamos)) {
     toast(`⚠️ ${motivoCuotaNoCobrableWA(cuota, prestamo)}. No se abrió WhatsApp`);
     return null;
   }
@@ -7795,10 +7790,10 @@ async function abrirWACliente(clienteId) {
   window.open(url, '_blank');
 }
 
-async function enviarWACuota(cuotaId) {
-  const contexto = await obtenerContextoWhatsAppCuota(cuotaId);
+async function enviarWACuota(cuotaId, opciones = {}) {
+  const contexto = await obtenerContextoWhatsAppCuota(cuotaId, opciones);
   if (!contexto) return;
-  const msg = crearMensajeWhatsAppCuota(contexto);
+  const msg = opciones.mensaje || crearMensajeWhatsAppCuota(contexto);
   abrirWhatsAppSeguro(contexto.cliente.telefono, msg);
 }
 
