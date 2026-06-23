@@ -7726,7 +7726,7 @@ async function obtenerContextoWhatsAppCuota(cuotaId) {
   const vencimiento = parseDate(cuota.fechaVenc);
   if (!vencimiento) { toast('⚠️ La cuota no tiene una fecha de vencimiento válida'); return null; }
 
-  return { cuota, cliente, prestamo, telefono: cliente.telefono, vencimiento };
+  return { cuota, cliente, prestamo, vencimiento };
 }
 
 function crearMensajeWhatsAppCuota({ cuota, cliente, prestamo, vencimiento }) {
@@ -7799,7 +7799,7 @@ async function enviarWACuota(cuotaId) {
   const contexto = await obtenerContextoWhatsAppCuota(cuotaId);
   if (!contexto) return;
   const msg = crearMensajeWhatsAppCuota(contexto);
-  abrirWhatsAppSeguro(contexto.telefono, msg);
+  abrirWhatsAppSeguro(contexto.cliente.telefono, msg);
 }
 
 /* =====================================================
