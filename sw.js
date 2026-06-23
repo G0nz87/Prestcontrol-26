@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'prestcontrol-';
-const CACHE_NAME = `${CACHE_PREFIX}shell-v1`;
+const CACHE_NAME = `${CACHE_PREFIX}shell-v2`;
 
 const APP_SHELL = [
   './',
@@ -23,7 +23,9 @@ const APP_SHELL = [
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL))
+    caches.open(CACHE_NAME).then(cache => cache.addAll(
+      APP_SHELL.map(asset => new Request(asset, { cache: 'reload' }))
+    ))
   );
   self.skipWaiting();
 });
@@ -49,7 +51,9 @@ self.addEventListener('fetch', event => {
 
   event.respondWith((async () => {
     try {
-      const response = await fetch(request);
+      const response = request.mode === 'navigate'
+        ? await fetch(request, { cache: 'no-store' })
+        : await fetch(request);
       if (url.origin === self.location.origin && response.ok) {
         const cache = await caches.open(CACHE_NAME);
         await cache.put(request, response.clone());
