@@ -5391,7 +5391,7 @@ async function mostrarComprobanteApp(cuotaId) {
   const cuotasPagadas = prestamo ? (await dbAll('cuotas')).filter(c => c.prestamoId === prestamo.id && c.estado === 'Pagado').length : '-';
 
   // Texto para WhatsApp
-  const msgWA = encodeURIComponent(
+  const msgWA = (
     `✅ *Comprobante de Pago*\n` +
     `━━━━━━━━━━━━━━━━━━\n` +
     `👤 Cliente: *${cuota.clienteNombre}*\n` +
@@ -5463,18 +5463,11 @@ async function mostrarComprobanteApp(cuotaId) {
     btnWAComprobante.addEventListener('click', async () => {
       const clienteId = cuota.clienteId || prestamo?.clienteId;
       const clienteActual = clienteId ? await dbGet('clientes', clienteId) : null;
-      const telefonoWA = normalizarTelefonoWA(clienteActual?.telefono);
-      if (!clienteActual || clienteActual._deleted || !telefonoWA) {
+      if (!clienteActual || clienteActual._deleted) {
         toast('No se encontró el teléfono actualizado del cliente.');
         return;
       }
-      const waURL = `https://wa.me/${telefonoWA}?text=${msgWA}`;
-      if (!waURL.startsWith('https://wa.me/') || waURL.includes('wa.me/54549') || waURL.includes('api.whatsapp.com')) {
-        console.error('[WA COMPROBANTE] URL inválida bloqueada:', waURL);
-        toast('No se pudo generar un enlace válido de WhatsApp.');
-        return;
-      }
-      window.open(waURL, '_blank');
+      abrirWhatsAppSeguro(clienteActual.telefono, msgWA);
     });
   }
 
@@ -7673,6 +7666,24 @@ function normalizarTelefonoWA(valor) {
   return telefono ? `54${telefono}` : '';
 }
 
+function abrirWhatsAppSeguro(telefonoOrigen, mensaje) {
+  const telefono = normalizarTelefonoWA(telefonoOrigen);
+  if (!telefono) {
+    toast('⚠️ El cliente no tiene un teléfono válido');
+    return false;
+  }
+
+  const url = `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje || '')}`;
+  if (!url.startsWith('https://wa.me/') || url.includes('wa.me/54549') || url.includes('api.whatsapp.com')) {
+    console.error('[WHATSAPP] URL inválida bloqueada:', url);
+    toast('No se pudo generar un enlace válido de WhatsApp.');
+    return false;
+  }
+
+  window.open(url, '_blank');
+  return true;
+}
+
 function motivoCuotaNoCobrableWA(cuota, prestamo) {
   if (!cuota || cuota._deleted) return 'La cuota no está disponible';
   const estadoCuota = {
@@ -7703,8 +7714,7 @@ async function obtenerContextoWhatsAppCuota(cuotaId) {
     return null;
   }
 
-  const telefono = normalizarTelefonoWA(cliente.telefono);
-  if (!telefono) { toast('⚠️ El cliente no tiene un teléfono válido'); return null; }
+  if (!cliente.telefono) { toast('⚠️ El cliente no tiene un teléfono válido'); return null; }
   if (cuota.nro === undefined || cuota.nro === null || cuota.nro === '') {
     toast('⚠️ La cuota no tiene número'); return null;
   }
@@ -7715,7 +7725,7 @@ async function obtenerContextoWhatsAppCuota(cuotaId) {
   const vencimiento = parseDate(cuota.fechaVenc);
   if (!vencimiento) { toast('⚠️ La cuota no tiene una fecha de vencimiento válida'); return null; }
 
-  return { cuota, cliente, prestamo, telefono, vencimiento };
+  return { cuota, cliente, prestamo, telefono: cliente.telefono, vencimiento };
 }
 
 function crearMensajeWhatsAppCuota({ cuota, cliente, prestamo, vencimiento }) {
@@ -7788,8 +7798,7 @@ async function enviarWACuota(cuotaId) {
   const contexto = await obtenerContextoWhatsAppCuota(cuotaId);
   if (!contexto) return;
   const msg = crearMensajeWhatsAppCuota(contexto);
-  const url = `https://wa.me/${contexto.telefono}?text=${encodeURIComponent(msg)}`;
-  window.open(url, '_blank');
+  abrirWhatsAppSeguro(contexto.telefono, msg);
 }
 
 /* =====================================================
