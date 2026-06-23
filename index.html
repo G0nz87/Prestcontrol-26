@@ -7661,9 +7661,10 @@ function normalizarTelefonoWA(valor) {
   let telefono = String(valor || '').replace(/\D/g, '');
   if (telefono.startsWith('00')) telefono = telefono.slice(2);
   while (telefono.startsWith('54549')) telefono = telefono.slice(2);
-  if (telefono.startsWith('0')) telefono = telefono.slice(1);
-  if (telefono.startsWith('54')) return telefono;
-  return telefono ? `54${telefono}` : '';
+  if (telefono.startsWith('549')) return telefono;
+  if (telefono.startsWith('54')) telefono = telefono.slice(2);
+  telefono = telefono.replace(/^0+/, '');
+  return telefono ? `549${telefono}` : '';
 }
 
 function abrirWhatsAppSeguro(telefonoOrigen, mensaje) {
