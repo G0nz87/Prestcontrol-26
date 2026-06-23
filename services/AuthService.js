@@ -17,6 +17,9 @@ export class AuthService {
     window._fbAuth.onAuthStateChanged(user => {
       this._currentUser = user || null;
       window._fbUser    = this._currentUser; // bridge legacy
+      if (typeof window.onFirebaseAuthStateChanged === 'function') {
+        window.onFirebaseAuthStateChanged(this._currentUser);
+      }
     });
   }
 

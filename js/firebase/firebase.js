@@ -27,11 +27,16 @@ function _initFirebase() {
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     _fbAuth = firebase.auth();
     _fbDb   = firebase.firestore();
-    _fbDb.enablePersistence().catch(() => {});
+    _fbDb.enablePersistence().catch(error => {
+      console.warn('Firestore persistence no disponible:', error?.code || error);
+    });
 
     // Mantener _fbUser siempre actualizado (incluso tras recargar la página)
     _fbAuth.onAuthStateChanged(user => {
       _fbUser = user || null;
+      if (typeof window.onFirebaseAuthStateChanged === 'function') {
+        window.onFirebaseAuthStateChanged(_fbUser);
+      }
     });
 
     return true;
@@ -581,4 +586,3 @@ async function cargarFotoPerfil() {
   }
   actualizarFotoBadge(foto || null);
 }
-

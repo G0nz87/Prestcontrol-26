@@ -1,10 +1,6 @@
 /* =====================================================
    AUTH — MULTI-USUARIO (credenciales en GLOBAL_DB)
 ===================================================== */
-const DEFAULT_USER   = 'admin';
-const DEFAULT_PASS   = '1234';
-const DEFAULT_MASTER = 'master1234';
-
 // Lee un usuario de la DB global
 async function getUsuario(username) {
   return await globalDbGet('usuarios', username);
@@ -12,24 +8,19 @@ async function getUsuario(username) {
 
 // Guarda / actualiza un usuario en la DB global
 async function setUsuario(obj) {
-  await globalDbPut('usuarios', obj);
+  const { pass, password, masterPass, ...seguro } = obj;
+  await globalDbPut('usuarios', seguro);
 }
 
-// Devuelve las credenciales del usuario activo (o defaults)
+// Devuelve solo la identidad local. Las contraseñas nunca se persisten localmente.
 async function authGetCred() {
   if (currentUser) {
     const u = await getUsuario(currentUser);
-    if (u) return { user: u.username, pass: u.pass };
+    if (u) return { user: u.username };
   }
-  // fallback: primer usuario que exista, o defaults
   const todos = await globalDbAll('usuarios');
-  if (todos.length) return { user: todos[0].username, pass: todos[0].pass };
-  return { user: DEFAULT_USER, pass: DEFAULT_PASS };
-}
-
-async function authGetMaster() {
-  const m = await getGlobalConfig('master_pass');
-  return m || DEFAULT_MASTER;
+  if (todos.length) return { user: todos[0].username };
+  return { user: '' };
 }
 
 // ── TABS LOGIN/REGISTRO ──────────────────────────────
@@ -112,14 +103,7 @@ async function doRegistro() {
 
 // Crea el usuario en IndexedDB y entra a la app (compatibilidad)
 async function _crearUsuarioLocal(username, password, masterPass) {
-  const btnReg = document.getElementById('btn-registro');
-  try {
-    await setUsuario({ username, pass: password, firstRun: false, creadoEn: new Date().toISOString() });
-    await _entrarALaApp(username, password, { firstRun: false });
-    toast('🎉 ¡Bienvenido, ' + username + '!');
-  } finally {
-    if (btnReg) { btnReg.disabled = false; btnReg.textContent = '✨ Crear mi cuenta'; }
-  }
+  throw new Error('El acceso local con contraseña fue desactivado. Usá Firebase Auth.');
 }
 
 // LOGIN MULTI-USUARIO
@@ -335,14 +319,9 @@ async function guardarSeguridad() {
       return;
     }
   } else {
-    // Fallback offline: comparar contra cache local
-    const cred = await authGetCred();
-    if (passActual !== cred.pass) {
-      errEl.textContent = 'Contraseña actual incorrecta';
-      errEl.classList.add('on');
-      document.getElementById('sec-pass-actual').value = '';
-      return;
-    }
+    errEl.textContent = 'Se requiere una sesión Firebase activa para cambiar credenciales';
+    errEl.classList.add('on');
+    return;
   }
 
   if (!newUser) {
@@ -373,7 +352,7 @@ async function guardarSeguridad() {
     }
 
     const existing = await getUsuario(currentUser) || { username: currentUser };
-    await setUsuario({ ...existing, username: newUser, pass: newPass || existing.pass });
+    await setUsuario({ ...existing, username: newUser });
     if (newUser !== currentUser) {
       currentUser = newUser;
       showUserBadge(newUser);
@@ -430,4 +409,3 @@ function cerrarSesion() {
   closeUserMenu();
   toast('👋 Sesión cerrada');
 }
-

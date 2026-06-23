@@ -191,6 +191,7 @@ export async function abrirRenovacionPrestamo(prestamoId) {
   document.getElementById('ren-fecha').value = new Date().toISOString().split('T')[0];
   document.getElementById('ren-prenda').value = prestamo.prenda || '';
   document.getElementById('ren-notas').value = `Renovacion de ${prestamo.id}`;
+  document.getElementById('ren-confirm-text').value = '';
   setRenovacionError('');
   calcularPreviewRenovacion();
   window.openSheet('sh-renovar-prestamo');
@@ -226,6 +227,12 @@ export async function confirmarRenovacionPrestamo() {
   const btn = document.getElementById('ren-save');
   const prestamoOrigenId = window._renovacionPrestamoId;
   if (!prestamoOrigenId || btn?.disabled) return;
+  const confirmacion = document.getElementById('ren-confirm-text')?.value.trim().toUpperCase();
+  if (confirmacion !== 'RENOVAR') {
+    setRenovacionError('Escribí RENOVAR para confirmar la operación');
+    document.getElementById('ren-confirm-text')?.focus();
+    return;
+  }
   if (btn) { btn.disabled = true; btn.textContent = 'Renovando...'; }
   setRenovacionError('');
 
@@ -442,9 +449,9 @@ export async function confirmarBorrarPrestamoFinal() {
       console.warn('confirmarBorrarPrestamoFinal reauth:', e.code);
     }
   } else {
-    // Fallback offline: validar contra local
-    const cred = await window.authGetCred();
-    if (pass === cred.pass) passValida = true;
+    errEl.textContent = 'Se requiere una sesión Firebase activa para confirmar';
+    errEl.classList.add('on');
+    return;
   }
 
   if (!passValida) {

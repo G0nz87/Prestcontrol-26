@@ -26,10 +26,9 @@ async function completarFirstRun() {
 
   // Si cambió el username, renombrar la entrada
   const oldUser = currentUser;
-  const oldPass = (await getUsuario(oldUser))?.pass || DEFAULT_PASS;
   const existing = await getUsuario(oldUser) || { username: oldUser };
-  await setUsuario({ ...existing, username: newUser, pass: newPass, firstRun: false });
-  if (oldUser !== newUser) await globalDbPut('usuarios', { ...existing, username: newUser, pass: newPass, firstRun: false });
+  await setUsuario({ ...existing, username: newUser, firstRun: false });
+  if (oldUser !== newUser) await setUsuario({ ...existing, username: newUser, firstRun: false });
 
   currentUser = newUser;
   showUserBadge(newUser);
@@ -38,7 +37,7 @@ async function completarFirstRun() {
   await logBitacora('config', `Primer ingreso completado: usuario "${newUser}" configurado`, newUser);
 
   // Actualizar cuenta Firebase (no crear nueva)
-  sincronizarCambiandoCredenciales(oldUser, oldPass, newUser, newPass);
+  sincronizarCambiandoCredenciales(oldUser, '', newUser, newPass);
 }
 
 /* =====================================================

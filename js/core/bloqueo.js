@@ -30,20 +30,8 @@ async function doUnlock() {
 
   // Validar contra Firebase Auth real (la misma contraseña con la que ingresaste)
   if (!_fbUser || !_fbAuth) {
-    // Fallback offline: validar contra local si no hay Firebase disponible
-    const cred = await authGetCred();
-    if (inputPass === cred.pass) {
-      err.classList.remove('on');
-      document.getElementById('lock-screen').classList.remove('on');
-      document.getElementById('lock-pass').value = '';
-      appDesbloqueada = true;
-      resetInactividad();
-    } else {
-      err.textContent = 'Contraseña incorrecta';
-      err.classList.add('on');
-      document.getElementById('lock-pass').value = '';
-      document.getElementById('lock-pass').focus();
-    }
+    err.textContent = 'La sesión Firebase no está activa. Ingresá nuevamente.';
+    err.classList.add('on');
     return;
   }
 
@@ -74,4 +62,3 @@ function iniciarWatchdogInactividad() {
   );
   resetInactividad();
 }
-

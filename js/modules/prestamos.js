@@ -468,9 +468,9 @@ async function confirmarBorrarPrestamoFinal() {
       console.warn('confirmarBorrarPrestamoFinal reauth:', e.code);
     }
   } else {
-    // Fallback offline: validar contra local
-    const cred = await authGetCred();
-    if (pass === cred.pass) passValida = true;
+    errEl.textContent = 'Se requiere una sesión Firebase activa para confirmar';
+    errEl.classList.add('on');
+    return;
   }
 
   if (!passValida) {
@@ -591,4 +591,3 @@ async function confirmarBorrarPrestamoFinal() {
   toast(`🗑️ Préstamo eliminado · ${motivoLabel}`);
   goPage('prestamos');
 }
-

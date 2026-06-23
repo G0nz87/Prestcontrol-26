@@ -1169,6 +1169,12 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
       <div class="form-summary-detail" id="ren-pv-detalle"></div>
     </div>
     <div class="login-err" id="ren-error" style="margin-bottom:12px"></div>
+    <div class="form-alert is-info" style="margin-bottom:12px">
+      Esta acción crea un préstamo nuevo y compensa la cuota seleccionada. Escribí <b>RENOVAR</b> para confirmar.
+    </div>
+    <div class="field">
+      <input class="inp" id="ren-confirm-text" autocomplete="off" placeholder="Escribí RENOVAR">
+    </div>
     <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeSheet()">Cancelar</button>
       <button class="btn btn-gold" id="ren-save" onclick="confirmarRenovacionPrestamo()">Crear renovacion</button>
@@ -1209,6 +1215,10 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
     <div class="form-delete-icon">🗑️</div>
     <div class="form-delete-title" id="del-title">¿Eliminar?</div>
     <div class="form-delete-msg" id="del-msg"></div>
+    <div class="field" style="text-align:left;margin-top:14px">
+      <label class="lbl">Confirmación</label>
+      <input class="inp" id="del-confirm-text" autocomplete="off" placeholder="Escribí ELIMINAR">
+    </div>
     <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeSheet()">Cancelar</button>
       <button class="btn btn-red" id="del-confirm-btn">Eliminar</button>
@@ -1447,6 +1457,7 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 let appDesbloqueada = false;
 let inactividadTimer = null;
 let currentUser = null; // usuario activo
+let cierreSesionEnCurso = false;
 
 /* =====================================================
    DATABASE — IndexedDB (por usuario)
@@ -1609,12 +1620,39 @@ function globalDbAll(store) {
     req.onerror   = () => rej(req.error);
   });
 }
+function globalDbDel(store, key) {
+  return new Promise((res, rej) => {
+    if (!GLOBAL_DB) { res(); return; }
+    const tx  = GLOBAL_DB.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).delete(key);
+    req.onsuccess = () => res();
+    req.onerror   = () => rej(req.error);
+  });
+}
 async function getGlobalConfig(key) {
   const r = await globalDbGet('config', key);
   return r ? r.value : null;
 }
 async function setGlobalConfig(key, value) {
   await globalDbPut('config', { key, value });
+}
+
+function usuarioLocalSinPassword(obj) {
+  if (!obj) return obj;
+  const { pass, password, masterPass, ...seguro } = obj;
+  return seguro;
+}
+
+async function limpiarCredencialesLocalesInseguras() {
+  const usuarios = await globalDbAll('usuarios');
+  for (const usuario of usuarios) {
+    if ('pass' in usuario || 'password' in usuario || 'masterPass' in usuario) {
+      await globalDbPut('usuarios', usuarioLocalSinPassword(usuario));
+    }
+  }
+  await globalDbDel('config', 'master_pass').catch(error => {
+    console.warn('No se pudo limpiar master_pass local:', error);
+  });
 }
 
 /* =====================================================
@@ -1899,9 +1937,9 @@ async function ejecutarResetApp() {
       console.warn('ejecutarResetApp reauth:', e.code);
     }
   } else {
-    // Fallback offline
-    const cred = await authGetCred();
-    if (masterInput === cred.pass) passValida = true;
+    errEl.textContent = 'Se requiere una sesión Firebase activa para borrar datos';
+    errEl.classList.add('on');
+    return;
   }
 
   if (!passValida) {
@@ -2010,8 +2048,9 @@ async function ejecutarBorrarPrestamos() {
       console.warn('ejecutarBorrarPrestamos reauth:', e.code);
     }
   } else {
-    const cred = await authGetCred();
-    if (passInput === cred.pass) passValida = true;
+    errEl.textContent = 'Se requiere una sesión Firebase activa para borrar datos';
+    errEl.classList.add('on');
+    return;
   }
 
   if (!passValida) {
@@ -2161,10 +2200,9 @@ async function completarFirstRun() {
 
   // Si cambió el username, renombrar la entrada
   const oldUser = currentUser;
-  const oldPass = (await getUsuario(oldUser))?.pass || DEFAULT_PASS;
   const existing = await getUsuario(oldUser) || { username: oldUser };
-  await setUsuario({ ...existing, username: newUser, pass: newPass, firstRun: false });
-  if (oldUser !== newUser) await globalDbPut('usuarios', { ...existing, username: newUser, pass: newPass, firstRun: false });
+  await setUsuario({ ...existing, username: newUser, firstRun: false });
+  if (oldUser !== newUser) await setUsuario({ ...existing, username: newUser, firstRun: false });
 
   currentUser = newUser;
   showUserBadge(newUser);
@@ -2173,7 +2211,7 @@ async function completarFirstRun() {
   await logBitacora('config', `Primer ingreso completado: usuario "${newUser}" configurado`, newUser);
 
   // Actualizar cuenta Firebase (no crear nueva)
-  sincronizarCambiandoCredenciales(oldUser, oldPass, newUser, newPass);
+  sincronizarCambiandoCredenciales(oldUser, '', newUser, newPass);
 }
 
 /* =====================================================
@@ -2243,7 +2281,7 @@ async function registrarHuella() {
     toast('⚠️ Tu dispositivo no soporta huella digital');
     return;
   }
-  if (!currentUser) { toast('⚠️ Necesitás estar logueado'); return; }
+  if (!currentUser || !_fbUser) { toast('⚠️ Necesitás una sesión Firebase activa'); return; }
 
   try {
     const challenge = crypto.getRandomValues(new Uint8Array(32));
@@ -2272,6 +2310,7 @@ async function registrarHuella() {
       id: credential.id,
       rawId: bufferToB64(credential.rawId),
       username: currentUser,
+      uid: _fbUser.uid,
       createdAt: new Date().toISOString()
     };
     localStorage.setItem('pc_biometric_' + currentUser, JSON.stringify(credData));
@@ -2325,19 +2364,19 @@ async function loginConHuella() {
     // Identificar qué usuario corresponde
     const matched = creds.find(c => c.id === assertion.id);
     if (!matched) { toast('⚠️ Huella no reconocida'); return; }
+    if (!_fbUser || !matched.uid || matched.uid !== _fbUser.uid) {
+      toast('⚠️ La huella requiere una sesión vigente. Ingresá con tu contraseña y volvé a registrarla.');
+      return;
+    }
 
     const username = matched.username;
 
     // Verificar que el usuario existe en la DB
     const usuario = await getUsuario(username);
-    const isDefault = username === DEFAULT_USER;
-    if (!usuario && !isDefault) { toast('⚠️ Usuario no encontrado'); return; }
+    if (!usuario) { toast('⚠️ Usuario no encontrado'); return; }
 
     // Login exitoso
     currentUser = username;
-    if (!usuario) {
-      await setUsuario({ username, pass: DEFAULT_PASS, creadoEn: new Date().toISOString(), firstRun: true });
-    }
     await initDB(username);
     await autoUpdateEstados();
     await updateBadges();
@@ -2516,6 +2555,10 @@ function syncHeaderState() {
 }
 
 function goPage(id) {
+  if (!appDesbloqueada || !_fbUser || !DB) {
+    mostrarLoginPorSesionInvalida('Tu sesión no está activa. Ingresá nuevamente.');
+    return Promise.resolve();
+  }
   pageStack = [];
   currentRoute = { page: id };
   if (id === 'prestamos') loanExpanded = null;
@@ -2624,6 +2667,7 @@ function closeSheet() {
    RENDER PAGES
 ===================================================== */
 async function renderPage(id) {
+  if (!appDesbloqueada || !_fbUser || !DB) return;
   const titles = {
     dashboard: '💰 PrestControl', alertas: '🔔 Alertas', hoy: '📅 Cobrar Hoy',
     atrasadas: '⚠️ Cuotas Atrasadas', clientes: '👥 Clientes',
@@ -6318,10 +6362,6 @@ document.addEventListener('click', e => {
 /* =====================================================
    AUTH — MULTI-USUARIO (credenciales en GLOBAL_DB)
 ===================================================== */
-const DEFAULT_USER   = 'admin';
-const DEFAULT_PASS   = '1234';
-const DEFAULT_MASTER = 'master1234';
-
 // Lee un usuario de la DB global
 async function getUsuario(username) {
   return await globalDbGet('usuarios', username);
@@ -6329,24 +6369,18 @@ async function getUsuario(username) {
 
 // Guarda / actualiza un usuario en la DB global
 async function setUsuario(obj) {
-  await globalDbPut('usuarios', obj);
+  await globalDbPut('usuarios', usuarioLocalSinPassword(obj));
 }
 
-// Devuelve las credenciales del usuario activo (o defaults)
+// Devuelve solo la identidad local. Las contraseñas nunca se persisten localmente.
 async function authGetCred() {
   if (currentUser) {
     const u = await getUsuario(currentUser);
-    if (u) return { user: u.username, pass: u.pass };
+    if (u) return { user: u.username };
   }
-  // fallback: primer usuario que exista, o defaults
   const todos = await globalDbAll('usuarios');
-  if (todos.length) return { user: todos[0].username, pass: todos[0].pass };
-  return { user: DEFAULT_USER, pass: DEFAULT_PASS };
-}
-
-async function authGetMaster() {
-  const m = await getGlobalConfig('master_pass');
-  return m || DEFAULT_MASTER;
+  if (todos.length) return { user: todos[0].username };
+  return { user: '' };
 }
 
 // ── TABS LOGIN/REGISTRO ──────────────────────────────
@@ -6429,14 +6463,7 @@ async function doRegistro() {
 
 // Crea el usuario en IndexedDB y entra a la app (compatibilidad)
 async function _crearUsuarioLocal(username, password, masterPass) {
-  const btnReg = document.getElementById('btn-registro');
-  try {
-    await setUsuario({ username, pass: password, firstRun: false, creadoEn: new Date().toISOString() });
-    await _entrarALaApp(username, password, { firstRun: false });
-    toast('🎉 ¡Bienvenido, ' + username + '!');
-  } finally {
-    if (btnReg) { btnReg.disabled = false; btnReg.textContent = '✨ Crear mi cuenta'; }
-  }
+  throw new Error('El acceso local con contraseña fue desactivado. Usá Firebase Auth.');
 }
 
 // LOGIN MULTI-USUARIO
@@ -6652,13 +6679,9 @@ async function guardarSeguridad() {
       return;
     }
   } else {
-    const cred = await authGetCred();
-    if (passActual !== cred.pass) {
-      errEl.textContent = 'Contraseña actual incorrecta';
-      errEl.classList.add('on');
-      document.getElementById('sec-pass-actual').value = '';
-      return;
-    }
+    errEl.textContent = 'Se requiere una sesión Firebase activa para cambiar credenciales';
+    errEl.classList.add('on');
+    return;
   }
 
   if (!newUser) {
@@ -6683,7 +6706,7 @@ async function guardarSeguridad() {
       if (_fbDb) await _fbDb.collection('users').doc(_fbUser.uid).set({ nombre: newUser }, { merge: true });
     }
     const existing = await getUsuario(currentUser) || { username: currentUser };
-    await setUsuario({ ...existing, username: newUser, pass: newPass || existing.pass });
+    await setUsuario({ ...existing, username: newUser });
     if (newUser !== currentUser) {
       currentUser = newUser;
       showUserBadge(newUser);
@@ -6707,23 +6730,27 @@ async function guardarMaestra() {
   toast('ℹ️ Esta función fue eliminada. Usá "Cambiar contraseña" arriba.');
 }
 
-function cerrarSesion() {
+function limpiarSesionLocal() {
   detenerNotificaciones();
   detenerComandosVoz();
   appDesbloqueada  = false;
   currentUser      = null;
-  DB               = null;
+  if (DB) DB.close();
+  DB = null;
   driveAccessToken = null;
-  _fbUser          = null;
+  _fbUser = null;
   clearTimeout(inactividadTimer);
   clearTimeout(_syncDebounce);
   clearInterval(driveSyncTimer);
   if (typeof detenerSyncRealtime === 'function') detenerSyncRealtime();
   drivePendingSync = false;
-
-  // Cerrar sesión Firebase
-  window.authService?.logout().catch(() => {});
-
+  closeSheet();
+  document.getElementById('lock-screen')?.classList.remove('on');
+  document.getElementById('firstrun-screen')?.classList.remove('on');
+  document.querySelectorAll('.page').forEach(page => {
+    page.classList.remove('on');
+    page.innerHTML = '';
+  });
   const badge = document.getElementById('usr-badge');
   if (badge) { badge.style.display = 'none'; }
   document.getElementById('sync-pending-badge').classList.remove('on');
@@ -6738,7 +6765,36 @@ function cerrarSesion() {
   document.getElementById('login-screen').classList.remove('hidden');
   setTimeout(() => (_savedUser ? _loginPassEl : _loginUserEl).focus(), 50);
   closeUserMenu();
-  toast('👋 Sesión cerrada');
+}
+
+function mostrarLoginPorSesionInvalida(mensaje = '') {
+  const estabaActiva = appDesbloqueada || !!DB;
+  limpiarSesionLocal();
+  if (mensaje && estabaActiva) toast(mensaje);
+}
+
+window.onFirebaseAuthStateChanged = user => {
+  if (!user && !cierreSesionEnCurso) {
+    mostrarLoginPorSesionInvalida('Tu sesión venció o fue cerrada. Ingresá nuevamente.');
+  }
+};
+
+async function cerrarSesion() {
+  if (cierreSesionEnCurso) return;
+  cierreSesionEnCurso = true;
+  appDesbloqueada = false;
+  detenerSyncRealtime();
+  try {
+    await window.authService?.logout();
+    limpiarSesionLocal();
+    toast('👋 Sesión cerrada');
+  } catch (error) {
+    console.error('No se pudo cerrar la sesión Firebase:', error);
+    limpiarSesionLocal();
+    toast('⚠️ Sesión local cerrada. Firebase no confirmó el cierre.');
+  } finally {
+    cierreSesionEnCurso = false;
+  }
 }
 
 /* =====================================================
@@ -7333,20 +7389,9 @@ async function doUnlock() {
 
   // Validar contra Firebase Auth real (la misma contraseña con la que ingresaste)
   if (!_fbUser || !_fbAuth) {
-    // Fallback offline: validar contra local si no hay Firebase disponible
-    const cred = await authGetCred();
-    if (inputPass === cred.pass) {
-      err.classList.remove('on');
-      document.getElementById('lock-screen').classList.remove('on');
-      document.getElementById('lock-pass').value = '';
-      appDesbloqueada = true;
-      resetInactividad();
-    } else {
-      err.textContent = 'Contraseña incorrecta';
-      err.classList.add('on');
-      document.getElementById('lock-pass').value = '';
-      document.getElementById('lock-pass').focus();
-    }
+    err.textContent = 'La sesión Firebase no está activa. Ingresá nuevamente.';
+    err.classList.add('on');
+    setTimeout(() => mostrarLoginPorSesionInvalida(), 700);
     return;
   }
 
@@ -8571,6 +8616,7 @@ async function init() {
   window.authService?.bootstrap();
   instalarPWA();
   await initGlobalDB();
+  await limpiarCredencialesLocalesInseguras();
   updateHdrDate();
   initComandosVoz();
   initNotificaciones();
@@ -8612,12 +8658,6 @@ async function init() {
       const hayUsuarios = todosUsuarios.length > 0;
       if (!hayUsuarios) {
         showRegisterTab();
-      }
-      // Migrar admin/1234 si existe: forzar que vaya al first-run para cambiar credenciales
-      const adminUser = await getUsuario('admin').catch(() => null);
-      if (adminUser && adminUser.pass === '1234') {
-        // Tiene la clave por defecto — marcar como firstRun para que cambie
-        await setUsuario({ ...adminUser, firstRun: true });
       }
     })();
   }, 200);

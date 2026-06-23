@@ -94,12 +94,25 @@ export async function confirmarBorrarCliente(id) {
     return;
   }
   document.getElementById('del-title').textContent = '¿Eliminar cliente?';
-  document.getElementById('del-msg').textContent   = `Se eliminará "${c.nombre}". Esta acción no se puede deshacer.`;
-  document.getElementById('del-confirm-btn').onclick = () => borrarCliente(id);
+  document.getElementById('del-msg').textContent   = `Se eliminará "${c.nombre}" y sus registros asociados. Esta acción no se puede deshacer.`;
+  const confirmInput = document.getElementById('del-confirm-text');
+  const confirmBtn = document.getElementById('del-confirm-btn');
+  confirmInput.value = '';
+  confirmBtn.disabled = true;
+  confirmInput.oninput = () => {
+    confirmBtn.disabled = confirmInput.value.trim().toUpperCase() !== 'ELIMINAR';
+  };
+  confirmBtn.onclick = () => borrarCliente(id);
   window.openSheet('sh-delete');
+  setTimeout(() => confirmInput.focus(), 120);
 }
 
 export async function borrarCliente(id) {
+  const confirmacion = document.getElementById('del-confirm-text')?.value.trim().toUpperCase();
+  if (confirmacion !== 'ELIMINAR') {
+    window.toast('Escribí ELIMINAR para confirmar');
+    return;
+  }
   window.closeSheet();
   const cli = await window.dbGet('clientes', id);
   // Borrado logico — marca como eliminado, no destruye datos

@@ -154,9 +154,9 @@ async function ejecutarResetApp() {
       console.warn('ejecutarResetApp reauth:', e.code);
     }
   } else {
-    // Fallback offline
-    const cred = await authGetCred();
-    if (masterInput === cred.pass) passValida = true;
+    errEl.textContent = 'Se requiere una sesión Firebase activa para borrar datos';
+    errEl.classList.add('on');
+    return;
   }
 
   if (!passValida) {
@@ -265,8 +265,9 @@ async function ejecutarBorrarPrestamos() {
       console.warn('ejecutarBorrarPrestamos reauth:', e.code);
     }
   } else {
-    const cred = await authGetCred();
-    if (passInput === cred.pass) passValida = true;
+    errEl.textContent = 'Se requiere una sesión Firebase activa para borrar datos';
+    errEl.classList.add('on');
+    return;
   }
 
   if (!passValida) {
@@ -336,4 +337,3 @@ async function ejecutarBorrarPrestamos() {
 function requireLicense(action) { return true; }
 // checkLicense no hace nada — retorna 'full' siempre
 async function checkLicense(username) { return 'full'; }
-

@@ -53,12 +53,6 @@ async function init() {
       if (!hayUsuarios) {
         showRegisterTab();
       }
-      // Migrar admin/1234 si existe: forzar que vaya al first-run para cambiar credenciales
-      const adminUser = await getUsuario('admin').catch(() => null);
-      if (adminUser && adminUser.pass === '1234') {
-        // Tiene la clave por defecto — marcar como firstRun para que cambie
-        await setUsuario({ ...adminUser, firstRun: true });
-      }
     })();
   }, 200);
 }

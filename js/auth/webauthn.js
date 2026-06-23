@@ -25,7 +25,7 @@ async function registrarHuella() {
     toast('⚠️ Tu dispositivo no soporta huella digital');
     return;
   }
-  if (!currentUser) { toast('⚠️ Necesitás estar logueado'); return; }
+  if (!currentUser || !_fbUser) { toast('⚠️ Necesitás una sesión Firebase activa'); return; }
 
   try {
     const challenge = crypto.getRandomValues(new Uint8Array(32));
@@ -54,6 +54,7 @@ async function registrarHuella() {
       id: credential.id,
       rawId: bufferToB64(credential.rawId),
       username: currentUser,
+      uid: _fbUser.uid,
       createdAt: new Date().toISOString()
     };
     localStorage.setItem('pc_biometric_' + currentUser, JSON.stringify(credData));
@@ -107,19 +108,19 @@ async function loginConHuella() {
     // Identificar qué usuario corresponde
     const matched = creds.find(c => c.id === assertion.id);
     if (!matched) { toast('⚠️ Huella no reconocida'); return; }
+    if (!_fbUser || !matched.uid || matched.uid !== _fbUser.uid) {
+      toast('⚠️ La huella requiere una sesión vigente. Ingresá con tu contraseña y volvé a registrarla.');
+      return;
+    }
 
     const username = matched.username;
 
     // Verificar que el usuario existe en la DB
     const usuario = await getUsuario(username);
-    const isDefault = username === DEFAULT_USER;
-    if (!usuario && !isDefault) { toast('⚠️ Usuario no encontrado'); return; }
+    if (!usuario) { toast('⚠️ Usuario no encontrado'); return; }
 
     // Login exitoso
     currentUser = username;
-    if (!usuario) {
-      await setUsuario({ username, pass: DEFAULT_PASS, creadoEn: new Date().toISOString(), firstRun: true });
-    }
     await initDB(username);
     await autoUpdateEstados();
     await updateBadges();
@@ -273,4 +274,3 @@ function setLoading(id) {
 function emptyHTML(ic, t, s='') {
   return `<div class="empty"><div class="empty-ic">${ic}</div><div class="empty-t">${t}</div>${s?`<div class="empty-s">${s}</div>`:''}`;
 }
-

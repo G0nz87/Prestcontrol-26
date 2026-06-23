@@ -426,7 +426,30 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 
 # ETAPA 9 — SEGURIDAD AVANZADA
 
-**Estado:** PENDIENTE
+**Estado:** EN PROGRESO
+
+## 9.1 — Seguridad mínima de sesión y acceso local
+
+**Estado:** CERRADO
+
+**Fecha:** 2026-06-23
+
+## Cerrado
+- Reglas Firestore versionadas para limitar `users/{uid}` y sus subcolecciones al usuario autenticado propietario.
+- Configuración local de Firebase preparada sin desplegar reglas automáticamente.
+- Logout asíncrono: espera `signOut()`, detiene listeners y limpia memoria/UI de sesión.
+- Pérdida de usuario Firebase bloquea el acceso local y devuelve a login.
+- Contraseñas locales legacy eliminadas al iniciar y nuevos guardados sanitizados.
+- Fallbacks que comparaban contraseñas locales desactivados.
+- IndexedDB y operaciones offline conservadas en el logout normal.
+- Eliminación de cliente protegida con confirmación escrita `ELIMINAR`.
+- Renovación protegida con confirmación escrita `RENOVAR`, sin cambios financieros.
+
+## Pendiente
+- Revisar y desplegar manualmente las reglas Firestore versionadas, con aprobación explícita.
+- Evaluar una opción separada para cerrar sesión y borrar datos locales sin perder operaciones pendientes.
+
+**Commit asociado:** PENDIENTE
 
 ---
 
@@ -479,9 +502,9 @@ Crear módulo propio de empeños: prenda, tasación, dueño / cliente, valor pre
 
 # ESTADO ACTUAL
 
-**Etapa actual:** ETAPA 8 — WhatsApp / cobranza — PARCIAL / ESTABLE
-**Último bloque cerrado:** ETAPA 8.2 — Plantillas WhatsApp humanas y profesionales
-**Próximo bloque recomendado:** Mantener `wa.me` manual / semimanual y postergar la API oficial de WhatsApp
+**Etapa actual:** ETAPA 9 — Seguridad avanzada — EN PROGRESO
+**Último bloque cerrado:** ETAPA 9.1 — Seguridad mínima de sesión y acceso local
+**Próximo bloque recomendado:** Validar y desplegar manualmente las reglas Firestore con aprobación explícita
 
 ---
 
