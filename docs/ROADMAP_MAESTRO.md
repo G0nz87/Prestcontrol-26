@@ -387,7 +387,40 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 
 # ETAPA 8 — WHATSAPP / COBRANZA
 
-**Estado:** PENDIENTE
+**Estado:** PARCIAL / ESTABLE
+
+## 8.1 — WhatsApp seguro para cobranza
+
+**Estado:** CERRADO
+
+- Base activa de WhatsApp centralizada para cobranza.
+- Validación de cuotas cobrables y bloqueo de estados cerrados.
+- Uso manual / semimanual mediante `wa.me`.
+
+## 8.2 — Plantillas WhatsApp humanas y profesionales
+
+**Estado:** CERRADO
+
+- Mensajes diferenciados para cuotas vencidas, que vencen hoy y próximas.
+- Textos breves, claros, profesionales y cercanos.
+
+## 8.3 / 8.x — WhatsApp del comprobante
+
+**Estado:** FUNCIONAL
+
+- Funcional con números locales argentinos cargados como `3834...`.
+- Recomendación operativa actual: guardar teléfonos argentinos sin `+54` ni `+549`.
+- Ejemplo recomendado: `3834381638`.
+
+## Pendiente futuro
+
+- Soporte robusto para números con prefijo internacional.
+- Soporte para clientes de otros países.
+
+## Decisión actual
+
+- No continuar todavía con la API oficial de WhatsApp.
+- Mantener el flujo manual / semimanual mediante `wa.me`.
 
 ---
 
@@ -446,9 +479,9 @@ Crear módulo propio de empeños: prenda, tasación, dueño / cliente, valor pre
 
 # ESTADO ACTUAL
 
-**Etapa actual:** ETAPA 7 — Comandos por voz  
-**Último bloque cerrado:** ETAPA 7.6 — Clientes y bitácora  
-**Próximo bloque recomendado:** Validar Etapa 7.6 con reconocimiento real en navegadores compatibles
+**Etapa actual:** ETAPA 8 — WhatsApp / cobranza — PARCIAL / ESTABLE
+**Último bloque cerrado:** ETAPA 8.2 — Plantillas WhatsApp humanas y profesionales
+**Próximo bloque recomendado:** Mantener `wa.me` manual / semimanual y postergar la API oficial de WhatsApp
 
 ---
 
