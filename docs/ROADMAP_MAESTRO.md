@@ -461,12 +461,18 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 - Credenciales biométricas asociadas al email normalizado y UID de Firebase.
 - El email escrito en login limita la biometría exclusivamente a esa cuenta.
 - Un email distinto bloquea el acceso antes de solicitar la credencial del dispositivo.
-- Con email vacío se usa solamente el último UID biométrico guardado y se muestra su cuenta en el login.
+- Política A: con email vacío la biometría se bloquea antes de invocar WebAuthn.
 - WebAuthn recibe una única credencial seleccionada, no todas las registradas en el dispositivo.
 - Cambiar de usuario Firebase invalida la credencial de otra cuenta y exige registrarla nuevamente.
 - Registro, eliminación y estado visual de biometría resueltos por UID.
+- Validación reforzada en celular antes y después del sensor: email escrito, email Firebase, UID y credencial deben coincidir.
+- Eliminada la ruta de último usuario biométrico que podía abrir una cuenta con el campo vacío.
+- Revisión definitiva del 2026-06-24: la política A anterior no había llegado a `main`; Netlify seguía desplegando la ruta de último usuario de `b177c10`.
+- Trazas temporales `[Biometría 9.2]` agregadas para verificar email visible, credencial, UID y motivo de bloqueo en el dispositivo.
 
 **Commit asociado:** `09df84d`
+
+**Revisión móvil política A y trazas:** PENDIENTE DE COMMIT
 
 ## 9.3 — Seguridad local y respaldo manual
 
@@ -484,7 +490,7 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 - Exportación Excel existente reutilizada como formato legible.
 - Sin restauración nueva, borrado de datos ni cambios de schema.
 
-**Commit asociado:** PENDIENTE
+**Commit asociado:** `b177c10`
 
 ---
 

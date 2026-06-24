@@ -2277,10 +2277,13 @@ function b64ToBuffer(b64) {
 }
 
 const BIOMETRIC_PREFIX = 'pc_biometric_';
-const BIOMETRIC_LAST_UID_KEY = 'pc_last_biometric_uid';
 
 function normalizarEmailBiometrico(email) {
   return String(email || '').trim().toLowerCase();
+}
+
+function logBiometria(evento, detalle = {}) {
+  console.info(`[Biometría 9.2] ${evento}`, detalle);
 }
 
 function credencialesBiometricasGuardadas() {
@@ -2307,6 +2310,7 @@ async function registrarHuella() {
   try {
     const email = normalizarEmailBiometrico(_fbUser.email);
     if (!email) { toast('⚠️ La cuenta Firebase no tiene un email válido'); return; }
+    logBiometria('registro_inicio', { email, uidEsperado: _fbUser.uid });
     const challenge = crypto.getRandomValues(new Uint8Array(32));
     const userId = strToBuffer(_fbUser.uid);
 
@@ -2341,7 +2345,11 @@ async function registrarHuella() {
       .filter(item => item.uid === _fbUser.uid)
       .forEach(item => localStorage.removeItem(item.key));
     localStorage.setItem(BIOMETRIC_PREFIX + _fbUser.uid, JSON.stringify(credData));
-    localStorage.setItem(BIOMETRIC_LAST_UID_KEY, _fbUser.uid);
+    logBiometria('registro_guardado', {
+      email,
+      credentialId: credential.id,
+      uidResuelto: _fbUser.uid
+    });
 
     toast('✅ Huella registrada correctamente');
     actualizarUIHuella();
@@ -2360,20 +2368,46 @@ async function registrarHuella() {
 
 async function loginConHuella() {
   if (!webAuthnDisponible()) return;
+
+  const emailInput = document.getElementById('login-email');
+  const emailVisible = emailInput?.value || '';
+  const emailSolicitado = normalizarEmailBiometrico(emailVisible);
+  const emailFirebase = normalizarEmailBiometrico(_fbUser?.email);
+  logBiometria('intento_login', {
+    emailVisible,
+    emailNormalizado: emailSolicitado,
+    uidEsperado: _fbUser?.uid || null
+  });
+
+  // Política A: nunca invocar WebAuthn sin un email visible explícito.
+  if (!emailSolicitado) {
+    logBiometria('bloqueo', { motivo: 'email_vacio' });
+    toast('Ingresá tu email para usar la huella.');
+    emailInput?.focus();
+    return;
+  }
   if (!_fbUser) {
+    logBiometria('bloqueo', { motivo: 'sesion_firebase_ausente' });
     toast('⚠️ La biometría requiere una sesión Firebase vigente');
+    return;
+  }
+  if (emailSolicitado !== emailFirebase) {
+    logBiometria('bloqueo', {
+      motivo: 'email_no_coincide_con_firebase',
+      emailNormalizado: emailSolicitado,
+      emailFirebase,
+      uidEsperado: _fbUser.uid
+    });
+    toast('La biometría registrada corresponde a otra cuenta.');
     return;
   }
 
   const creds = credencialesBiometricasGuardadas();
   if (!creds.length) {
+    logBiometria('bloqueo', { motivo: 'sin_credenciales_guardadas', uidEsperado: _fbUser.uid });
     toast('⚠️ No hay huella registrada');
     return;
   }
-
-  const emailInput = document.getElementById('login-email');
-  const emailSolicitado = normalizarEmailBiometrico(emailInput?.value);
-  const emailFirebase = normalizarEmailBiometrico(_fbUser.email);
 
   // Credenciales de 9.1 ya vinculadas al UID: completar su email de forma segura.
   creds.forEach(item => {
@@ -2384,31 +2418,34 @@ async function loginConHuella() {
     }
   });
 
-  let seleccionada;
-  if (emailSolicitado) {
-    seleccionada = creds.find(item => normalizarEmailBiometrico(item.email) === emailSolicitado);
-    if (!seleccionada || emailSolicitado !== emailFirebase) {
-      toast('La biometría registrada corresponde a otra cuenta.');
-      return;
-    }
-  } else {
-    const ultimoUid = localStorage.getItem(BIOMETRIC_LAST_UID_KEY);
-    seleccionada = creds.find(item => item.uid === ultimoUid);
-    if (!seleccionada) {
-      toast('Ingresá el email de la cuenta biométrica para continuar.');
-      return;
-    }
-    if (seleccionada.email && emailInput) emailInput.value = seleccionada.email;
-    toast(`Biometría de ${seleccionada.email || seleccionada.username}`);
-  }
-
-  if (seleccionada.uid !== _fbUser.uid) {
-    toast('La biometría registrada corresponde a otra cuenta.');
+  const seleccionada = creds.find(item =>
+    item.uid === _fbUser.uid
+    && normalizarEmailBiometrico(item.email) === emailSolicitado
+  );
+  if (!seleccionada) {
+    logBiometria('bloqueo', {
+      motivo: 'credencial_no_coincide',
+      emailNormalizado: emailSolicitado,
+      uidEsperado: _fbUser.uid,
+      credencialesDisponibles: creds.map(item => ({
+        credentialId: item.id,
+        email: normalizarEmailBiometrico(item.email),
+        uidResuelto: item.uid
+      }))
+    });
+    toast('No hay biometría registrada para esta cuenta. Ingresá normalmente y volvé a registrarla.');
     return;
   }
+  logBiometria('credencial_seleccionada', {
+    emailNormalizado: emailSolicitado,
+    credentialId: seleccionada.id,
+    uidEsperado: _fbUser.uid,
+    uidResuelto: seleccionada.uid
+  });
 
   try {
     const challenge = crypto.getRandomValues(new Uint8Array(32));
+    logBiometria('webauthn_inicio', { credentialId: seleccionada.id, uidEsperado: _fbUser.uid });
 
     const assertion = await navigator.credentials.get({
       publicKey: {
@@ -2424,10 +2461,31 @@ async function loginConHuella() {
     });
 
     // Identificar qué usuario corresponde
+    logBiometria('webauthn_respuesta', {
+      credentialIdDevuelto: assertion.id,
+      credentialIdEsperado: seleccionada.id,
+      uidEsperado: _fbUser.uid,
+      uidResuelto: seleccionada.uid
+    });
     const matched = assertion.id === seleccionada.id ? seleccionada : null;
     if (!matched) { toast('⚠️ Huella no reconocida'); return; }
-    if (!_fbUser || !matched.uid || matched.uid !== _fbUser.uid) {
-      toast('⚠️ La huella requiere una sesión vigente. Ingresá con tu contraseña y volvé a registrarla.');
+    const emailAlResolver = normalizarEmailBiometrico(emailInput?.value);
+    if (!_fbUser
+      || matched.uid !== _fbUser.uid
+      || normalizarEmailBiometrico(matched.email) !== emailSolicitado
+      || normalizarEmailBiometrico(_fbUser.email) !== emailSolicitado
+      || emailAlResolver !== emailSolicitado) {
+      logBiometria('bloqueo', {
+        motivo: 'validacion_posterior_fallida',
+        credentialIdDevuelto: assertion.id,
+        credentialIdEsperado: seleccionada.id,
+        emailVisibleActual: emailInput?.value || '',
+        emailNormalizadoActual: emailAlResolver,
+        emailAsociado: normalizarEmailBiometrico(matched.email),
+        uidEsperado: _fbUser?.uid || null,
+        uidResuelto: matched.uid
+      });
+      toast('La biometría registrada corresponde a otra cuenta.');
       return;
     }
 
@@ -2445,7 +2503,6 @@ async function loginConHuella() {
     await updateSyncPendingBadge();
     await setSyncMeta('currentUser', username);
     await setSyncMeta('lastLoginAt', new Date().toISOString());
-    localStorage.setItem(BIOMETRIC_LAST_UID_KEY, matched.uid);
     showUserBadge(username);
     document.getElementById('login-screen').classList.add('hidden');
     appDesbloqueada = true;
@@ -2453,9 +2510,15 @@ async function loginConHuella() {
     initNotificaciones();
     driveAutoSync();
     await renderPage('dashboard');
+    logBiometria('login_exitoso', {
+      email: emailSolicitado,
+      credentialId: matched.id,
+      uidResuelto: matched.uid
+    });
     toast('👆 Bienvenido, ' + username);
 
   } catch(e) {
+    logBiometria('error', { nombre: e.name, mensaje: e.message });
     if (e.name === 'NotAllowedError') {
       toast('⚠️ Autenticación cancelada');
     } else {
@@ -2469,9 +2532,6 @@ function eliminarHuella() {
   credencialesBiometricasGuardadas()
     .filter(item => item.uid === _fbUser.uid)
     .forEach(item => localStorage.removeItem(item.key));
-  if (localStorage.getItem(BIOMETRIC_LAST_UID_KEY) === _fbUser.uid) {
-    localStorage.removeItem(BIOMETRIC_LAST_UID_KEY);
-  }
   toast('🗑️ Huella eliminada');
   actualizarUIHuella();
   actualizarBotonHuella();
