@@ -55,6 +55,5 @@ function calcularScoring(cuotas) {
 }
 
 /* =====================================================
-   WEBAUTHN — Huella digital / Face ID / Windows Hello
+   BIOMETRÍA / WEBAUTHN — DESACTIVADO
 ===================================================== */
-

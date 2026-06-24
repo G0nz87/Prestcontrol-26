@@ -26,7 +26,7 @@ async function init() {
     }
   });
 
-  // Mostrar botón huella si hay credencial registrada
+  // Biometría desactivada: ocultar botón y limpiar credenciales locales legacy.
   actualizarBotonHuella();
 
   // Indicadores de conexión

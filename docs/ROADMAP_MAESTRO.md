@@ -453,22 +453,25 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 
 ## 9.2 — Biometría vinculada correctamente al usuario
 
-**Estado:** IMPLEMENTADA / PENDIENTE DE VALIDACIÓN MÓVIL FINAL
+**Estado:** DESACTIVADA / PENDIENTE FUTURO
 
 **Fecha:** 2026-06-24
 
 ## Estado actual
-- El registro biométrico solo está disponible dentro de Configuración y requiere una sesión Firebase activa iniciada con email y contraseña en la ejecución actual.
-- Cada credencial queda vinculada al email normalizado, UID Firebase, `credentialId` WebAuthn y fecha de registro.
-- El login biométrico exige escribir primero el email y selecciona una única credencial asociada a ese email y UID.
-- Email vacío, email distinto o cuenta sin huella bloquean el flujo antes de invocar WebAuthn.
-- Después del sensor se vuelven a validar email visible, email asociado, UID Firebase, tipo de credencial y `credentialId`.
-- No se usa último usuario, primera credencial disponible ni migración silenciosa de credenciales antiguas sin email.
-- La bandera `BIOMETRIA_LOGIN_HABILITADA` controla tanto el acceso biométrico como su activación en Configuración.
-- Las trazas biométricas quedan desactivadas por defecto para no exponer identificadores en producción.
-- La biometría actúa como desbloqueo local de una sesión Firebase todavía vigente; después de un cierre de sesión explícito se requiere email y contraseña.
+- La funcionalidad biométrica queda eliminada/desactivada temporalmente del login y de Configuración.
+- No se muestra el botón `Ingresar con huella`.
+- No se muestra la opción `Activar huella digital`.
+- Las funciones biométricas quedan como bloqueos seguros: informan `Biometría desactivada temporalmente.` y retornan sin invocar WebAuthn.
+- Se limpian credenciales biométricas locales legacy (`pc_biometric_*` y `pc_last_biometric_uid`) sin borrar clientes, préstamos, cuotas, pagos, backup ni configuración general.
+- El login vigente y seguro es únicamente email + contraseña.
 
-**Validación móvil final:** PENDIENTE DE PRUEBA EN DISPOSITIVO
+## Motivo
+- El flujo biométrico en celular seguía permitiendo acceso con email vacío o distinto.
+- Se decidió retirar la biometría para una futura reimplementación limpia, sin arrastrar rutas legacy ni credenciales locales antiguas.
+
+## Pendiente futuro
+- Rediseñar biometría desde cero con validación estricta por cuenta, UID Firebase y credencial WebAuthn.
+- Auditar en dispositivo móvil real antes de volver a habilitarla.
 
 **Commit asociado:** PENDIENTE
 

@@ -973,24 +973,6 @@ async function renderConfig() {
     </div>
 
     <div class="cfg-section" style="margin-top:24px">🔐 Seguridad y Acceso</div>
-    <!-- HUELLA DIGITAL -->
-    <div class="card" style="margin-bottom:12px" id="card-huella">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
-        <div style="font-size:28px">👆</div>
-        <div>
-          <div style="font-size:14px;font-weight:700;color:var(--txt)">Huella digital / Face ID</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:2px">Ingresá sin escribir contraseña</div>
-        </div>
-        <div id="huella-estado" style="margin-left:auto;font-size:12px;font-weight:700"></div>
-      </div>
-      <div id="huella-info" style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5"></div>
-      <button class="btn btn-grn btn-full" id="btn-reg-huella" onclick="registrarHuella()" style="margin-bottom:8px">
-        👆 Activar huella digital
-      </button>
-      <button class="btn btn-red btn-full" id="btn-del-huella" onclick="eliminarHuella()" style="display:none">
-        🗑️ Desactivar huella
-      </button>
-    </div>
     <div class="card" style="margin-bottom:12px">
       <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Cambiá tu usuario y contraseña de ingreso</div>
       <div class="field"><label class="lbl">Contraseña actual *</label>
