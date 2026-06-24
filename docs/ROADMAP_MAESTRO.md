@@ -453,11 +453,19 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 
 ## 9.2 — Biometría vinculada correctamente al usuario
 
-**Estado:** CERRADO
+**Estado:** PENDIENTE / DESACTIVADA TEMPORALMENTE
 
 **Fecha:** 2026-06-23
 
-## Cerrado
+## Estado actual
+- Login biométrico desactivado temporalmente por seguridad.
+- Motivo: en celular la huella continúa abriendo sesión sin respetar el email visible.
+- Login seguro vigente: email + contraseña.
+- El botón de huella permanece oculto y deshabilitado.
+- `loginConHuella()` bloquea cualquier ejecución directa antes de WebAuthn.
+- Las credenciales biométricas guardadas se conservan para una auditoría futura.
+
+## Trabajo previo conservado
 - Credenciales biométricas asociadas al email normalizado y UID de Firebase.
 - El email escrito en login limita la biometría exclusivamente a esa cuenta.
 - Un email distinto bloquea el acceso antes de solicitar la credencial del dispositivo.

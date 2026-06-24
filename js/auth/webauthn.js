@@ -21,6 +21,7 @@ function b64ToBuffer(b64) {
 }
 
 const BIOMETRIC_PREFIX = 'pc_biometric_';
+const BIOMETRIA_LOGIN_HABILITADA = false; // Desactivada temporalmente por seguridad (Etapa 9.2).
 
 function normalizarEmailBiometrico(email) {
   return String(email || '').trim().toLowerCase();
@@ -111,6 +112,11 @@ async function registrarHuella() {
 }
 
 async function loginConHuella() {
+  if (!BIOMETRIA_LOGIN_HABILITADA) {
+    logBiometria('bloqueo', { motivo: 'biometria_desactivada_temporalmente' });
+    toast('Biometría desactivada temporalmente. Ingresá con email y contraseña.');
+    return;
+  }
   if (!webAuthnDisponible()) return;
 
   const emailInput = document.getElementById('login-email');
@@ -313,7 +319,16 @@ function actualizarUIHuella() {
 
 function actualizarBotonHuella() {
   const btn = document.getElementById('btn-huella');
-  if (!btn || !webAuthnDisponible()) return;
+  if (!btn) return;
+  if (!BIOMETRIA_LOGIN_HABILITADA) {
+    btn.disabled = true;
+    btn.setAttribute('aria-hidden', 'true');
+    btn.style.display = 'none';
+    return;
+  }
+  if (!webAuthnDisponible()) return;
+  btn.disabled = false;
+  btn.removeAttribute('aria-hidden');
   // Mostrar botón si hay alguna huella registrada
   const hayHuella = credencialesBiometricasGuardadas().length > 0;
   btn.style.display = hayHuella ? 'flex' : 'none';
