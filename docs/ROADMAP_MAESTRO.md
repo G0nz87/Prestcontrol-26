@@ -449,6 +449,23 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 - Revisar y desplegar manualmente las reglas Firestore versionadas, con aprobación explícita.
 - Evaluar una opción separada para cerrar sesión y borrar datos locales sin perder operaciones pendientes.
 
+**Commit asociado:** `57de9f0`
+
+## 9.2 — Biometría vinculada correctamente al usuario
+
+**Estado:** CERRADO
+
+**Fecha:** 2026-06-23
+
+## Cerrado
+- Credenciales biométricas asociadas al email normalizado y UID de Firebase.
+- El email escrito en login limita la biometría exclusivamente a esa cuenta.
+- Un email distinto bloquea el acceso antes de solicitar la credencial del dispositivo.
+- Con email vacío se usa solamente el último UID biométrico guardado y se muestra su cuenta en el login.
+- WebAuthn recibe una única credencial seleccionada, no todas las registradas en el dispositivo.
+- Cambiar de usuario Firebase invalida la credencial de otra cuenta y exige registrarla nuevamente.
+- Registro, eliminación y estado visual de biometría resueltos por UID.
+
 **Commit asociado:** PENDIENTE
 
 ---
@@ -503,7 +520,7 @@ Crear módulo propio de empeños: prenda, tasación, dueño / cliente, valor pre
 # ESTADO ACTUAL
 
 **Etapa actual:** ETAPA 9 — Seguridad avanzada — EN PROGRESO
-**Último bloque cerrado:** ETAPA 9.1 — Seguridad mínima de sesión y acceso local
+**Último bloque cerrado:** ETAPA 9.2 — Biometría vinculada correctamente al usuario
 **Próximo bloque recomendado:** Validar y desplegar manualmente las reglas Firestore con aprobación explícita
 
 ---
