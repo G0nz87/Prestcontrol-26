@@ -21,14 +21,15 @@ function b64ToBuffer(b64) {
 }
 
 const BIOMETRIC_PREFIX = 'pc_biometric_';
-const BIOMETRIA_LOGIN_HABILITADA = false; // Desactivada temporalmente por seguridad (Etapa 9.2).
+const BIOMETRIA_LOGIN_HABILITADA = true;
+const BIOMETRIA_DEBUG = false;
 
 function normalizarEmailBiometrico(email) {
   return String(email || '').trim().toLowerCase();
 }
 
 function logBiometria(evento, detalle = {}) {
-  console.info(`[Biometría 9.2] ${evento}`, detalle);
+  if (BIOMETRIA_DEBUG) console.info(`[Biometría 9.2] ${evento}`, detalle);
 }
 
 function credencialesBiometricasGuardadas() {
@@ -46,11 +47,18 @@ function credencialesBiometricasGuardadas() {
 }
 
 async function registrarHuella() {
+  if (!BIOMETRIA_LOGIN_HABILITADA) {
+    toast('Biometría desactivada temporalmente. Ingresá con email y contraseña.');
+    return;
+  }
   if (!webAuthnDisponible()) {
     toast('⚠️ Tu dispositivo no soporta huella digital');
     return;
   }
-  if (!currentUser || !_fbUser) { toast('⚠️ Necesitás una sesión Firebase activa'); return; }
+  if (!appDesbloqueada || !loginConPasswordConfirmado || !currentUser || !_fbUser) {
+    toast('Ingresá con email y contraseña antes de registrar la huella.');
+    return;
+  }
 
   try {
     const email = normalizarEmailBiometrico(_fbUser.email);
@@ -117,6 +125,7 @@ async function loginConHuella() {
     toast('Biometría desactivada temporalmente. Ingresá con email y contraseña.');
     return;
   }
+  loginConPasswordConfirmado = false;
   if (!webAuthnDisponible()) return;
 
   const emailInput = document.getElementById('login-email');
@@ -153,20 +162,6 @@ async function loginConHuella() {
   }
 
   const creds = credencialesBiometricasGuardadas();
-  if (!creds.length) {
-    logBiometria('bloqueo', { motivo: 'sin_credenciales_guardadas', uidEsperado: _fbUser.uid });
-    toast('⚠️ No hay huella registrada');
-    return;
-  }
-
-  creds.forEach(item => {
-    if (!item.email && item.uid === _fbUser.uid && emailFirebase) {
-      item.email = emailFirebase;
-      const { key, ...data } = item;
-      localStorage.setItem(key, JSON.stringify(data));
-    }
-  });
-
   const seleccionada = creds.find(item =>
     item.uid === _fbUser.uid
     && normalizarEmailBiometrico(item.email) === emailSolicitado
@@ -182,7 +177,7 @@ async function loginConHuella() {
         uidResuelto: item.uid
       }))
     });
-    toast('No hay biometría registrada para esta cuenta. Ingresá normalmente y volvé a registrarla.');
+    toast('No hay huella registrada para esta cuenta.');
     return;
   }
   logBiometria('credencial_seleccionada', {
@@ -216,7 +211,9 @@ async function loginConHuella() {
     });
 
     // Identificar qué usuario corresponde
-    const matched = assertion.id === seleccionada.id ? seleccionada : null;
+    const matched = assertion?.type === 'public-key' && assertion.id === seleccionada.id
+      ? seleccionada
+      : null;
     if (!matched) { toast('⚠️ Huella no reconocida'); return; }
     const emailAlResolver = normalizarEmailBiometrico(emailInput?.value);
     if (!_fbUser
@@ -293,6 +290,25 @@ function actualizarUIHuella() {
   if (!estEl) return;
 
   const tiene = _fbUser && credencialesBiometricasGuardadas().find(item => item.uid === _fbUser.uid);
+  if (!BIOMETRIA_LOGIN_HABILITADA) {
+    estEl.textContent = '⏸️ Desactivada';
+    estEl.style.color = 'var(--muted)';
+    if (infoEl) infoEl.textContent = 'La biometría está desactivada temporalmente. Ingresá con email y contraseña.';
+    if (btnReg) {
+      btnReg.disabled = true;
+      btnReg.style.display = 'none';
+    }
+    if (btnDel) btnDel.style.display = tiene ? 'block' : 'none';
+    return;
+  }
+  if (!loginConPasswordConfirmado && !tiene) {
+    estEl.textContent = '🔒 Requiere contraseña';
+    estEl.style.color = 'var(--muted)';
+    if (infoEl) infoEl.textContent = 'Ingresá con email y contraseña para registrar la huella de esta cuenta.';
+    if (btnReg) btnReg.style.display = 'none';
+    if (btnDel) btnDel.style.display = 'none';
+    return;
+  }
   if (!webAuthnDisponible()) {
     estEl.textContent = '⚫ No disponible';
     estEl.style.color = 'var(--muted)';
@@ -326,12 +342,11 @@ function actualizarBotonHuella() {
     btn.style.display = 'none';
     return;
   }
-  if (!webAuthnDisponible()) return;
-  btn.disabled = false;
-  btn.removeAttribute('aria-hidden');
-  // Mostrar botón si hay alguna huella registrada
-  const hayHuella = credencialesBiometricasGuardadas().length > 0;
-  btn.style.display = hayHuella ? 'flex' : 'none';
+  const emailSolicitado = normalizarEmailBiometrico(document.getElementById('login-email')?.value);
+  const disponible = webAuthnDisponible() && !!_fbUser && !!emailSolicitado;
+  btn.disabled = !disponible;
+  btn.setAttribute('aria-hidden', String(!disponible));
+  btn.style.display = disponible ? 'flex' : 'none';
 }
 
 /* Ojito para campos de contraseña */

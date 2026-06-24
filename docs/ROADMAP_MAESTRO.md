@@ -453,34 +453,24 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 
 ## 9.2 — Biometría vinculada correctamente al usuario
 
-**Estado:** PENDIENTE / DESACTIVADA TEMPORALMENTE
+**Estado:** IMPLEMENTADA / PENDIENTE DE VALIDACIÓN MÓVIL FINAL
 
-**Fecha:** 2026-06-23
+**Fecha:** 2026-06-24
 
 ## Estado actual
-- Login biométrico desactivado temporalmente por seguridad.
-- Motivo: en celular la huella continúa abriendo sesión sin respetar el email visible.
-- Login seguro vigente: email + contraseña.
-- El botón de huella permanece oculto y deshabilitado.
-- `loginConHuella()` bloquea cualquier ejecución directa antes de WebAuthn.
-- Las credenciales biométricas guardadas se conservan para una auditoría futura.
+- El registro biométrico solo está disponible dentro de Configuración y requiere una sesión Firebase activa iniciada con email y contraseña en la ejecución actual.
+- Cada credencial queda vinculada al email normalizado, UID Firebase, `credentialId` WebAuthn y fecha de registro.
+- El login biométrico exige escribir primero el email y selecciona una única credencial asociada a ese email y UID.
+- Email vacío, email distinto o cuenta sin huella bloquean el flujo antes de invocar WebAuthn.
+- Después del sensor se vuelven a validar email visible, email asociado, UID Firebase, tipo de credencial y `credentialId`.
+- No se usa último usuario, primera credencial disponible ni migración silenciosa de credenciales antiguas sin email.
+- La bandera `BIOMETRIA_LOGIN_HABILITADA` controla tanto el acceso biométrico como su activación en Configuración.
+- Las trazas biométricas quedan desactivadas por defecto para no exponer identificadores en producción.
+- La biometría actúa como desbloqueo local de una sesión Firebase todavía vigente; después de un cierre de sesión explícito se requiere email y contraseña.
 
-## Trabajo previo conservado
-- Credenciales biométricas asociadas al email normalizado y UID de Firebase.
-- El email escrito en login limita la biometría exclusivamente a esa cuenta.
-- Un email distinto bloquea el acceso antes de solicitar la credencial del dispositivo.
-- Política A: con email vacío la biometría se bloquea antes de invocar WebAuthn.
-- WebAuthn recibe una única credencial seleccionada, no todas las registradas en el dispositivo.
-- Cambiar de usuario Firebase invalida la credencial de otra cuenta y exige registrarla nuevamente.
-- Registro, eliminación y estado visual de biometría resueltos por UID.
-- Validación reforzada en celular antes y después del sensor: email escrito, email Firebase, UID y credencial deben coincidir.
-- Eliminada la ruta de último usuario biométrico que podía abrir una cuenta con el campo vacío.
-- Revisión definitiva del 2026-06-24: la política A anterior no había llegado a `main`; Netlify seguía desplegando la ruta de último usuario de `b177c10`.
-- Trazas temporales `[Biometría 9.2]` agregadas para verificar email visible, credencial, UID y motivo de bloqueo en el dispositivo.
+**Validación móvil final:** PENDIENTE DE PRUEBA EN DISPOSITIVO
 
-**Commit asociado:** `09df84d`
-
-**Revisión móvil política A y trazas:** PENDIENTE DE COMMIT
+**Commit asociado:** PENDIENTE
 
 ## 9.3 — Seguridad local y respaldo manual
 
