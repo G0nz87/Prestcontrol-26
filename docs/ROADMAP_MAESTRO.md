@@ -466,6 +466,24 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 - Cambiar de usuario Firebase invalida la credencial de otra cuenta y exige registrarla nuevamente.
 - Registro, eliminación y estado visual de biometría resueltos por UID.
 
+**Commit asociado:** `09df84d`
+
+## 9.3 — Seguridad local y respaldo manual
+
+**Estado:** CERRADO
+
+**Fecha:** 2026-06-23
+
+## Cerrado
+- Respaldo JSON manual v3 con fecha, hora y zona horaria.
+- Clientes, préstamos, cuotas, pagos embebidos, bitácora y configuración no secreta incluidos.
+- Registros eliminados conservados para que el respaldo sea completo.
+- Contraseñas, API keys, PIN, biometría, tokens, UID internos y metadatos de sincronización excluidos.
+- Advertencia visible y confirmación previa por tratarse de datos sensibles.
+- Nombre de archivo identificable con fecha y hora local.
+- Exportación Excel existente reutilizada como formato legible.
+- Sin restauración nueva, borrado de datos ni cambios de schema.
+
 **Commit asociado:** PENDIENTE
 
 ---
@@ -520,7 +538,7 @@ Crear módulo propio de empeños: prenda, tasación, dueño / cliente, valor pre
 # ESTADO ACTUAL
 
 **Etapa actual:** ETAPA 9 — Seguridad avanzada — EN PROGRESO
-**Último bloque cerrado:** ETAPA 9.2 — Biometría vinculada correctamente al usuario
+**Último bloque cerrado:** ETAPA 9.3 — Seguridad local y respaldo manual
 **Próximo bloque recomendado:** Validar y desplegar manualmente las reglas Firestore con aprobación explícita
 
 ---

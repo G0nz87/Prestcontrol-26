@@ -879,13 +879,17 @@ async function renderConfig() {
     <button class="btn btn-ghost btn-full" style="margin-top:10px" onclick="testWA()">📤 Enviar mensaje de prueba</button>
     <button class="btn btn-ghost btn-full" style="margin-top:10px" onclick="enviarResumenWA()">📊 Enviar resumen ahora</button>
 
-    <div class="cfg-section" style="margin-top:24px">📄 Exportar datos</div>
+    <div class="cfg-section" style="margin-top:24px">🔐 Respaldo manual</div>
+    <div class="form-alert is-info" style="margin-bottom:12px;line-height:1.6">
+      El respaldo contiene datos sensibles de clientes y operaciones. Guardalo en un lugar seguro.<br>
+      Se genera manualmente con fecha y hora. No incluye contraseñas, API keys, PIN, biometría ni datos internos de sincronización.
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <button class="btn btn-ghost" onclick="exportarPDF()">📄 PDF Reporte</button>
-      <button class="btn btn-ghost" onclick="exportarBackup()">📤 Backup JSON</button>
+      <button class="btn btn-gold" onclick="exportarBackup()">📤 Exportar respaldo</button>
+      <button class="btn btn-ghost" onclick="exportarExcel()">📊 Excel legible</button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
-      <button class="btn btn-ghost" onclick="exportarExcel()">📊 Excel</button>
+      <button class="btn btn-ghost" onclick="exportarPDF()">📄 PDF Reporte</button>
       <button class="btn btn-ghost" onclick="document.getElementById('imp-excel-file').click()">📥 Importar Excel</button>
     </div>
     <button class="btn btn-grn btn-full" style="margin-top:10px" onclick="exportarGoogleSheets()">
@@ -895,7 +899,8 @@ async function renderConfig() {
     <button class="btn btn-ghost btn-full" style="margin-top:10px" onclick="document.getElementById('imp-file').click()">📥 Importar Backup JSON</button>
     <input type="file" id="imp-file" accept=".json" style="display:none" onchange="importarBackup(this)">
     <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5">
-      El Excel y Google Sheets exportan: Clientes, Préstamos, Cuotas, Vista por Cliente, Dashboard y Bitácora con formato y colores. Google Sheets requiere Drive conectado.
+      El JSON incluye clientes, préstamos, cuotas con sus pagos, bitácora y configuración no secreta. El nombre del archivo indica fecha y hora.<br>
+      Excel y Google Sheets generan una versión legible con formato y colores. Google Sheets requiere Drive conectado.
     </div>
 
     <div class="cfg-section" style="margin-top:24px">🔥 Firebase — Sync en Tiempo Real</div>
@@ -1253,4 +1258,3 @@ function cuotaDetailItemHTML(c) {
     ${pagBtn}
   </div>`;
 }
-

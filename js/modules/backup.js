@@ -1,18 +1,85 @@
 /* =====================================================
    BACKUP / RESTORE
 ===================================================== */
+const RESPALDO_CAMPOS_EXCLUIDOS = new Set([
+  'pass', 'password', 'masterpass', 'pin', 'hash', 'salt',
+  'apikey', 'waapikey', 'token', 'accesstoken', 'credential',
+  'credentialid', 'rawid', 'userid', 'deviceid', 'secret',
+  'refreshtoken', 'privatekey'
+]);
+
+function esCampoSensibleParaRespaldo(clave) {
+  const normalizada = String(clave || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return RESPALDO_CAMPOS_EXCLUIDOS.has(normalizada)
+    || normalizada.startsWith('pin')
+    || /(password|apikey|accesstoken|refreshtoken|credential|privatekey|secret)$/.test(normalizada);
+}
+
+function limpiarDatoParaRespaldo(valor) {
+  if (Array.isArray(valor)) return valor.map(limpiarDatoParaRespaldo);
+  if (valor instanceof Date) return valor.toISOString();
+  if (!valor || typeof valor !== 'object') return valor;
+  return Object.fromEntries(
+    Object.entries(valor)
+      .filter(([clave]) => !esCampoSensibleParaRespaldo(clave))
+      .map(([clave, dato]) => [clave, limpiarDatoParaRespaldo(dato)])
+  );
+}
+
+function selloFechaRespaldo(fecha) {
+  const dos = numero => String(numero).padStart(2, '0');
+  return `${fecha.getFullYear()}-${dos(fecha.getMonth() + 1)}-${dos(fecha.getDate())}_${dos(fecha.getHours())}-${dos(fecha.getMinutes())}-${dos(fecha.getSeconds())}`;
+}
+
 async function exportarBackup() {
-  const [clientes, prestamos, cuotas] = await Promise.all([
-    dbAll('clientes'), dbAll('prestamos'), dbAll('cuotas')
-  ]);
-  const data = { v:2, fecha: new Date().toISOString(), clientes, prestamos, cuotas };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  const d    = new Date().toISOString().split('T')[0];
-  a.href = url; a.download = `prestamos_backup_${d}.json`;
-  a.click(); URL.revokeObjectURL(url);
-  toast('✅ Backup descargado');
+  if (!DB || !appDesbloqueada) {
+    toast('⚠️ Ingresá a PrestControl para exportar un respaldo');
+    return;
+  }
+  if (!confirm('El respaldo contiene datos personales y financieros sensibles. ¿Querés descargarlo ahora?')) return;
+
+  try {
+    const [clientes, prestamos, cuotas, bitacora, waPhone] = await Promise.all([
+      dbAllIncludeDeleted('clientes'),
+      dbAllIncludeDeleted('prestamos'),
+      dbAllIncludeDeleted('cuotas'),
+      dbAll('bitacora'),
+      getConfig('waPhone')
+    ]);
+    const fecha = new Date();
+    const data = limpiarDatoParaRespaldo({
+      v: 3,
+      tipo: 'prestcontrol-respaldo-manual',
+      fecha: fecha.toISOString(),
+      zonaHoraria: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+      usuario: { nombre: currentUser || '' },
+      clientes,
+      prestamos,
+      cuotas,
+      bitacora,
+      configuracion: {
+        whatsappTelefono: waPhone || ''
+      },
+      detalle: {
+        pagos: 'Incluidos dentro de cuotas',
+        historial: 'Incluido mediante prestamos, cuotas y bitacora'
+      }
+    });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `prestcontrol_respaldo_${selloFechaRespaldo(fecha)}.json`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast(`✅ Respaldo ${fecha.toLocaleString('es-AR')} descargado`);
+  } catch (error) {
+    console.error('No se pudo exportar el respaldo:', error);
+    toast('❌ No se pudo generar el respaldo');
+  }
 }
 
 async function importarBackup(input) {
@@ -72,4 +139,3 @@ async function importarBackup(input) {
   }
   input.value = '';
 }
-
