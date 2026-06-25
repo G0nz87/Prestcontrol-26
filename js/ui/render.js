@@ -1056,9 +1056,6 @@ async function renderConfig() {
       prevEl.innerHTML = `<span style="font-size:24px;font-weight:700;color:${color}">${inicial}</span>`;
     }
   }
-
-  // Huella digital
-  actualizarUIHuella();
 }
 
 /* =====================================================
