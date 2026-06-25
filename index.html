@@ -6406,7 +6406,9 @@ async function doLogin() {
   err.classList.remove('on');
 
   try {
-    const cred = await window.authService.login(inputEmail, inputPass);
+    const cred = window.authService?.login
+      ? await window.authService.login(inputEmail, inputPass)
+      : await _fbAuth.signInWithEmailAndPassword(inputEmail, inputPass);
     _fbUser = cred.user;
     _loginIntentos = 0;
 
