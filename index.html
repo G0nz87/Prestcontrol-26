@@ -6490,7 +6490,7 @@ async function _entrarALaApp(username, password, usuarioObj) {
     cargarFotoPerfil();
   }, 800);
 
-  await renderPage('dashboard');
+  await goPage('dashboard');
 
   if (usuarioObj?.firstRun === true) {
     setTimeout(showFirstRunScreen, 500);
