@@ -427,3 +427,68 @@ PENDIENTE — inventario propuesto, esperando aprobación para crear `docs/INVEN
 8. No tocar Firebase.
 9. No tocar PWA.
 10. Mantener siempre un working tree limpio antes de iniciar cada subetapa.
+
+---
+
+# Etapa 11 planificada — Backup y restauración profesional
+
+La restauración completa de backups JSON no se implementa dentro de Etapa 10.
+Queda planificada como una etapa funcional separada para evitar mezclar orden técnico con cambios de datos sensibles.
+
+## 11.1 — Importar y mezclar JSON
+
+**Estado:** existente como flujo actual aclarado.
+
+- Conserva los datos actuales.
+- Agrega registros faltantes.
+- Actualiza coincidencias por ID según la regla actual.
+- No restaura la app completa.
+- No debe confundirse con restauración total.
+
+## 11.2 — Restaurar backup completo local
+
+**Estado:** pendiente.
+
+- Debe reemplazar localmente los datos actuales por los datos del backup.
+- Debe restaurar:
+  - clientes;
+  - préstamos;
+  - cuotas;
+  - bitácora, si está disponible en el backup.
+- No debe restaurar:
+  - contraseñas;
+  - PIN;
+  - tokens;
+  - biometría;
+  - sync interno.
+- No debe usar `dbPut()` para la restauración completa porque modifica `updatedAt`.
+- Debe usar un helper raw tipo `dbPutRaw()` para preservar IDs, timestamps y contenido del backup.
+- Debe exigir confirmación escrita `RESTAURAR`.
+- Debe advertir que se reemplazarán los datos locales actuales.
+- No debe subir automáticamente a Firebase.
+
+## 11.3 — Sincronizar restauración con Firebase
+
+**Estado:** pendiente futuro.
+
+- Debe ser una acción separada de la restauración local.
+- No debe ejecutarse automáticamente.
+- Debe requerir confirmación explícita.
+- Debe resolver cuidadosamente altas, modificaciones y eliminaciones remotas.
+
+## 11.4 — Comparador / previsualización avanzada de backups
+
+**Estado:** pendiente.
+
+- Comparar datos actuales contra datos del backup antes de aplicar cambios.
+- Mostrar cantidades de clientes, préstamos, cuotas y bitácora.
+- Detectar posibles duplicados o diferencias relevantes.
+- Permitir decidir con información clara antes de importar o restaurar.
+
+## 11.5 — Historial de backups
+
+**Estado:** pendiente.
+
+- Registrar fecha/hora de backups generados o restaurados.
+- Mostrar historial operativo de respaldos.
+- Mantener trazabilidad sin guardar contraseñas, tokens, PIN, biometría ni sync interno.
