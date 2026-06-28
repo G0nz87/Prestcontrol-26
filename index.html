@@ -4278,8 +4278,11 @@ async function renderConfig() {
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><rect x="3" y="3" width="18" height="18" rx="2" fill="#0F9D58"/><path d="M7 8h10M7 12h10M7 16h6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
       Exportar a Google Sheets
     </button>
-    <button class="btn btn-ghost btn-full" style="margin-top:10px" onclick="document.getElementById('imp-file').click()">📥 Importar Backup JSON</button>
+    <button class="btn btn-ghost btn-full" style="margin-top:10px" title="Conserva tus datos actuales, agrega faltantes y actualiza coincidencias por ID." onclick="document.getElementById('imp-file').click()">📥 Importar y mezclar Backup JSON</button>
     <input type="file" id="imp-file" accept=".json" style="display:none" onchange="importarBackup(this)">
+    <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">
+      Conserva tus datos actuales. Agrega registros faltantes y actualiza coincidencias por ID. No restaura la app completa.
+    </div>
     <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5">
       El JSON incluye clientes, préstamos, cuotas con sus pagos, bitácora y configuración no secreta. El nombre del archivo indica fecha y hora.<br>
       Excel y Google Sheets generan una versión legible con formato y colores. Google Sheets requiere Drive conectado.

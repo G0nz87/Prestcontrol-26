@@ -1,8 +1,10 @@
 # INVENTARIO TÉCNICO — PRESTCONTROL
 
-**Estado:** Diagnóstico inicial Etapa 10.1  
+**Estado:** Etapa 10.3 — legacy aislado de forma reversible
 **Objetivo:** identificar código activo, código legacy probable y zonas sensibles antes de ordenar archivos.  
 **Regla:** este inventario no autoriza borrar, mover ni refactorizar código sin aprobación explícita.
+
+**Actualización 10.3:** los archivos legacy confirmados fueron movidos, sin eliminarse, desde `js/` hacia `legacy/js/`, conservando la estructura interna.
 
 ---
 
@@ -87,58 +89,60 @@ También existe un script inline grande dentro de `index.html`, que contiene gra
 
 ---
 
-## 3. Código legacy probable no cargado directamente
+## 3. Código legacy aislado no cargado directamente
 
-El directorio `js/` no aparece cargado directamente desde `index.html`.
+El directorio `js/` no aparecía cargado directamente desde `index.html`.
 
-Archivos legacy probables:
+En Etapa 10.3 estos archivos fueron aislados de forma reversible en `legacy/js/`.
+
+Archivos legacy aislados:
 
 ### js/auth/
 
-- `js/auth/auth.js`
-- `js/auth/first-run.js`
-- `js/auth/user-menu.js`
-- `js/auth/webauthn.js`
+- `legacy/js/auth/auth.js`
+- `legacy/js/auth/first-run.js`
+- `legacy/js/auth/user-menu.js`
+- `legacy/js/auth/webauthn.js`
 
 ### js/core/
 
-- `js/core/bloqueo.js`
-- `js/core/init.js`
-- `js/core/pwa.js`
-- `js/core/utils.js`
+- `legacy/js/core/bloqueo.js`
+- `legacy/js/core/init.js`
+- `legacy/js/core/pwa.js`
+- `legacy/js/core/utils.js`
 
 ### js/db/
 
-- `js/db/admin.js`
-- `js/db/database.js`
+- `legacy/js/db/admin.js`
+- `legacy/js/db/database.js`
 
 ### js/firebase/
 
-- `js/firebase/firebase.js`
+- `legacy/js/firebase/firebase.js`
 
 ### js/modules/
 
-- `js/modules/backup.js`
-- `js/modules/bitacora.js`
-- `js/modules/calendario.js`
-- `js/modules/clientes.js`
-- `js/modules/excel.js`
-- `js/modules/graficos.js`
-- `js/modules/historial.js`
-- `js/modules/notificaciones.js`
-- `js/modules/pdf.js`
-- `js/modules/prestamos.js`
-- `js/modules/whatsapp.js`
+- `legacy/js/modules/backup.js`
+- `legacy/js/modules/bitacora.js`
+- `legacy/js/modules/calendario.js`
+- `legacy/js/modules/clientes.js`
+- `legacy/js/modules/excel.js`
+- `legacy/js/modules/graficos.js`
+- `legacy/js/modules/historial.js`
+- `legacy/js/modules/notificaciones.js`
+- `legacy/js/modules/pdf.js`
+- `legacy/js/modules/prestamos.js`
+- `legacy/js/modules/whatsapp.js`
 
 ### js/ui/
 
-- `js/ui/badges.js`
-- `js/ui/navigation.js`
-- `js/ui/render.js`
+- `legacy/js/ui/badges.js`
+- `legacy/js/ui/navigation.js`
+- `legacy/js/ui/render.js`
 
 ### Otros
 
-- `js/globals.js`
+- `legacy/js/globals.js`
 - `css/styles.css`
 
 `css/styles.css` existe, pero no se detectó carga directa desde `index.html`.
@@ -235,6 +239,7 @@ Riesgo:
 Activo:
 
 - `exportarBackup()` en `index.html`
+- `importarBackup(input)` en `index.html`
 
 Legacy probable:
 
@@ -243,6 +248,9 @@ Legacy probable:
 Riesgo:
 
 - Exportación contiene datos sensibles.
+- La importación JSON actual funciona como mezcla/merge: conserva datos actuales, agrega registros faltantes y actualiza coincidencias por ID.
+- La importación JSON actual no restaura la app completa.
+- Restauración completa de backup queda planificada como Etapa 11.1.
 - No modificar sin etapa propia.
 
 ### Notificaciones / PWA
@@ -286,36 +294,36 @@ No tocar sin etapa explícita:
 
 ---
 
-## 6. Archivos candidatos a futura carpeta legacy/
+## 6. Archivos aislados en legacy/js/
 
-Candidatos, no aprobados todavía:
+Movidos de forma reversible en Etapa 10.3:
 
-- `js/auth/auth.js`
-- `js/auth/first-run.js`
-- `js/auth/user-menu.js`
-- `js/auth/webauthn.js`
-- `js/core/bloqueo.js`
-- `js/core/init.js`
-- `js/core/pwa.js`
-- `js/core/utils.js`
-- `js/db/admin.js`
-- `js/db/database.js`
-- `js/firebase/firebase.js`
-- `js/modules/backup.js`
-- `js/modules/bitacora.js`
-- `js/modules/calendario.js`
-- `js/modules/clientes.js`
-- `js/modules/excel.js`
-- `js/modules/graficos.js`
-- `js/modules/historial.js`
-- `js/modules/notificaciones.js`
-- `js/modules/pdf.js`
-- `js/modules/prestamos.js`
-- `js/modules/whatsapp.js`
-- `js/ui/badges.js`
-- `js/ui/navigation.js`
-- `js/ui/render.js`
-- `js/globals.js`
+- `legacy/js/auth/auth.js`
+- `legacy/js/auth/first-run.js`
+- `legacy/js/auth/user-menu.js`
+- `legacy/js/auth/webauthn.js`
+- `legacy/js/core/bloqueo.js`
+- `legacy/js/core/init.js`
+- `legacy/js/core/pwa.js`
+- `legacy/js/core/utils.js`
+- `legacy/js/db/admin.js`
+- `legacy/js/db/database.js`
+- `legacy/js/firebase/firebase.js`
+- `legacy/js/modules/backup.js`
+- `legacy/js/modules/bitacora.js`
+- `legacy/js/modules/calendario.js`
+- `legacy/js/modules/clientes.js`
+- `legacy/js/modules/excel.js`
+- `legacy/js/modules/graficos.js`
+- `legacy/js/modules/historial.js`
+- `legacy/js/modules/notificaciones.js`
+- `legacy/js/modules/pdf.js`
+- `legacy/js/modules/prestamos.js`
+- `legacy/js/modules/whatsapp.js`
+- `legacy/js/ui/badges.js`
+- `legacy/js/ui/navigation.js`
+- `legacy/js/ui/render.js`
+- `legacy/js/globals.js`
 - `css/styles.css`
 
 Antes de moverlos, verificar:
