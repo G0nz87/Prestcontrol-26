@@ -2,8 +2,8 @@
 
 **Proyecto:** PrestControl  
 **Stack:** Netlify + Firebase + GitHub + IndexedDB  
-**Última actualización:** 20/06/2026  
-**Estado general:** Etapa 5 cerrada
+**Última actualización:** 03/07/2026  
+**Estado general:** Etapa 10 cerrada
 
 ---
 
@@ -221,7 +221,6 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 
 ---
 
-
 ## 5.6 — Comprobantes profesionales imprimibles
 
 **Estado:** CERRADO
@@ -266,9 +265,11 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 - Se agregó `cuotas` al refresco posterior a `confirmarPago()`.
 - Sin cambios en Préstamos, Clientes, cálculos, estados ni métricas.
 
+---
+
 # ETAPA 6 — NOTIFICACIONES PWA
 
-**Estado:** EN PROGRESO
+**Estado:** CERRADA / ESTABLE
 
 ## 6.1 — Base PWA real
 
@@ -283,9 +284,6 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 - Iconos PNG reales de 192x192 y 512x512.
 - Sin Push API, Firebase Messaging ni backend de notificaciones.
 
-## Pendiente de Etapa 6
-- Definir e implementar notificaciones push reales con la aplicación cerrada.
-
 ## 6.2 — Notificación local coherente
 
 **Estado:** CERRADO
@@ -299,11 +297,14 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 - Apertura o enfoque de PrestControl al tocar una notificación.
 - Sin Push API, Firebase Messaging, VAPID ni backend.
 
+## Pendiente futuro
+- Definir e implementar notificaciones push reales con la aplicación cerrada.
+
 ---
 
 # ETAPA 7 — COMANDOS POR VOZ
 
-**Estado:** EN PROGRESO
+**Estado:** CERRADA / ESTABLE
 
 ## 7.1 — Comandos mínimos y seguros
 
@@ -426,7 +427,7 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 
 # ETAPA 9 — SEGURIDAD AVANZADA
 
-**Estado:** EN PROGRESO
+**Estado:** COMPLETADA / ESTABLE
 
 ## 9.1 — Seguridad mínima de sesión y acceso local
 
@@ -445,7 +446,7 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 - Eliminación de cliente protegida con confirmación escrita `ELIMINAR`.
 - Renovación protegida con confirmación escrita `RENOVAR`, sin cambios financieros.
 
-## Pendiente
+## Pendiente futuro
 - Revisar y desplegar manualmente las reglas Firestore versionadas, con aprobación explícita.
 - Evaluar una opción separada para cerrar sesión y borrar datos locales sin perder operaciones pendientes.
 
@@ -473,8 +474,6 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 - Rediseñar biometría desde cero con validación estricta por cuenta, UID Firebase y credencial WebAuthn.
 - Auditar en dispositivo móvil real antes de volver a habilitarla.
 
-**Commit asociado:** PENDIENTE
-
 ## 9.3 — Seguridad local y respaldo manual
 
 **Estado:** CERRADO
@@ -493,20 +492,111 @@ El nuevo préstamo calcula total, cuota y ganancia sobre `montoNominal`, usando 
 
 **Commit asociado:** `b177c10`
 
+## 9.4 — Auditoría de secretos y exposición del repositorio
+
+**Estado:** CERRADO
+
+## Cerrado
+- Auditoría local del repositorio sin modificar archivos.
+- Sin claves privadas detectadas.
+- Sin service accounts detectadas.
+- Sin `.env` sensible detectado.
+- Sin tokens ni credenciales administrativas versionadas.
+- `firebaseConfig` web considerado configuración pública normal del cliente.
+
+## 9.5 — Verificación de reglas Firebase en producción
+
+**Estado:** CERRADO / VERIFICADO LOCALMENTE
+
+## Cerrado
+- Revisión local de `firestore.rules`.
+- Reglas versionadas para proteger `users/{uid}` con `request.auth.uid == uid`.
+- Denegación por defecto para rutas fuera de alcance.
+- No se ejecutó `firebase deploy`.
+- Producción requiere verificación visual/manual en Firebase Console cuando corresponda.
+
 ---
 
 # ETAPA 10 — ORDEN TÉCNICO
 
-**Estado:** PENDIENTE
+**Estado:** ✅ COMPLETADA
+
+## 10.1 — Inventario técnico
+
+**Estado:** CERRADO
+
+## Cerrado
+- Inventario técnico del proyecto creado en `docs/INVENTARIO_TECNICO.md`.
+- Clasificación de módulos activos y legacy.
+- Documentación de zonas sensibles que no se deben tocar sin subetapa específica.
+- Reglas de Etapa 10 documentadas para evitar eliminaciones o movimientos inseguros.
+
+## 10.2 — Auditoría inicial
+
+**Estado:** CERRADO
+
+## Cerrado
+- Identificación de arquitectura activa.
+- Identificación de módulos históricos.
+- Detección de archivos legacy no cargados.
+- Separación conceptual entre código activo, legacy probable y zonas críticas.
+
+## 10.3 — Backup
+
+**Estado:** CERRADO
+
+## Cerrado
+- Se aclaró el flujo `Importar y mezclar Backup JSON`.
+- Se documentó que el importador actual conserva datos actuales y mezcla por ID.
+- Se evitó confundir importación merge con restauración completa.
+- Se documentó la futura restauración completa como Etapa 11.
+
+## 10.4 — Modularización
+
+**Estado:** CERRADO
+
+## Cerrado
+- Extracción de helpers puros a `core/helpers.js`.
+- Extracción de UI State a `core/ui-state.js`.
+- Extracción de DOM Helpers a `core/dom-helpers.js`.
+- Extracción del módulo Historial a `ui/historial.js`.
+- Exposición controlada en `window` para no romper llamadas inline/globales existentes.
+- Sin cambios de comportamiento funcional.
+
+## 10.5 — Dashboard
+
+**Estado:** CERRADO / BLOQUE DOCUMENTADO
+
+## Cerrado
+- Intento de extraer Dashboard Gráficos.
+- Detectado problema en pruebas reales de PC y celular.
+- La extracción fue revertida.
+- Dashboard Gráficos volvió a `index.html`.
+- Bloque documentado como temporalmente bloqueado.
+- No volver a extraer este bloque hasta rediseñar dependencias/timing del dashboard.
+
+## 10.6 — Saneamiento técnico
+
+**Estado:** CERRADO
+
+## Cerrado
+- Auditoría de código activo.
+- Auditoría de código legacy.
+- Aislamiento reversible de legacy en `legacy/js/`.
+- Actualización del Service Worker.
+- Actualización del `APP_SHELL`.
+- Documentación del mapa de dependencias activo.
+- Documentación de módulos bloqueados.
+- Proyecto estabilizado para continuar con nuevas funcionalidades.
 
 ---
 
 # PENDIENTES NUEVOS / FUTUROS
 
 ## Comprobantes profesionales
-**Estado:** PENDIENTE ETAPA 5
+**Estado:** CERRADO EN ETAPA 5
 
-Objetivo:
+Objetivo cerrado:
 - Fondo blanco.
 - Sin franja negra grande.
 - Mejor impresión.
@@ -542,11 +632,43 @@ Crear módulo propio de empeños: prenda, tasación, dueño / cliente, valor pre
 
 ---
 
-# ESTADO ACTUAL
+# ESTADO ACTUAL DEL PROYECTO
 
-**Etapa actual:** ETAPA 9 — Seguridad avanzada — EN PROGRESO
-**Último bloque cerrado:** ETAPA 9.3 — Seguridad local y respaldo manual
-**Próximo bloque recomendado:** Validar y desplegar manualmente las reglas Firestore con aprobación explícita
+✅ Arquitectura modular estable.  
+✅ Firebase estable.  
+✅ Sync estable.  
+✅ PWA estable.  
+✅ Backup Merge estable.  
+✅ Dashboard funcional.  
+✅ Historial modularizado.  
+✅ Helpers modularizados.  
+✅ Base preparada para nuevas funcionalidades.
+
+---
+
+# PRÓXIMA ETAPA RECOMENDADA
+
+# ETAPA 11 — FUNCIONALIDADES AVANZADAS
+
+## 11.1 — Restauración completa de Backup
+
+**Estado:** PENDIENTE
+
+## 11.2 — Gestión de Empeños / Prendas
+
+**Estado:** PENDIENTE
+
+## 11.3 — Comparador de Backups
+
+**Estado:** PENDIENTE
+
+## 11.4 — Historial de Backups
+
+**Estado:** PENDIENTE
+
+## 11.5 — Sincronización segura de restauraciones
+
+**Estado:** PENDIENTE
 
 ---
 
