@@ -532,3 +532,39 @@ Contenido previsto:
 - Registrar monto recuperado o pérdida.
 - Registrar observaciones de la prenda.
 - Posible futuro: fotos de la prenda.
+
+---
+
+# Mapa de dependencias activo
+
+Estado documentado luego de las extracciones seguras de Etapa 10.
+
+Árbol activo cargado desde `index.html`:
+
+```txt
+index.html
+ ├── core/firebase.js
+ ├── core/helpers.js
+ ├── repositories/index.js
+ │    ├── Repository.js
+ │    ├── ClienteRepository.js
+ │    └── PrestamoRepository.js
+ ├── services/index.js
+ │    ├── AuthService.js
+ │    ├── ClienteService.js
+ │    ├── PrestamoService.js
+ │    └── MetricasFinancierasService.js
+ ├── core/ui-state.js
+ ├── core/dom-helpers.js
+ ├── ui/historial.js
+ └── ui/index.js
+      ├── clientes.js
+      └── prestamos.js
+```
+
+Notas:
+
+- `sw.js` cachea estos módulos activos como parte del `APP_SHELL`.
+- `legacy/js/` queda aislado y no cargado por `index.html`.
+- Dashboard Gráficos queda inline en `index.html` y bloqueado temporalmente para extracción.
+- Auth, Firebase, sync, WhatsApp, backup, pagos, cobros y cuotas siguen principalmente inline en `index.html`.
