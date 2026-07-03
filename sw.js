@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'prestcontrol-';
-const CACHE_NAME = `${CACHE_PREFIX}shell-v3`;
+const CACHE_NAME = `${CACHE_PREFIX}shell-v4`;
 
 const APP_SHELL = [
   './',
@@ -8,6 +8,9 @@ const APP_SHELL = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './core/firebase.js',
+  './core/helpers.js',
+  './core/ui-state.js',
+  './core/dom-helpers.js',
   './repositories/index.js',
   './repositories/Repository.js',
   './repositories/ClienteRepository.js',
@@ -16,6 +19,8 @@ const APP_SHELL = [
   './services/ClienteService.js',
   './services/PrestamoService.js',
   './services/AuthService.js',
+  './services/MetricasFinancierasService.js',
+  './ui/historial.js',
   './ui/index.js',
   './ui/clientes.js',
   './ui/prestamos.js'
