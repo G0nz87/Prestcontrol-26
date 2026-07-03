@@ -430,6 +430,23 @@ PENDIENTE — inventario propuesto, esperando aprobación para crear `docs/INVEN
 
 ---
 
+# Bloque temporalmente bloqueado — Dashboard Gráficos
+
+**Clasificación:** 🔴 temporalmente bloqueado.
+
+Durante Etapa 10 se intentó extraer el bloque de Dashboard Gráficos a `ui/dashboard-graficos.js`.
+La prueba real en PC/celular falló:
+
+- en PC la pestaña Gráficos de Inicio no abrió correctamente;
+- en celular, al intentar volver a Inicio después de abrir Gráficos, la app quedó cargando.
+
+La extracción fue revertida y el bloque volvió a `index.html`.
+
+No volver a extraer Dashboard Gráficos hasta rediseñar primero sus dependencias y el timing del dashboard.
+El problema no debe tratarse como una extracción simple de bloque: requiere una subetapa específica de rediseño/control de carga.
+
+---
+
 # Etapa 11 planificada — Backup y restauración profesional
 
 La restauración completa de backups JSON no se implementa dentro de Etapa 10.
@@ -492,3 +509,26 @@ Queda planificada como una etapa funcional separada para evitar mezclar orden t�
 - Registrar fecha/hora de backups generados o restaurados.
 - Mostrar historial operativo de respaldos.
 - Mantener trazabilidad sin guardar contraseñas, tokens, PIN, biometría ni sync interno.
+
+---
+
+# Mejora futura — Gestión de empeños / prendas
+
+Esta funcionalidad no pertenece a Etapa 10.
+Debe implementarse luego del orden técnico, como etapa funcional independiente.
+
+Contenido previsto:
+
+- Crear listado de prendas/empeños entregados por cliente.
+- Mostrar estado del empeño:
+  - activo;
+  - con cuotas pagadas;
+  - atrasado;
+  - ejecutado;
+  - cancelado/recuperado.
+- Mostrar historial de pagos asociados.
+- Mostrar si luego de pagar algunas cuotas el empeño fue ejecutado.
+- Registrar fecha de ejecución.
+- Registrar monto recuperado o pérdida.
+- Registrar observaciones de la prenda.
+- Posible futuro: fotos de la prenda.
