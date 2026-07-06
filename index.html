@@ -4166,8 +4166,11 @@ async function renderConfig() {
       Se genera manualmente con fecha y hora. No incluye contraseñas, API keys, PIN, biometría ni datos internos de sincronización.
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <button class="btn btn-gold" onclick="exportarBackup()">📤 Exportar respaldo</button>
+      <button class="btn btn-gold" onclick="exportarBackup()">📤 Crear copia de seguridad</button>
       <button class="btn btn-ghost" onclick="exportarExcel()">📊 Excel legible</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">
+      Guarda una copia completa de clientes, préstamos, cuotas, pagos y configuración segura para poder recuperarla más adelante.
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
       <button class="btn btn-ghost" onclick="exportarPDF()">📄 PDF Reporte</button>
@@ -4177,13 +4180,19 @@ async function renderConfig() {
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><rect x="3" y="3" width="18" height="18" rx="2" fill="#0F9D58"/><path d="M7 8h10M7 12h10M7 16h6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
       Exportar a Google Sheets
     </button>
-    <button class="btn btn-ghost btn-full" style="margin-top:10px" title="Conserva tus datos actuales, agrega faltantes y actualiza coincidencias por ID." onclick="document.getElementById('imp-file').click()">📥 Importar y mezclar Backup JSON</button>
+    <button class="btn btn-ghost btn-full" style="margin-top:10px" title="Conserva tus datos actuales. Agrega los registros del archivo y actualiza coincidencias por ID. No reemplaza toda la aplicación." onclick="document.getElementById('imp-file').click()">📥 Importar y mezclar datos</button>
     <input type="file" id="imp-file" accept=".json" style="display:none" onchange="importarBackup(this)">
     <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">
-      Conserva tus datos actuales. Agrega registros faltantes y actualiza coincidencias por ID. No restaura la app completa.
+      Conserva tus datos actuales. Agrega los registros del archivo y actualiza coincidencias por ID. No reemplaza toda la aplicación.
+    </div>
+    <button class="btn btn-red btn-full" style="margin-top:12px" onclick="document.getElementById('restore-file').click()">♻ Restaurar copia completa</button>
+    <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restaurarBackupCompletoPreview(this)">
+    <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">
+      Reemplaza los datos actuales por los del archivo de respaldo. Usar solo para recuperar la aplicación exactamente como estaba.<br>
+      Mientras esta función se encuentra en desarrollo: Actualmente solo valida y previsualiza el archivo.
     </div>
     <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5">
-      El JSON incluye clientes, préstamos, cuotas con sus pagos, bitácora y configuración no secreta. El nombre del archivo indica fecha y hora.<br>
+      El respaldo utiliza un archivo (.json) e incluye clientes, préstamos, cuotas con sus pagos, bitácora y configuración no secreta. El nombre del archivo indica fecha y hora.<br>
       Excel y Google Sheets generan una versión legible con formato y colores. Google Sheets requiere Drive conectado.
     </div>
 
@@ -6107,6 +6116,119 @@ async function importarBackup(input) {
   } catch(e) {
     toast('❌ Error al leer el archivo. Verificá que sea un backup válido.');
   }
+  input.value = '';
+}
+
+function validarBackupCompletoPreview(data) {
+  if (!data || typeof data !== 'object') {
+    return 'El archivo no contiene un JSON válido de PrestControl.';
+  }
+  if (data.tipo !== 'prestcontrol-respaldo-manual') {
+    return 'El archivo no corresponde a un respaldo manual de PrestControl.';
+  }
+  if (!Array.isArray(data.clientes)) {
+    return 'El backup no contiene una lista válida de clientes.';
+  }
+  if (!Array.isArray(data.prestamos)) {
+    return 'El backup no contiene una lista válida de préstamos.';
+  }
+  if (!Array.isArray(data.cuotas)) {
+    return 'El backup no contiene una lista válida de cuotas.';
+  }
+  if (data.bitacora && !Array.isArray(data.bitacora)) {
+    return 'El backup contiene una bitácora inválida.';
+  }
+  if (data.clientes.some(c => !c || !c.id)) {
+    return 'El backup contiene clientes sin ID.';
+  }
+  if (data.prestamos.some(p => !p || !p.id || !p.clienteId)) {
+    return 'El backup contiene préstamos sin ID o sin cliente asociado.';
+  }
+  if (data.cuotas.some(c => !c || !c.id || !c.prestamoId)) {
+    return 'El backup contiene cuotas sin ID o sin préstamo asociado.';
+  }
+  return null;
+}
+
+async function restaurarBackupCompletoPreview(input) {
+  const file = input.files[0]; if (!file) return;
+
+  try {
+    if (!DB || !appDesbloqueada) {
+      toast('⚠️ Ingresá a PrestControl para validar un respaldo');
+      input.value = '';
+      return;
+    }
+
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const error = validarBackupCompletoPreview(data);
+    if (error) {
+      toast('❌ ' + error);
+      input.value = '';
+      return;
+    }
+
+    const [clientesActuales, prestamosActuales, cuotasActuales, bitacoraActual] = await Promise.all([
+      dbAllIncludeDeleted('clientes'),
+      dbAllIncludeDeleted('prestamos'),
+      dbAllIncludeDeleted('cuotas'),
+      dbAll('bitacora').catch(() => [])
+    ]);
+
+    const bitacoraBackup = Array.isArray(data.bitacora) ? data.bitacora : [];
+    const fechaBackup = data.fecha ? new Date(data.fecha) : null;
+    const fechaTexto = fechaBackup && !Number.isNaN(fechaBackup.getTime())
+      ? fechaBackup.toLocaleString('es-AR')
+      : 'No informada';
+
+    const preview = [
+      'Restaurar Backup Completo JSON',
+      '',
+      '⚠️ Esta acción reemplazará los datos locales por los del backup.',
+      'En esta versión SOLO se valida y previsualiza: no se aplicará la restauración.',
+      '',
+      `Archivo: ${file.name}`,
+      `Fecha del backup: ${fechaTexto}`,
+      `Usuario del backup: ${data.usuario?.nombre || 'No informado'}`,
+      '',
+      'Datos actuales:',
+      `• Clientes: ${clientesActuales.length}`,
+      `• Préstamos: ${prestamosActuales.length}`,
+      `• Cuotas: ${cuotasActuales.length}`,
+      `• Bitácora: ${bitacoraActual.length}`,
+      '',
+      'Datos del backup:',
+      `• Clientes: ${data.clientes.length}`,
+      `• Préstamos: ${data.prestamos.length}`,
+      `• Cuotas: ${data.cuotas.length}`,
+      `• Bitácora: ${bitacoraBackup.length}`,
+      '',
+      'Recomendación: exportá un respaldo actual antes de una restauración real.',
+      '',
+      '¿Querés continuar con la validación?'
+    ].join('\n');
+
+    if (!confirm(preview)) {
+      input.value = '';
+      return;
+    }
+
+    const confirmacion = prompt('Para confirmar la validación, escribí RESTAURAR.\n\nNo se restaurará nada todavía.');
+    if (confirmacion !== 'RESTAURAR') {
+      toast('ℹ️ Restauración completa cancelada');
+      input.value = '';
+      return;
+    }
+
+    const mensaje = 'Validación correcta. Restauración completa todavía no aplicada en esta versión.';
+    toast('✅ ' + mensaje);
+    alert(mensaje);
+  } catch(e) {
+    console.error('No se pudo validar el backup completo:', e);
+    toast('❌ Error al leer el archivo. Verificá que sea un backup válido.');
+  }
+
   input.value = '';
 }
 
