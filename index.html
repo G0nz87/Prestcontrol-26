@@ -1573,6 +1573,26 @@ function dbPut(store, obj) {
   });
 }
 
+// Escritura raw para restauración completa: preserva exactamente el objeto recibido
+function dbPutRaw(store, obj) {
+  return new Promise((res, rej) => {
+    const tx = DB.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).put(obj);
+    req.onsuccess = () => res(req.result);
+    req.onerror   = () => rej(req.error);
+  });
+}
+
+// Limpieza raw de stores para restauración completa
+function dbClearStore(store) {
+  return new Promise((res, rej) => {
+    const tx = DB.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).clear();
+    req.onsuccess = () => res();
+    req.onerror   = () => rej(req.error);
+  });
+}
+
 // Borrado lógico para datos críticos — marca deletedAt en vez de borrar
 async function dbSoftDelete(store, key) {
   try {
