@@ -3,7 +3,7 @@
 **Proyecto:** PrestControl  
 **Stack:** Netlify + Firebase + GitHub + IndexedDB  
 **Última actualización:** 18/07/2026  
-**Estado general:** Etapa 11 completada y validada
+**Estado general:** Etapa 11 completada y validada / Etapa 12 planificada
 
 ---
 
@@ -571,6 +571,240 @@ La funcionalidad quedó validada en pruebas reales entre PC y celular, incluyend
 
 ---
 
+# ETAPA 12 — MÓDULO DE PRENDAS / EMPEÑOS
+
+**Estado:** PLANIFICADA / NO INICIADA
+
+## Objetivo general
+
+Crear un módulo independiente de Prendas/Empeños para administrar los bienes entregados como garantía, su relación con la operación crediticia, su ejecución, inventario, venta y resultado financiero.
+
+El módulo deberá quedar totalmente integrado con:
+
+- Clientes.
+- Préstamos.
+- Cuotas.
+- Firebase.
+- IndexedDB.
+- `sync_queue`.
+- Backup.
+- Restauración.
+- Bitácora.
+- Dashboard.
+
+La implementación deberá mantener una separación clara entre la entidad prenda, el préstamo que garantiza y los movimientos financieros derivados de su eventual ejecución o venta.
+
+## Modelo de datos previsto
+
+Cada prenda deberá contemplar, como mínimo, los siguientes campos:
+
+- `id`: identificador único y estable de la prenda.
+- `clienteId`: referencia al propietario o cliente asociado.
+- `prestamoId`: referencia al préstamo garantizado.
+- `descripcion`: descripción general del bien.
+- `categoria`: tipo o familia de la prenda.
+- `marca`: fabricante o marca comercial.
+- `modelo`: modelo del bien.
+- `numeroSerie` / `IMEI`: identificador único cuando corresponda.
+- `color`: color principal del bien.
+- `estadoFisico`: condición física al momento del ingreso y en revisiones posteriores.
+- `observaciones`: detalles adicionales, accesorios, faltantes o particularidades.
+- `valorEstimado`: valuación inicial de la prenda.
+- `precioPublicado`: precio definido para ofrecerla a la venta.
+- `precioVenta`: importe real de la venta.
+- `gastosEstimados`: gastos previstos para acondicionamiento, publicación, traslado u otros conceptos.
+- `gastosReales`: gastos efectivamente incurridos.
+- `valorNetoEstimado`: resultado estimado después de descontar gastos previstos.
+- `valorNetoReal`: resultado real después de descontar gastos efectivos.
+- `fechaIngreso`: fecha en que la prenda se recibe como garantía.
+- `fechaEjecucion`: fecha en que se ejecuta la garantía.
+- `fechaVenta`: fecha en que se concreta la venta.
+- `ubicacion`: ubicación física actual dentro del inventario.
+- `comprador`: datos identificatorios o referencia del comprador.
+- `fotos`: colección de referencias a imágenes de la prenda.
+- `estado`: estado operativo actual.
+- `createdAt`: fecha de creación del registro.
+- `updatedAt`: fecha de la última modificación.
+- `_deleted`: tombstone lógico para sincronización, backup y restauración.
+
+### Estados posibles
+
+- **En garantía:** vinculada a un préstamo vigente y bajo custodia.
+- **Liberada:** garantía liberada luego de regularizar o cancelar la obligación.
+- **Ejecutada:** garantía aplicada por incumplimiento del préstamo.
+- **En venta:** prenda ejecutada incorporada al inventario de venta.
+- **Vendida:** venta registrada y resultado financiero consolidado.
+- **Devuelta:** bien restituido al cliente.
+- **Cancelada:** registro anulado sin eliminar su trazabilidad.
+
+Los cambios de estado deberán validarse mediante transiciones permitidas y quedar registrados en la bitácora.
+
+## Relación con préstamos
+
+- Cada préstamo podrá tener una o varias prendas asociadas.
+- Cada prenda pertenecerá a un cliente y se vinculará con el préstamo específico que garantiza.
+- Desde la prenda deberá poder consultarse el cliente, el préstamo, las cuotas pagadas y las cuotas pendientes.
+- Desde el detalle del cliente y del préstamo deberá poder accederse a las prendas relacionadas.
+- El vínculo deberá conservarse aunque el préstamo se cierre, la prenda cambie de estado o alguno de los registros quede marcado con tombstone.
+- La liberación, devolución o ejecución de una prenda deberá respetar el estado financiero real del préstamo y requerir una acción explícita del usuario.
+
+## Ejecución de la prenda
+
+Al ejecutar un préstamo deberá generarse automáticamente un registro financiero inmutable o auditable que capture la situación exacta al momento de la ejecución:
+
+- Capital prestado.
+- Capital recuperado.
+- Interés cobrado.
+- Interés pendiente.
+- Cuotas pagadas.
+- Cuotas pendientes.
+- Saldo restante.
+- Valor estimado de la prenda.
+
+La ejecución deberá:
+
+- Registrar la fecha y el usuario responsable.
+- Cambiar el estado de la prenda a **Ejecutada**.
+- Conservar una instantánea de los importes para impedir que cambios posteriores alteren el resultado histórico.
+- Registrar el evento en la bitácora.
+- Encolar los cambios necesarios en `sync_queue`.
+- Permitir el paso posterior a **En venta**, sin registrar automáticamente una venta inexistente.
+
+## Venta
+
+La venta deberá registrar, como mínimo:
+
+- Precio publicado.
+- Precio vendido.
+- Gastos estimados y gastos reales.
+- Comprador.
+- Fecha de venta.
+- Observaciones.
+
+Al confirmar la venta se deberá actualizar el estado a **Vendida**, conservar el detalle de la operación, registrar el evento en la bitácora y sincronizarlo con los demás dispositivos. Una venta no deberá confundirse con el cobro de una cuota ni generar pagos ficticios sobre el préstamo.
+
+## Resultado financiero
+
+El módulo deberá calcular automáticamente:
+
+- Recuperación por cuotas.
+- Recuperación por venta.
+- Recuperación total.
+- Ganancia estimada.
+- Ganancia real.
+- Pérdida, si corresponde.
+
+Los cálculos deberán diferenciar claramente importes estimados de importes reales, evitar doble contabilización entre cuotas y venta, y conservar el detalle necesario para auditoría. Las fórmulas definitivas deberán documentarse y validarse antes de incorporarlas a las métricas globales.
+
+## Inventario
+
+Crear una vista independiente denominada **Prendas**, con:
+
+- Listado general de prendas.
+- Filtros por estado, categoría, fecha, cliente, préstamo y ubicación.
+- Búsqueda por descripción, marca, modelo, número de serie, IMEI, cliente o préstamo.
+- Acceso rápido al cliente relacionado.
+- Acceso rápido al préstamo relacionado.
+- Visualización de fotos.
+- Cambio de estado mediante acciones controladas.
+- Indicadores de valuación, precio publicado, precio de venta y resultado.
+- Diseño responsive para PC y celular.
+
+La vista deberá distinguir claramente las prendas en garantía del inventario ejecutado disponible para venta.
+
+## Dashboard futuro
+
+Agregar, en una fase posterior y solo después de validar los cálculos del módulo, métricas para:
+
+- Prendas en garantía.
+- Prendas ejecutadas.
+- Prendas en venta.
+- Prendas vendidas.
+- Valor total del inventario.
+- Recuperación estimada.
+- Recuperación real.
+- Ganancias por ventas.
+- Pérdidas.
+
+Las métricas deberán permitir acceder al detalle que origina cada total y no deberán modificar las métricas financieras actuales hasta completar su validación funcional y contable.
+
+## Integración técnica y compatibilidad
+
+El módulo deberá ser compatible con:
+
+- Sincronización entre dispositivos mediante el flujo vigente de Firebase e IndexedDB.
+- Operación offline y publicación posterior mediante `sync_queue`.
+- Bloqueo de escrituras durante `restorePending`.
+- Backup JSON, incluyendo registros activos y tombstones.
+- Restauración completa `backup → IndexedDB → Firebase`.
+- Previsualización, validación e importación de respaldos.
+- Firebase y sus reglas de acceso por usuario.
+- Bitácora de altas, ediciones, cambios de estado, ejecución, venta, devolución y cancelación.
+- Auditoría de datos, transiciones, cálculos y convergencia entre dispositivos.
+- Reparación de sincronización local desde Firebase.
+
+La entidad deberá usar identificadores estables, `createdAt`, `updatedAt`, `_deleted` y `deletedAt` cuando corresponda, sin depender exclusivamente de borrados físicos. Las escrituras deberán seguir las mismas garantías de convergencia y protección ya establecidas para clientes, préstamos y cuotas.
+
+## Plan de implementación
+
+El desarrollo se dividirá en fases pequeñas, verificables y acumulativas:
+
+### Fase 1 — Entidad Prendas
+
+- Definir esquema, estados y transiciones válidas.
+- Crear persistencia en IndexedDB.
+- Incorporar sincronización Firebase, `sync_queue`, tombstones y bitácora.
+- Integrar la entidad con backup, importación, restauración y `restorePending`.
+- Validar altas, ediciones, bajas lógicas, operación offline y convergencia entre dispositivos.
+
+### Fase 2 — Integración con préstamos
+
+- Permitir una o varias prendas por préstamo.
+- Vincular cliente, préstamo y resumen de cuotas.
+- Agregar accesos cruzados desde Cliente, Préstamo y Prenda.
+- Definir liberación, devolución y restricciones según el estado del préstamo.
+
+### Fase 3 — Inventario
+
+- Crear la vista independiente **Prendas**.
+- Implementar listado, filtros, búsqueda, fotos, ubicación y acciones por estado.
+- Adaptar la experiencia a PC y celular.
+
+### Fase 4 — Ejecución
+
+- Implementar la acción controlada de ejecución.
+- Generar la instantánea financiera del préstamo.
+- Registrar transición de estado, bitácora y sincronización.
+- Validar que la ejecución no cree cobros ni ventas ficticias.
+
+### Fase 5 — Venta
+
+- Registrar publicación, venta, gastos, comprador, fecha y observaciones.
+- Calcular valores netos estimados y reales.
+- Consolidar el estado **Vendida** con trazabilidad completa.
+
+### Fase 6 — Informes financieros
+
+- Calcular recuperación por cuotas, por venta y total.
+- Calcular ganancia estimada, ganancia real y pérdida.
+- Crear informes detallados y auditables sin doble contabilización.
+- Validar las fórmulas con casos reales antes de exponer resultados globales.
+
+### Fase 7 — Dashboard
+
+- Incorporar las métricas de prendas e inventario ya validadas.
+- Agregar accesos desde cada indicador hacia su detalle.
+- Verificar consistencia entre Dashboard, informes, inventario y datos sincronizados.
+
+## Criterios generales de desarrollo
+
+- Cada fase deberá cerrarse con pruebas funcionales locales, offline/online y entre PC y celular antes de comenzar la siguiente.
+- No se avanzará a cálculos financieros o Dashboard sin validar previamente persistencia, sincronización, restauración y trazabilidad.
+- Las operaciones sensibles deberán requerir confirmación explícita y respetar el modo solo lectura.
+- La etapa será desarrollada sin romper la compatibilidad con las etapas anteriores ni alterar los flujos actuales de clientes, préstamos, cuotas, backup, restauración y sincronización.
+
+---
+
 # PENDIENTES NUEVOS / FUTUROS
 
 ## Comprobantes profesionales
@@ -605,18 +839,12 @@ Calcular riesgo bajo / medio / alto según historial real del cliente.
 
 Mostrar: habilitados, bloqueados, atrasados, sin deuda y con crédito activo.
 
-## Empeños
-**Estado:** PENDIENTE FUTURO
-
-Crear módulo propio de empeños: prenda, tasación, dueño / cliente, valor prestado, préstamo asociado, estado, vencimiento y acciones.
-
----
-
 # ESTADO ACTUAL
 
 **Etapa actual:** ETAPA 11 — Restauración completa y sincronización entre dispositivos — COMPLETADA
 **Último bloque cerrado:** ETAPA 11 — Restauración completa y sincronización entre dispositivos
 **Validación:** Pruebas reales PC ↔ celular y offline ↔ online completadas correctamente
+**Próxima etapa planificada:** ETAPA 12 — Módulo de Prendas / Empeños — NO INICIADA
 
 ---
 
