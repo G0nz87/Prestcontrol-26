@@ -40,6 +40,7 @@ export function openSheetPrestamo(clientePreseleccionadoId = null) {
 }
 
 export async function savePrestamo() {
+  if (await window.bloquearEscrituraPorRestorePending?.()) return;
   const clienteId = document.getElementById('pre-cliente').value;
   const montoRaw  = document.getElementById('pre-monto').value;
   const interesRaw= document.getElementById('pre-interes').value;
@@ -224,6 +225,7 @@ export function calcularPreviewRenovacion() {
 }
 
 export async function confirmarRenovacionPrestamo() {
+  if (await window.bloquearEscrituraPorRestorePending?.()) return;
   const btn = document.getElementById('ren-save');
   const prestamoOrigenId = window._renovacionPrestamoId;
   if (!prestamoOrigenId || btn?.disabled) return;
@@ -429,6 +431,7 @@ export function selMotivo(motivo) {
 }
 
 export async function confirmarBorrarPrestamoFinal() {
+  if (await window.bloquearEscrituraPorRestorePending?.()) return;
   const id       = window._deletePrestamoId;
   const motivo   = window._deletePrestamoMotivo;
   const pass     = document.getElementById('dp-pass').value;

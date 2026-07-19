@@ -28,6 +28,7 @@ export async function editarCliente(id) {
 }
 
 export async function saveCliente() {
+  if (await window.bloquearEscrituraPorRestorePending?.()) return;
   const nombre   = document.getElementById('cli-nombre').value.trim();
   const dni      = document.getElementById('cli-dni').value.trim();
   const telefono = document.getElementById('cli-tel').value.trim();
@@ -108,6 +109,7 @@ export async function confirmarBorrarCliente(id) {
 }
 
 export async function borrarCliente(id) {
+  if (await window.bloquearEscrituraPorRestorePending?.()) return;
   const confirmacion = document.getElementById('del-confirm-text')?.value.trim().toUpperCase();
   if (confirmacion !== 'ELIMINAR') {
     window.toast('Escribí ELIMINAR para confirmar');

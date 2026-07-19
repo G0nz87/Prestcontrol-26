@@ -1621,6 +1621,34 @@ async function setConfig(key, value) {
   await dbPut('config', { key, value });
 }
 
+async function hayRestauracionLocalPendiente() {
+  const estado = await getConfig('restorePending');
+  return !!(estado && estado.active);
+}
+
+async function limpiarRestorePending() {
+  await setConfig('restorePending', { active: false, clearedAt: new Date().toISOString() });
+}
+
+async function bloquearSyncPorRestorePending() {
+  if (await hayRestauracionLocalPendiente()) {
+    toast('⚠️ Hay una restauración local pendiente. Elegí primero si querés subirla a Firebase o cancelarla.');
+    driveSetStatus('err', 'Restauración local aplicada. Firebase no se sincronizó todavía.');
+    return true;
+  }
+  return false;
+}
+
+async function bloquearEscrituraPorRestorePending() {
+  if (await hayRestauracionLocalPendiente()) {
+    toast('⚠️ Hay una restauración local pendiente. Solo podés revisar datos, reintentar publicación o cancelar la restauración.');
+    driveSetStatus('err', 'Modo solo lectura por restauración pendiente.');
+    return true;
+  }
+  return false;
+}
+window.bloquearEscrituraPorRestorePending = bloquearEscrituraPorRestorePending;
+
 // Config global (independiente del usuario — para lista de usuarios)
 function globalDbGet(store, key) {
   return new Promise((res, rej) => {
@@ -1691,6 +1719,10 @@ let _syncProcessing = false;
 
 async function addToSyncQueue(store, recordId, payload, operation = 'upsert') {
   if (!DB) return;
+  if (await hayRestauracionLocalPendiente()) {
+    driveSetStatus('err', 'Modo solo lectura por restauración pendiente.');
+    return;
+  }
   try {
     const opId = `sq_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
     const entry = {
@@ -1921,6 +1953,7 @@ async function buscarCuotasDuplicadas() {
 }
 
 async function ejecutarLimpiezaDuplicadas(ids) {
+  if (await bloquearEscrituraPorRestorePending()) return;
   if (!Array.isArray(ids) || ids.length === 0) return;
   closeSheet();
   toast('⏳ Limpiando duplicadas...');
@@ -2471,7 +2504,24 @@ async function renderPage(id) {
     case 'historial' : await renderHistorial();  break;
     case 'cobros'    : await renderCobros();     break;
   }
+  await renderRestorePendingReadonlyBanner(id);
   await updateAlertasBadge();
+}
+
+async function renderRestorePendingReadonlyBanner(id) {
+  if (id === 'config') return;
+  if (!(await hayRestauracionLocalPendiente())) return;
+  const el = document.getElementById('pg-' + id);
+  if (!el) return;
+  el.insertAdjacentHTML('afterbegin', `
+    <div class="form-alert is-warning" style="margin-bottom:12px;line-height:1.6">
+      <b>⚠️ Modo solo lectura por restauración pendiente.</b><br>
+      Podés revisar datos, pero no registrar pagos ni hacer cambios hasta reintentar la publicación en Firebase o cancelar la restauración.
+      <div style="margin-top:10px">
+        <button class="btn btn-ghost btn-full" onclick="goPage('config')">Ir a Configuración</button>
+      </div>
+    </div>
+  `);
 }
 
 function toggleMasMenu() {
@@ -3154,6 +3204,7 @@ async function renderCobros() {
   const hoy = today();
   const prestamosPorId = prestamosMap(prestamos);
   window.marcarTodasCobrosHoy = async function() {
+    if (await bloquearEscrituraPorRestorePending()) return;
     const cuotasActuales = await dbAll('cuotas');
     const prestamosActuales = await dbAll('prestamos');
     const mapaPrestamos = prestamosMap(prestamosActuales);
@@ -3252,6 +3303,7 @@ async function renderHoy() {
 }
 
 async function marcarTodasHoy() {
+  if (await bloquearEscrituraPorRestorePending()) return;
   const [cuotas, prestamos] = await Promise.all([dbAll('cuotas'), dbAll('prestamos')]);
   const hoy = today();
   const prestamosPorId = prestamosMap(prestamos);
@@ -4146,6 +4198,7 @@ async function renderConfig() {
   const notifSoportada = 'Notification' in window;
   const notifPerm = notifSoportada ? Notification.permission : 'unsupported';
   const authCred = await authGetCred();
+  const restorePendingActivo = await hayRestauracionLocalPendiente();
 
   el.innerHTML = `<div class="fadeIn">
     <div class="cfg-section">🔔 Notificaciones del sistema</div>
@@ -4221,6 +4274,16 @@ async function renderConfig() {
       <div style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.6">
         Tus datos se sincronizan automáticamente con Firebase. Ingresá desde cualquier dispositivo con el mismo usuario y contraseña.
       </div>
+      ${restorePendingActivo ? `
+      <div class="form-alert is-warning" style="margin-bottom:12px;line-height:1.6">
+        <b>⚠️ Restauración local pendiente</b><br>
+        La copia de seguridad fue restaurada en este dispositivo.<br>
+        Firebase no se sincronizó todavía para evitar que los datos remotos vuelvan a pisar esta restauración.
+        <div style="display:grid;grid-template-columns:1fr;gap:8px;margin-top:12px">
+          <button class="btn btn-ghost btn-full" onclick="cancelarRestauracionLocal()">↩ Cancelar restauración y volver a sincronizar</button>
+          <button class="btn btn-ghost btn-full" onclick="reintentarPublicacionRestauracionFirebase()">🔄 Reintentar publicación en Firebase</button>
+        </div>
+      </div>` : ''}
       <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;margin-bottom:12px">
         Estado: <span id="cfg-drive-estado">⚪ Verificando...</span>
       </div>
@@ -4403,7 +4466,7 @@ async function openClienteDetail(id, opciones = {}) {
   // Scoring automático basado en comportamiento real de pagos
   const scoring = calcularScoring(misCuotas);
   // Auto-actualizar riesgo si tiene historial
-  if (scoring.autoRiesgo && scoring.autoRiesgo !== cliente.riesgo && misCuotas.length >= 3) {
+  if (scoring.autoRiesgo && scoring.autoRiesgo !== cliente.riesgo && misCuotas.length >= 3 && !(await hayRestauracionLocalPendiente())) {
     cliente.riesgo = scoring.autoRiesgo;
     await dbPut('clientes', { ...cliente, riesgo: scoring.autoRiesgo });
   }
@@ -4798,6 +4861,7 @@ async function abrirEdicionPrestamoInformativa(id) {
 }
 
 async function guardarEdicionPrestamo() {
+  if (await bloquearEscrituraPorRestorePending()) return;
   const id = _editarPrestamoId;
   const errEl = document.getElementById('edit-pre-error');
   const btn = document.getElementById('edit-pre-save');
@@ -5125,6 +5189,7 @@ function calcPreview() {
    PAGO DE CUOTA
 ===================================================== */
 async function abrirPago(cuotaId) {
+  if (await bloquearEscrituraPorRestorePending()) return;
   const c = await dbGet('cuotas', cuotaId);
   if (!c) { toast('Cuota no encontrada'); return; }
   if (c.estado === 'Pagado') { toast('ℹ️ Ya está pagada'); return; }
@@ -5141,6 +5206,10 @@ function marcarPagada(cuotaId) {
 }
 
 async function confirmarPago(metodo) {
+  if (await bloquearEscrituraPorRestorePending()) {
+    closeSheet();
+    return;
+  }
   const cuotaId  = document.getElementById('pago-cuota-id').value;
   const fechaPago = document.getElementById('pago-fecha').value;
   const c = await dbGet('cuotas', cuotaId);
@@ -5298,6 +5367,7 @@ function mostrarOpcionRecibo(cuotaId) {
 }
 
 async function syncEstadoPrestamo(prestamoId) {
+  if (await hayRestauracionLocalPendiente()) return;
   const [prestamo, cuotas] = await Promise.all([
     dbGet('prestamos', prestamoId), dbAll('cuotas')
   ]);
@@ -5943,6 +6013,7 @@ async function exportarPDF() {
    WHATSAPP
 ===================================================== */
 async function saveWhatsApp() {
+  if (await bloquearEscrituraPorRestorePending()) return;
   const phone  = document.getElementById('wa-phone').value.trim().replace(/[\s+\-()]/g,'');
   const apikey = document.getElementById('wa-apikey').value.trim();
   if (!phone || !apikey) { toast('⚠️ Ingresá teléfono y API Key'); return; }
@@ -6082,6 +6153,10 @@ async function exportarBackup() {
 }
 
 async function importarBackup(input) {
+  if (await bloquearEscrituraPorRestorePending()) {
+    input.value = '';
+    return;
+  }
   const file = input.files[0]; if (!file) return;
   const text = await file.text();
   try {
@@ -6205,8 +6280,8 @@ async function restaurarBackupCompletoPreview(input) {
     const preview = [
       'Restaurar Backup Completo JSON',
       '',
-      '⚠️ Esta acción reemplazará los datos locales por los del backup.',
-      'En esta versión SOLO se valida y previsualiza: no se aplicará la restauración.',
+      '⚠️ Esta acción reemplazará los datos actuales por los del respaldo y publicará ese estado en Firebase.',
+      'Los demás dispositivos vinculados también recibirán esta restauración.',
       '',
       `Archivo: ${file.name}`,
       `Fecha del backup: ${fechaTexto}`,
@@ -6234,22 +6309,306 @@ async function restaurarBackupCompletoPreview(input) {
       return;
     }
 
-    const confirmacion = prompt('Para confirmar la validación, escribí RESTAURAR.\n\nNo se restaurará nada todavía.');
+    const confirmacion = prompt('Para confirmar la restauración completa, escribí RESTAURAR.\n\nEsta acción reemplazará los datos actuales por los del respaldo y publicará ese estado en Firebase. Los demás dispositivos vinculados también recibirán esta restauración.');
     if (confirmacion !== 'RESTAURAR') {
       toast('ℹ️ Restauración completa cancelada');
       input.value = '';
       return;
     }
 
-    const mensaje = 'Validación correcta. Restauración completa todavía no aplicada en esta versión.';
-    toast('✅ ' + mensaje);
-    alert(mensaje);
+    try {
+      await aplicarRestauracionBackupCompleto(data);
+      const plan = await construirPlanSubidaRestauracionFirebase();
+      await publicarRestauracionFirebaseDesdePlan(plan);
+      await limpiarRestorePending();
+      iniciarSyncRealtime();
+      driveSetStatus('ok', 'Restauración completa publicada en Firebase.');
+      await renderPage('dashboard');
+      toast('✅ Restauración completa finalizada. Firebase y los demás dispositivos se actualizarán con esta copia.');
+    } catch(errorAplicacion) {
+      console.error('No se pudo aplicar la restauración completa:', errorAplicacion);
+      if (await hayRestauracionLocalPendiente()) {
+        driveSetStatus('err', 'Restauración local aplicada. Firebase no se sincronizó todavía.');
+        toast('❌ La restauración local se aplicó, pero no pudo publicarse en Firebase. Reintentá cuando tengas conexión.');
+      } else {
+        toast('❌ ' + (errorAplicacion?.message || 'No se pudo aplicar la restauración completa'));
+      }
+      input.value = '';
+      return;
+    }
   } catch(e) {
     console.error('No se pudo validar el backup completo:', e);
     toast('❌ Error al leer el archivo. Verificá que sea un backup válido.');
   }
 
   input.value = '';
+}
+
+async function aplicarRestauracionBackupCompleto(data) {
+  const error = validarBackupCompletoPreview(data);
+  if (error) {
+    toast('❌ ' + error);
+    throw new Error(error);
+  }
+
+  if (!DB || !appDesbloqueada) {
+    const msg = 'Ingresá a PrestControl para restaurar un respaldo';
+    toast('⚠️ ' + msg);
+    throw new Error(msg);
+  }
+
+  const pending = await getSyncQueuePending();
+  if (pending.length > 0) {
+    const msg = `Hay ${pending.length} operación${pending.length !== 1 ? 'es' : ''} pendiente${pending.length !== 1 ? 's' : ''} de sincronizar. Guardá ahora antes de restaurar.`;
+    toast('⚠️ ' + msg);
+    throw new Error(msg);
+  }
+
+  detenerSyncRealtime();
+  clearInterval(driveSyncTimer);
+  clearTimeout(_syncDebounce);
+  drivePendingSync = false;
+
+  for (const store of ['clientes', 'prestamos', 'cuotas', 'bitacora']) {
+    await dbClearStore(store);
+  }
+
+  for (const cliente of data.clientes) {
+    await dbPutRaw('clientes', cliente);
+  }
+  for (const prestamo of data.prestamos) {
+    await dbPutRaw('prestamos', prestamo);
+  }
+  for (const cuota of data.cuotas) {
+    await dbPutRaw('cuotas', cuota);
+  }
+  for (const entrada of (Array.isArray(data.bitacora) ? data.bitacora : [])) {
+    await dbPutRaw('bitacora', entrada);
+  }
+
+  const telefonoWA = data.configuracion?.whatsappTelefono;
+  if (telefonoWA) {
+    await setConfig('waPhone', telefonoWA);
+  }
+
+  await autoUpdateEstados();
+  await updateBadges();
+  await renderPage('dashboard');
+  await setConfig('restorePending', {
+    active: true,
+    createdAt: new Date().toISOString(),
+    backupFecha: data.fecha || null
+  });
+  toast('Restauración local completada. Revisá los datos antes de sincronizar.');
+}
+
+async function cancelarRestauracionLocal() {
+  if (!confirm('Esto descartará la restauración local como verdad y volverá a sincronizar con Firebase. Los datos remotos pueden reaparecer.')) {
+    return;
+  }
+
+  await limpiarRestorePending();
+  driveSetStatus('syncing', 'Sincronizando con Firebase...');
+  await _pullFromFirebase();
+  iniciarSyncRealtime();
+  await renderPage('dashboard');
+  toast('Restauración local cancelada. Firebase volvió a sincronizar.');
+}
+
+function construirPlanStoreSubidaRestauracion(locales, remotos) {
+  const localMap = new Map((locales || []).filter(r => r?.id).map(r => [r.id, r]));
+  const remotoMap = new Map((remotos || []).filter(r => r?.id).map(r => [r.id, r]));
+  return {
+    plan: {
+      subir: [...localMap.values()],
+      sobrantesRemotos: [...remotoMap.values()].filter(r => !localMap.has(r.id))
+    },
+    localTotal: localMap.size,
+    remotoTotal: remotoMap.size
+  };
+}
+
+async function construirPlanSubidaRestauracionFirebase() {
+  if (!(await hayRestauracionLocalPendiente())) {
+    throw new Error('No hay una restauración local pendiente para subir.');
+  }
+  if (!_fbUser || !_fbDb) {
+    throw new Error('No hay usuario Firebase conectado.');
+  }
+
+  const [localClientes, localPrestamos, localCuotas, fbClientes, fbPrestamos, fbCuotas] = await Promise.all([
+    dbAllIncludeDeleted('clientes'),
+    dbAllIncludeDeleted('prestamos'),
+    dbAllIncludeDeleted('cuotas'),
+    fbObtenerTodos('clientes'),
+    fbObtenerTodos('prestamos'),
+    fbObtenerTodos('cuotas')
+  ]);
+
+  const clientes = construirPlanStoreSubidaRestauracion(localClientes, fbClientes);
+  const prestamos = construirPlanStoreSubidaRestauracion(localPrestamos, fbPrestamos);
+  const cuotas = construirPlanStoreSubidaRestauracion(localCuotas, fbCuotas);
+
+  return {
+    clientes: clientes.plan,
+    prestamos: prestamos.plan,
+    cuotas: cuotas.plan,
+    resumen: {
+      clientesSubir: clientes.plan.subir.length,
+      clientesEliminar: clientes.plan.sobrantesRemotos.length,
+      prestamosSubir: prestamos.plan.subir.length,
+      prestamosEliminar: prestamos.plan.sobrantesRemotos.length,
+      cuotasSubir: cuotas.plan.subir.length,
+      cuotasEliminar: cuotas.plan.sobrantesRemotos.length,
+      clientesLocal: clientes.localTotal,
+      clientesFirebase: clientes.remotoTotal,
+      prestamosLocal: prestamos.localTotal,
+      prestamosFirebase: prestamos.remotoTotal,
+      cuotasLocal: cuotas.localTotal,
+      cuotasFirebase: cuotas.remotoTotal
+    }
+  };
+}
+
+function crearTombstoneRestauracion(remoto, fecha) {
+  return {
+    id: remoto.id,
+    _deleted: true,
+    deletedAt: fecha,
+    updatedAt: fecha,
+    userId: _fbUser.uid
+  };
+}
+
+async function publicarRestauracionFirebaseDesdePlan(plan) {
+  if (!(await hayRestauracionLocalPendiente())) {
+    throw new Error('No hay una restauracion local pendiente para publicar.');
+  }
+  if (!_fbUser || !_fbDb) {
+    throw new Error('No hay usuario Firebase conectado.');
+  }
+  if (!plan || typeof plan !== 'object') {
+    throw new Error('Plan de restauracion invalido.');
+  }
+
+  const stores = ['clientes', 'prestamos', 'cuotas'];
+  const fecha = new Date().toISOString();
+  const operaciones = [];
+
+  for (const store of stores) {
+    const bloque = plan[store] || {};
+    for (const item of (bloque.subir || [])) {
+      if (!item?.id) continue;
+      operaciones.push({
+        ref: _userDoc(store, item.id),
+        data: { ...item, userId: _fbUser.uid },
+        options: { merge: false }
+      });
+    }
+    for (const remoto of (bloque.sobrantesRemotos || [])) {
+      if (!remoto?.id) continue;
+      operaciones.push({
+        ref: _userDoc(store, remoto.id),
+        data: crearTombstoneRestauracion(remoto, fecha),
+        options: { merge: false }
+      });
+    }
+  }
+
+  const totalOps = operaciones.length;
+  let committedOps = 0;
+  const batchSize = 400;
+
+  for (let i = 0; i < operaciones.length; i += batchSize) {
+    const batch = _fbDb.batch();
+    const grupo = operaciones.slice(i, i + batchSize);
+    for (const op of grupo) {
+      batch.set(op.ref, op.data, op.options);
+    }
+    await batch.commit();
+    committedOps += grupo.length;
+  }
+
+  if (committedOps !== totalOps) {
+    throw new Error(`Publicacion incompleta: ${committedOps}/${totalOps} operaciones confirmadas.`);
+  }
+
+  return { totalOps, committedOps };
+}
+
+async function reintentarPublicacionRestauracionFirebase() {
+  try {
+    if (!(await hayRestauracionLocalPendiente())) {
+      toast('ℹ️ No hay una restauración local pendiente.');
+      return;
+    }
+
+    driveSetStatus('syncing', 'Publicando restauración en Firebase...');
+    const plan = await construirPlanSubidaRestauracionFirebase();
+    await publicarRestauracionFirebaseDesdePlan(plan);
+    await limpiarRestorePending();
+    iniciarSyncRealtime();
+    await renderPage('dashboard');
+    driveSetStatus('ok', 'Restauración completa publicada en Firebase.');
+    toast('✅ Restauración completa finalizada. Firebase y los demás dispositivos se actualizarán con esta copia.');
+  } catch(e) {
+    console.error('No se pudo reintentar la publicación de la restauración:', e);
+    driveSetStatus('err', 'Restauración local aplicada. Firebase no se sincronizó todavía.');
+    toast('❌ La restauración local se aplicó, pero no pudo publicarse en Firebase. Reintentá cuando tengas conexión.');
+  }
+}
+
+async function previsualizarSubidaRestauracionFirebase() {
+  try {
+    driveSetStatus('syncing', 'Comparando restauración local con Firebase...');
+    const plan = await construirPlanSubidaRestauracionFirebase();
+    const { resumen } = plan;
+
+    const preview = [
+      'Subir restauración a Firebase',
+      '',
+      'Esta acción hará que Firebase tome como referencia los datos restaurados en esta PC.',
+      'En esta versión SOLO se previsualiza: no se aplicarán cambios en Firebase.',
+      '',
+      'Local restaurado:',
+      `• Clientes: ${resumen.clientesLocal}`,
+      `• Préstamos: ${resumen.prestamosLocal}`,
+      `• Cuotas: ${resumen.cuotasLocal}`,
+      '',
+      'Firebase actual:',
+      `• Clientes: ${resumen.clientesFirebase}`,
+      `• Préstamos: ${resumen.prestamosFirebase}`,
+      `• Cuotas: ${resumen.cuotasFirebase}`,
+      '',
+      'Se subirán/actualizarán:',
+      `• Clientes: ${resumen.clientesSubir}`,
+      `• Préstamos: ${resumen.prestamosSubir}`,
+      `• Cuotas: ${resumen.cuotasSubir}`,
+      '',
+      'Se marcarán como eliminados en Firebase:',
+      `• Clientes: ${resumen.clientesEliminar}`,
+      `• Préstamos: ${resumen.prestamosEliminar}`,
+      `• Cuotas: ${resumen.cuotasEliminar}`,
+      '',
+      '¿Querés continuar con la previsualización?'
+    ].join('\n');
+
+    if (!confirm(preview)) return;
+
+    const confirmacion = prompt('Para confirmar la previsualización, escribí SUBIR RESTAURACION.\n\nNo se aplicarán cambios en Firebase todavía.');
+    if (confirmacion !== 'SUBIR RESTAURACION') {
+      toast('ℹ️ Subida de restauración cancelada');
+      return;
+    }
+
+    toast('✅ Previsualización correcta. La subida real a Firebase todavía no se aplicó.');
+    alert('Previsualización correcta. La subida real a Firebase todavía no se aplicó.');
+    driveSetStatus('err', 'Restauración local aplicada. Firebase no se sincronizó todavía.');
+  } catch(e) {
+    console.error('No se pudo previsualizar la subida a Firebase:', e);
+    toast('❌ No se pudo previsualizar la subida a Firebase.');
+    driveSetStatus('err', firebaseErrorMessage(e));
+  }
 }
 
 /* =====================================================
@@ -6526,6 +6885,10 @@ async function _entrarALaApp(username, password, usuarioObj) {
   // Sync inicial en segundo plano (no bloquea la UI)
   setTimeout(async () => {
     if (!_fbUser || !navigator.onLine) return;
+    if (await hayRestauracionLocalPendiente()) {
+      driveSetStatus('err', 'Restauración local aplicada. Firebase no se sincronizó todavía.');
+      return;
+    }
     await _pullFromFirebase();
     await _pushToFirebase();
     // Iniciar listeners en tiempo real
@@ -6612,6 +6975,7 @@ function verificarMaestra() { openReset(); }
 async function guardarNuevasCred() { closeReset(); }
 
 async function guardarSeguridad() {
+  if (await bloquearEscrituraPorRestorePending()) return;
   const passActual = document.getElementById('sec-pass-actual').value;
   const newUser    = document.getElementById('sec-user').value.trim();
   const newPass    = document.getElementById('sec-pass').value;
@@ -7671,6 +8035,7 @@ function _serviceFor(colName) {
 
 async function fbGuardar(colName, id, data) {
   if (!_fbUser) return;
+  if (await bloquearSyncPorRestorePending()) return;
   const service = _serviceFor(colName);
   if (service) return service.save({ ...data, id });
   await _userDoc(colName, id).set(
@@ -7681,6 +8046,7 @@ async function fbGuardar(colName, id, data) {
 
 async function fbEliminar(colName, id) {
   if (!_fbUser) return;
+  if (await bloquearSyncPorRestorePending()) return;
   const service = _serviceFor(colName);
   if (service) return service.delete(id);
   await _userDoc(colName, id).set(
@@ -7700,6 +8066,7 @@ async function fbObtenerTodos(colName) {
 // ── SYNC: subir datos locales a Firebase ──────────────
 async function _pushToFirebase() {
   if (!_fbUser) return;
+  if (await bloquearSyncPorRestorePending()) return;
 
   // OPTIMIZACIÓN: Solo subir lo que está en sync_queue (cambios pendientes)
   // En vez de subir TODOS los clientes/prestamos/cuotas, subimos solo los IDs modificados
@@ -7872,6 +8239,7 @@ async function _pullFromFirebase() {
 }
 
 async function repararSyncLocalDesdeFirebase() {
+  if (await bloquearEscrituraPorRestorePending()) return;
   if (!_fbUser || !_fbDb) {
     toast('⚠️ Firebase no está conectado');
     return;
@@ -7940,14 +8308,21 @@ async function repararSyncLocalDesdeFirebase() {
   alert(msg);
 }
 
-async function driveSave()     { await _pushToFirebase(); }
+async function driveSave() {
+  if (await bloquearSyncPorRestorePending()) return;
+  await _pushToFirebase();
+}
 async function driveLoad()     { return null; }
 async function driveAutoSync() {
+  if (await bloquearSyncPorRestorePending()) return;
   await _pullFromFirebase();
   await _pushToFirebase();
 }
 async function driveConectar()     { toast('ℹ️ Usamos Firebase'); }
-async function driveGuardarAhora() { await _pushToFirebase(); }
+async function driveGuardarAhora() {
+  if (await bloquearSyncPorRestorePending()) return;
+  await _pushToFirebase();
+}
 async function driveGetToken()     { return _fbUser ? 'firebase' : null; }
 async function driveAuth()         { return _fbUser ? 'firebase' : null; }
 
@@ -7959,13 +8334,15 @@ function scheduleDriveSync() {
     if (curPage === 'dashboard') renderDashboard();
   }
   clearTimeout(_syncDebounce);
-  _syncDebounce = setTimeout(() => {
+  _syncDebounce = setTimeout(async () => {
+    if (await bloquearSyncPorRestorePending()) return;
     if (appDesbloqueada && navigator.onLine && _fbUser) _pushToFirebase();
   }, 500);
 }
 
 // Push inmediato (sin debounce) — para acciones críticas como pagar cuotas
 async function pushInmediato() {
+  if (await bloquearSyncPorRestorePending()) return;
   if (appDesbloqueada && navigator.onLine && _fbUser) {
     clearTimeout(_syncDebounce);
     drivePendingSync = true;
@@ -7973,7 +8350,10 @@ async function pushInmediato() {
   }
 }
 
-window.addEventListener('online',  () => { if (_fbUser && drivePendingSync) _pushToFirebase(); });
+window.addEventListener('online',  async () => {
+  if (await bloquearSyncPorRestorePending()) return;
+  if (_fbUser && drivePendingSync) _pushToFirebase();
+});
 window.addEventListener('offline', () => driveSetStatus('err', 'Sin internet — modo offline'));
 
 // ── AUTENTICACIÓN FIREBASE ────────────────────────────
@@ -8043,6 +8423,7 @@ async function fbActualizarCredenciales(newUsername, newPassword) {
 
 // Llamado tras login normal
 async function sincronizarConServidor(username, password) {
+  if (await bloquearSyncPorRestorePending()) return;
   if (!navigator.onLine) {
     driveSetStatus('err', 'Sin internet — modo offline');
     return;
@@ -8200,6 +8581,10 @@ function detenerSyncRealtime() {
 ===================================================== */
 // Carga y guarda la foto en Firestore como base64
 async function subirFotoPerfil(input) {
+  if (await bloquearEscrituraPorRestorePending()) {
+    input.value = '';
+    return;
+  }
   if (!input.files?.[0]) return;
   const file = input.files[0];
   if (file.size > 500 * 1024) { toast('⚠️ La foto debe pesar menos de 500 KB'); return; }
@@ -8395,9 +8780,13 @@ async function init() {
   iniciarWatchdogInactividad();
 
   // Sincronizar al volver a la pestaña/app (cambio de dispositivo)
-  document.addEventListener('visibilitychange', () => {
+  document.addEventListener('visibilitychange', async () => {
     if (document.hidden) detenerComandosVoz();
     if (!document.hidden && appDesbloqueada && _fbUser) {
+      if (await hayRestauracionLocalPendiente()) {
+        driveSetStatus('err', 'Restauración local aplicada. Firebase no se sincronizó todavía.');
+        return;
+      }
       _pullFromFirebase().then(() => {
         if (drivePendingSync) driveSave();
       });
@@ -8439,6 +8828,7 @@ async function init() {
 
 async function autoUpdateEstados() {
   if (!DB) return;
+  if (await hayRestauracionLocalPendiente()) return;
   const cuotas = await dbAll('cuotas');
   const hoy = today();
   for (const c of cuotas) {
