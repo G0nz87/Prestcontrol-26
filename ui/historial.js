@@ -8,8 +8,8 @@ export async function renderHistorial() {
   el.innerHTML = '<div class="loader"><div class="spin"></div></div>';
 
   // Incluir eliminados para que el historial no se rompa al borrar préstamos
-  const [prestamos, cuotas] = await Promise.all([
-    window.dbAllIncludeDeleted('prestamos'), window.dbAllIncludeDeleted('cuotas')
+  const [prestamos, cuotas, pagosCuota] = await Promise.all([
+    window.dbAllIncludeDeleted('prestamos'), window.dbAllIncludeDeleted('cuotas'), window.dbAllIncludeDeleted('pagos_cuota')
   ]);
 
   el.innerHTML = `<div class="fadeIn">
@@ -17,7 +17,7 @@ export async function renderHistorial() {
       <button class="dtab ${histPeriodo==='mes'?'on':''}" onclick="switchHistPeriodo('mes')">📅 Por Mes</button>
       <button class="dtab ${histPeriodo==='semana'?'on':''}" onclick="switchHistPeriodo('semana')">📆 Por Semana</button>
     </div>
-    <div id="hist-body">${buildHistorial(prestamos, cuotas)}</div>
+    <div id="hist-body">${buildHistorial(prestamos, cuotas, pagosCuota)}</div>
   </div>`;
 }
 
@@ -26,7 +26,8 @@ export function switchHistPeriodo(p) {
   renderHistorial();
 }
 
-export function buildHistorial(prestamos, cuotas) {
+export function buildHistorial(prestamos, cuotas, pagosCuota = []) {
+  const prestamosPorId = new Map(prestamos.map(prestamo => [prestamo.id, prestamo]));
   // Agrupar préstamos creados por período
   // EXCLUIR préstamos cancelados por error de carga (motivo 'error' u 'otro' → _deleted o estado Cancelado)
   // INCLUIR préstamos Pagado (total), Ejecutado (prenda), Activo, Atrasado — son préstamos reales
@@ -40,19 +41,67 @@ export function buildHistorial(prestamos, cuotas) {
     gruposPre[key].cantidad++;
   });
 
+  // Desglose informativo por estado final. No altera los acumulados financieros.
+  const estadosFinales = ['Pagado', 'Ejecutado', 'Cancelado'];
+  const conteosEstadoTotal = { Pagado: 0, Renovado: 0, Ejecutado: 0, Cancelado: 0 };
+  const conteosEstadoPeriodo = {};
+  prestamos.filter(p => estadosFinales.includes(p.estado)).forEach(p => {
+    const estadoVisual = p.estado === 'Pagado' && p.cerradoPor === 'renovacion' ? 'Renovado' : p.estado;
+    const key = periodoKey(estadoVisual === 'Renovado' ? (p.renovadoEn || p.fecha) : p.fecha);
+    conteosEstadoTotal[estadoVisual]++;
+    if (!key) return;
+    if (!conteosEstadoPeriodo[key]) {
+      conteosEstadoPeriodo[key] = { Pagado: 0, Renovado: 0, Ejecutado: 0, Cancelado: 0 };
+    }
+    conteosEstadoPeriodo[key][estadoVisual]++;
+  });
+
+  // Una renovación se reconstruye desde el préstamo nuevo y su vínculo al anterior.
+  // Es un desglose informativo: no participa de Cobrado ni Ganancia real.
+  const renovacionesPorPeriodo = {};
+  prestamos
+    .filter(prestamo => !prestamo?._deleted && prestamo.origen === 'renovacion' && prestamo.prestamoOrigenId)
+    .forEach(prestamoNuevo => {
+      const prestamoOrigen = prestamosPorId.get(prestamoNuevo.prestamoOrigenId);
+      if (!prestamoOrigen || prestamoOrigen._deleted === true) return;
+      const fecha = prestamoOrigen.renovadoEn || prestamoNuevo.creadoEn || prestamoNuevo.createdAt || prestamoNuevo.fecha;
+      const key = periodoKey(fecha);
+      if (!key) return;
+      if (!renovacionesPorPeriodo[key]) renovacionesPorPeriodo[key] = [];
+      renovacionesPorPeriodo[key].push({
+        origenId: prestamoOrigen.id,
+        destinoId: prestamoNuevo.id,
+        montoCompensado: Number(prestamoNuevo.montoCompensado || 0),
+        montoEntregado: Number(prestamoNuevo.montoEntregado || 0),
+        fecha
+      });
+    });
+
   // Agrupar pagos cobrados por período
   // Incluye cuotas de préstamos cerrados que fueron pagadas (incluso cancelación total)
   // NO incluye cuotas Ejecutadas (prenda) porque no hubo cobro en efectivo
   const gruposCob = {};
-  cuotas.filter(c => c.estado === 'Pagado' && c.fechaPago && !c._deleted).forEach(c => {
+  const gruposCompensados = {};
+  cuotas.filter(c => c.estado === 'Pagado' && c.fechaPago && !c._deleted && Number(c.cantidadAbonos || 0) === 0).forEach(c => {
     const key = periodoKey(c.fechaPago);
     if (!key) return;
+    if (c.origenPago === 'renovacion_descuento') {
+      if (!gruposCompensados[key]) gruposCompensados[key] = 0;
+      gruposCompensados[key] += Number(c.montoCompensado ?? c.monto ?? 0);
+      return;
+    }
     if (!gruposCob[key]) gruposCob[key] = 0;
-    gruposCob[key] += Number(c.monto || 0);
+    gruposCob[key] += c.montoEfectivo != null ? Number(c.montoEfectivo || 0) : Number(c.monto || 0);
+  });
+  pagosCuota.filter(pago => pago && pago._deleted !== true && pago.tipo === 'ABONO_CUOTA').forEach(pago => {
+    const key = periodoKey(pago.fechaPago);
+    if (!key) return;
+    if (!gruposCob[key]) gruposCob[key] = 0;
+    gruposCob[key] += Number(pago.monto || 0);
   });
 
   // Unir todas las keys y ordenar desc
-  const allKeys = [...new Set([...Object.keys(gruposPre), ...Object.keys(gruposCob)])]
+  const allKeys = [...new Set([...Object.keys(gruposPre), ...Object.keys(gruposCob), ...Object.keys(gruposCompensados), ...Object.keys(conteosEstadoPeriodo), ...Object.keys(renovacionesPorPeriodo)])]
     .sort((a,b) => b.localeCompare(a));
 
   if (!allKeys.length) return window.emptyHTML('📈','Sin datos de período','Cargá préstamos para ver el historial.');
@@ -60,6 +109,7 @@ export function buildHistorial(prestamos, cuotas) {
   // ── TOTALES ACUMULADOS ──
   const totPrestado  = Object.values(gruposPre).reduce((s,g) => s + g.prestado, 0);
   const totCobrado   = Object.values(gruposCob).reduce((s,v) => s + v, 0);
+  const totCompensado = Object.values(gruposCompensados).reduce((s,v) => s + v, 0);
   const totCantidad  = Object.values(gruposPre).reduce((s,g) => s + g.cantidad, 0);
   const totGananciaReal = Math.max(0, totCobrado - totPrestado);
 
@@ -87,14 +137,24 @@ export function buildHistorial(prestamos, cuotas) {
         <span>📋 ${totCantidad} préstamo${totCantidad!==1?'s':''} histórico${totCantidad!==1?'s':''}</span>
         <span>📅 ${allKeys.length} ${histPeriodo === 'mes' ? 'mes' : 'semana'}${allKeys.length!==1?'es':''}</span>
       </div>
+      <div class="info-grid" style="margin-top:10px">
+        <div class="info-cell"><div class="info-lbl">Compensado por renovación</div><div class="info-val" style="color:var(--yel)">${window.fmtMoney(totCompensado)}</div></div>
+        <div class="info-cell"><div class="info-lbl">Pagados</div><div class="info-val" style="color:var(--grn)">${conteosEstadoTotal.Pagado}</div></div>
+        <div class="info-cell"><div class="info-lbl">Renovados</div><div class="info-val" style="color:var(--gold)">${conteosEstadoTotal.Renovado}</div></div>
+        <div class="info-cell"><div class="info-lbl">Ejecutados</div><div class="info-val" style="color:var(--red)">${conteosEstadoTotal.Ejecutado}</div></div>
+        <div class="info-cell"><div class="info-lbl">Cancelados</div><div class="info-val">${conteosEstadoTotal.Cancelado}</div></div>
+      </div>
     </div>`;
 
   // ── TARJETAS POR PERIODO CON COMPARATIVA ──
   const tarjetas = allKeys.map((key, idx) => {
     const pre = gruposPre[key] || { prestado:0, ganancia:0, cantidad:0 };
     const cobrado = gruposCob[key] || 0;
+    const compensado = gruposCompensados[key] || 0;
     const gananciaReal = Math.max(0, cobrado - pre.prestado);
     const label = periodoLabel(key);
+    const estados = conteosEstadoPeriodo[key] || { Pagado:0, Renovado:0, Ejecutado:0, Cancelado:0 };
+    const renovaciones = (renovacionesPorPeriodo[key] || []).sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
 
     // Comparar con período anterior (siguiente en la lista, porque está ordenada desc)
     const keyAnterior = allKeys[idx + 1];
@@ -142,9 +202,26 @@ export function buildHistorial(prestamos, cuotas) {
           <span style="font-size:12px;color:var(--muted)">💵 Ganancia real del período</span>
           <span style="font-size:13px;font-weight:800;color:var(--grn)">${window.fmtMoney(gananciaReal)}</span>
         </div>` : ''}
+        ${compensado > 0 ? `<div style="margin-top:8px;font-size:12px;color:var(--yel);font-weight:700">Compensado por renovación: ${window.fmtMoney(compensado)} · no ingresó efectivo</div>` : ''}
+        ${renovaciones.map(renovacion => `<div class="card-sm" style="margin-top:8px">
+          <div class="li-row">
+            <div>
+              <div class="li-name">${window.esc(renovacion.origenId)} → ${window.esc(renovacion.destinoId)}</div>
+              <div class="li-sub">Renovación · ${window.fmtDate(renovacion.fecha)}</div>
+              <div class="li-sub">Compensado: ${window.fmtMoney(renovacion.montoCompensado)} · Entregado: ${window.fmtMoney(renovacion.montoEntregado)}</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="abrirComprobanteRenovacion('${window.esc(renovacion.origenId)}')">Ver comprobante</button>
+          </div>
+        </div>`).join('')}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
           <span style="font-size:12px;color:var(--muted)">📋 ${pre.cantidad} préstamo${pre.cantidad!==1?'s':''} otorgado${pre.cantidad!==1?'s':''}</span>
           ${cobrado > 0 ? `<span style="font-size:11px;color:var(--grn);font-weight:700">✅ ${window.fmtMoney(cobrado)} ingresado</span>` : ''}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;font-size:11px;font-weight:700">
+          <span class="badge badge-success">Pagados: ${estados.Pagado}</span>
+          <span class="badge" style="color:var(--gold)">Renovados: ${estados.Renovado}</span>
+          <span class="badge badge-danger">Ejecutados: ${estados.Ejecutado}</span>
+          <span class="badge">Cancelados: ${estados.Cancelado}</span>
         </div>
       </div>`;
   }).join('');

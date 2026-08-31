@@ -25,6 +25,19 @@ export function fmtMoney(n) {
 
 export function round2(n) { return Math.round((+n + Number.EPSILON) * 100) / 100; }
 
+export function saldoCobrableCuota(cuota) {
+  if (!cuota || cuota._deleted === true) return 0;
+  const estado = String(cuota.estado || '').trim().toLocaleLowerCase('es-AR');
+  if (['pagado', 'pagada', 'ejecutada', 'ejecutado', 'cancelada', 'cancelado'].includes(estado)) return 0;
+  if (cuota.origenPago === 'renovacion_descuento' || cuota.cerradoPor === 'renovacion') return 0;
+  const monto = round2(Number(cuota.monto || 0));
+  const abonado = round2(Number(cuota.totalAbonado || 0));
+  if (cuota.saldoPendiente != null && Number.isFinite(Number(cuota.saldoPendiente))) {
+    return Math.max(0, round2(Number(cuota.saldoPendiente)));
+  }
+  return Math.max(0, round2(monto - abonado));
+}
+
 export function addMonths(date, n) {
   const d = new Date(date), day = d.getDate();
   d.setDate(1); d.setMonth(d.getMonth() + n);
@@ -60,6 +73,7 @@ Object.assign(window, {
   fmtDate,
   fmtMoney,
   round2,
+  saldoCobrableCuota,
   addMonths,
   addWeeks,
   calcVenc,

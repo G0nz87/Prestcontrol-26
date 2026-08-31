@@ -8,10 +8,40 @@ export function openSheetCliente(editId = null) {
   document.getElementById('sh-cli-title').textContent = editId ? '✏️ Editar Cliente' : '👤 Nuevo Cliente';
   if (!editId) {
     ['cli-nombre','cli-dni','cli-tel','cli-dir','cli-notas'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('cli-riesgo').value = 'Bajo';
+    document.getElementById('cli-riesgo').value = '';
     document.getElementById('cli-estado').value = 'Activo';
   }
+  prepararOverrideRiesgo(editId);
   window.openSheet('sh-cliente');
+}
+
+async function prepararOverrideRiesgo(editId) {
+  const selector = document.getElementById('cli-riesgo');
+  const motivo = document.getElementById('cli-riesgo-motivo');
+  const password = document.getElementById('cli-riesgo-password');
+  const cliente = editId ? await window.dbGet('clientes', editId) : null;
+  document.getElementById('cli-riesgo-field').style.display = editId ? '' : 'none';
+  const valorInicial = cliente?.riesgoOverrideNivel || cliente?.riesgo || '';
+  selector.dataset.inicial = valorInicial;
+  selector.dataset.legacy = !cliente?.riesgoOverrideNivel && cliente?.riesgo ? 'true' : 'false';
+  selector.value = valorInicial;
+  motivo.value = cliente?.riesgoOverrideMotivo || '';
+  password.value = '';
+  const actualizar = () => {
+    const cambio = selector.value !== selector.dataset.inicial;
+    document.getElementById('cli-riesgo-motivo-wrap').style.display = cambio ? '' : 'none';
+    document.getElementById('cli-riesgo-password-wrap').style.display = cambio ? '' : 'none';
+  };
+  selector.onchange = actualizar;
+  actualizar();
+  if (editId) {
+    const [prestamos, cuotas] = await Promise.all([window.dbAll('prestamos'), window.dbAll('cuotas')]);
+    const auto = window.riesgoClienteService.calcular(editId, { prestamos, cuotas });
+    const efectivo = window.riesgoClienteService.efectivo(cliente, auto);
+    document.getElementById('cli-riesgo-auto').textContent = `Automático: ${auto.nivelAuto}${auto.nivelAuto === 'SIN HISTORIAL' ? '' : ` · ${auto.score}/100`} · Efectivo: ${efectivo.nivel}${efectivo.tipo === 'automatico' ? '' : ' · ajustado manualmente'}`;
+  } else {
+    document.getElementById('cli-riesgo-auto').textContent = 'Riesgo automático: SIN HISTORIAL. El cliente se creará sin ajuste manual.';
+  }
 }
 
 export async function editarCliente(id) {
@@ -21,18 +51,25 @@ export async function editarCliente(id) {
   document.getElementById('cli-dni').value    = c.dni || '';
   document.getElementById('cli-tel').value    = c.telefono || '';
   document.getElementById('cli-dir').value    = c.direccion || '';
-  document.getElementById('cli-riesgo').value = c.riesgo || 'Bajo';
+  document.getElementById('cli-riesgo').value = c.riesgoOverrideNivel || c.riesgo || '';
   document.getElementById('cli-estado').value = c.estado === 'Bloqueado' ? 'Bloqueado' : 'Activo';
   document.getElementById('cli-notas').value  = c.notas || '';
   openSheetCliente(id);
 }
 
 export async function saveCliente() {
+  const editId = document.getElementById('cli-edit-id').value;
+  const operacion = window.iniciarOperacionProtegida?.(
+    `cliente:guardar:${editId || 'nuevo'}`,
+    document.activeElement,
+    'Guardando...'
+  );
+  if (!operacion) return;
+  try {
   if (await window.bloquearEscrituraPorRestorePending?.()) return;
   const nombre   = document.getElementById('cli-nombre').value.trim();
   const dni      = document.getElementById('cli-dni').value.trim();
   const telefono = document.getElementById('cli-tel').value.trim();
-  const editId   = document.getElementById('cli-edit-id').value;
   const estado   = document.getElementById('cli-estado').value === 'Bloqueado' ? 'Bloqueado' : 'Activo';
 
   // Validacion delegada al service (nombre obligatorio, DNI formato + duplicado, telefono formato)
@@ -44,35 +81,61 @@ export async function saveCliente() {
     return window.toast('⚠️ ' + e.message);
   }
 
-  const todos = await window.dbAll('clientes');
+  const todos = await window.dbAllIncludeDeleted('clientes');
   const id    = editId || window.nextId('CL', todos);
 
+  const orig = editId ? await window.dbGet('clientes', editId) : null;
+  const nivelOverride = document.getElementById('cli-riesgo').value;
+  const nivelInicial = document.getElementById('cli-riesgo').dataset.inicial || '';
+  const cambioRiesgo = nivelOverride !== nivelInicial;
+  let autorizacionRiesgo = null;
+  if (cambioRiesgo) {
+    const motivoOverride = document.getElementById('cli-riesgo-motivo').value.trim();
+    const password = document.getElementById('cli-riesgo-password').value;
+    if (!motivoOverride) return window.toast('⚠️ Ingresá el motivo del ajuste de riesgo');
+    try {
+      autorizacionRiesgo = await window.reautenticarOperacionSensible(password);
+    } catch (error) {
+      return window.toast('⚠️ ' + error.message);
+    }
+  }
+
   const cli = {
+    ...(orig || {}),
     id,
     nombre,
     dni,
     telefono,
     direccion: document.getElementById('cli-dir').value.trim(),
-    riesgo   : document.getElementById('cli-riesgo').value,
     notas    : document.getElementById('cli-notas').value.trim(),
     estado,
     _deleted : false,
     deletedAt: null,
-    creadoEn : editId ? undefined : new Date().toISOString()
+    creadoEn : orig?.creadoEn || new Date().toISOString()
   };
-
-  if (editId) {
-    const orig = await window.dbGet('clientes', editId);
-    Object.assign(cli, { creadoEn: orig.creadoEn });
+  if (cambioRiesgo) {
+    const motivoOverride = document.getElementById('cli-riesgo-motivo').value.trim();
+    cli.riesgoOverrideNivel = nivelOverride || null;
+    cli.riesgoOverrideMotivo = nivelOverride ? motivoOverride : null;
+    cli.riesgoOverridePor = nivelOverride ? autorizacionRiesgo.uid : null;
+    cli.riesgoOverrideAt = nivelOverride ? autorizacionRiesgo.authenticatedAt : null;
+    cli.riesgo = nivelOverride || null;
   }
 
   await window.dbPut('clientes', cli);
-  await window.addToSyncQueue('clientes', id, cli, 'upsert');
+  await window.addToSyncQueueOrThrow('clientes', id, cli, 'upsert');
   await window.logBitacora(
     editId ? 'edicion' : 'nuevo_cliente',
     `Cliente ${editId ? 'editado' : 'creado'}: ${nombre}${cli.dni ? ' · DNI ' + cli.dni : ''}`,
     id
   );
+  if (cambioRiesgo) {
+    await window.logBitacora(
+      nivelOverride ? 'riesgo_override' : 'riesgo_override_quitado',
+      nivelOverride ? `Riesgo ajustado manualmente a ${nivelOverride}: ${cli.riesgoOverrideMotivo}` : `Ajuste manual de riesgo quitado: ${document.getElementById('cli-riesgo-motivo').value.trim()}`,
+      id
+    );
+  }
   window.scheduleDriveSync();
 
   window.closeSheet();
@@ -82,6 +145,9 @@ export async function saveCliente() {
     await window.openClienteDetail(editId);
   } else {
     await window.renderPage('clientes');
+  }
+  } finally {
+    operacion.liberar();
   }
 }
 
@@ -109,6 +175,13 @@ export async function confirmarBorrarCliente(id) {
 }
 
 export async function borrarCliente(id) {
+  const operacion = window.iniciarOperacionProtegida?.(
+    `cliente:eliminar:${id}`,
+    document.getElementById('del-confirm-btn'),
+    'Eliminando...'
+  );
+  if (!operacion) return;
+  try {
   if (await window.bloquearEscrituraPorRestorePending?.()) return;
   const confirmacion = document.getElementById('del-confirm-text')?.value.trim().toUpperCase();
   if (confirmacion !== 'ELIMINAR') {
@@ -118,18 +191,20 @@ export async function borrarCliente(id) {
   window.closeSheet();
   const cli = await window.dbGet('clientes', id);
   // Borrado logico — marca como eliminado, no destruye datos
-  await window.dbSoftDelete('clientes', id);
   const cuotas    = await window.dbAll('cuotas');
   const prestamos = await window.dbAll('prestamos');
   for (const p of prestamos.filter(p => p.clienteId === id && !p._deleted)) {
     for (const c of cuotas.filter(c => c.prestamoId === p.id && !c._deleted)) {
-      await window.dbSoftDelete('cuotas', c.id);
+      await window.dbSoftDeleteAndQueue('cuotas', c.id);
     }
-    await window.dbSoftDelete('prestamos', p.id);
+    await window.dbSoftDeleteAndQueue('prestamos', p.id);
   }
+  await window.dbSoftDeleteAndQueue('clientes', id);
   await window.logBitacora('eliminacion', `Cliente eliminado: ${cli?.nombre || id}`, id);
-  window.addToSyncQueue('clientes', id, { _deleted: true, id });
   window.scheduleDriveSync();
   window.toast('🗑️ Cliente eliminado');
-  window.goPage('clientes');
+  await window.goPage('clientes');
+  } finally {
+    operacion.liberar();
+  }
 }

@@ -4,6 +4,30 @@
 // con el patron de pasos previos; se desbridgea cuando los utils se modularicen).
 
 export class PrestamoService {
+  static ESTADOS_TERMINALES = Object.freeze(['Pagado', 'Ejecutado', 'Cancelado']);
+  static ESTADOS_CUOTA_TERMINALES = Object.freeze(['Pagado', 'Ejecutada', 'Ejecutado', 'Cancelada', 'Cancelado']);
+
+  esEstadoTerminal(estado) {
+    return PrestamoService.ESTADOS_TERMINALES.includes(estado);
+  }
+
+  validarPagoCobrable(prestamo, cuota) {
+    if (!prestamo || prestamo._deleted === true) return { ok: false, motivo: 'El préstamo no existe o fue eliminado.' };
+    if (this.esEstadoTerminal(prestamo.estado)) return { ok: false, motivo: `El préstamo está ${prestamo.estado} y no admite nuevos pagos.` };
+    if (!['Activo', 'Atrasado'].includes(prestamo.estado)) return { ok: false, motivo: 'El préstamo no se encuentra en un estado cobrable.' };
+    if (!cuota || cuota._deleted === true) return { ok: false, motivo: 'La cuota no existe o fue eliminada.' };
+    if (cuota.estado === 'Pagado') return { ok: false, motivo: 'Esta cuota ya se encuentra pagada.' };
+    if (PrestamoService.ESTADOS_CUOTA_TERMINALES.includes(cuota.estado)) return { ok: false, motivo: `La cuota está ${cuota.estado} y no admite pagos.` };
+    return { ok: true, motivo: '' };
+  }
+
+  calcularEstadoConservandoTerminal(prestamo, cuotas) {
+    if (!prestamo || prestamo._deleted === true || this.esEstadoTerminal(prestamo.estado)) {
+      return prestamo?.estado || null;
+    }
+    return this.calcularEstado(cuotas);
+  }
+
   constructor(prestamoRepository) {
     if (!prestamoRepository) throw new Error('PrestamoService: prestamoRepository requerido');
     this.repo = prestamoRepository;
@@ -57,6 +81,10 @@ export class PrestamoService {
         fechaVenc    : fvenc.toISOString(),
         monto        : cuotaMonto,
         estado       : 'Pendiente',
+        totalAbonado : 0,
+        saldoPendiente: cuotaMonto,
+        cantidadAbonos: 0,
+        ultimoPagoId : null,
         fechaPago    : null,
         metodo       : null,
         notas        : '',

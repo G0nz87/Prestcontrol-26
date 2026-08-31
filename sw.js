@@ -1,5 +1,11 @@
 const CACHE_PREFIX = 'prestcontrol-';
-const CACHE_NAME = `${CACHE_PREFIX}shell-v4`;
+const CACHE_NAME = `${CACHE_PREFIX}shell-v62`;
+
+const FIREBASE_SDK_OFFLINE = [
+  'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
+  'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js',
+  'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js'
+];
 
 const APP_SHELL = [
   './',
@@ -20,17 +26,26 @@ const APP_SHELL = [
   './services/PrestamoService.js',
   './services/AuthService.js',
   './services/MetricasFinancierasService.js',
+  './services/CajaService.js',
+  './services/RiesgoClienteService.js',
   './ui/historial.js',
   './ui/index.js',
   './ui/clientes.js',
-  './ui/prestamos.js'
+  './ui/prestamos.js',
+  './ui/prendas.js',
+  './ui/caja.js'
 ];
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(
-      APP_SHELL.map(asset => new Request(asset, { cache: 'reload' }))
-    ))
+    caches.open(CACHE_NAME).then(async cache => {
+      await cache.addAll(APP_SHELL.map(asset => new Request(asset, { cache: 'reload' })));
+      // Los SDK son necesarios para que Firebase Auth pueda restaurar su usuario
+      // persistido al reabrir la PWA offline. Su fallo no invalida el shell local.
+      await Promise.allSettled(FIREBASE_SDK_OFFLINE.map(asset =>
+        cache.add(new Request(asset, { cache: 'reload', mode: 'cors' }))
+      ));
+    })
   );
   self.skipWaiting();
 });
@@ -43,7 +58,16 @@ self.addEventListener('activate', event => {
           .filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
           .map(key => caches.delete(key))
       ))
-      .then(() => self.clients.claim())
+      .then(async () => {
+        await self.clients.claim();
+        // La página coordina la recarga cuando ya no hay formularios ni
+        // operaciones financieras activas.
+        const ventanas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        ventanas.forEach(cliente => cliente.postMessage({
+          type: 'PRESTCONTROL_SHELL_READY',
+          cacheName: CACHE_NAME
+        }));
+      })
   );
 });
 
@@ -59,7 +83,7 @@ self.addEventListener('fetch', event => {
       const response = request.mode === 'navigate'
         ? await fetch(request, { cache: 'no-store' })
         : await fetch(request);
-      if (url.origin === self.location.origin && response.ok) {
+      if ((url.origin === self.location.origin || FIREBASE_SDK_OFFLINE.includes(request.url)) && response.ok) {
         const cache = await caches.open(CACHE_NAME);
         await cache.put(request, response.clone());
       }

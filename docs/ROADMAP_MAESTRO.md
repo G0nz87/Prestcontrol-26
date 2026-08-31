@@ -2,8 +2,8 @@
 
 **Proyecto:** PrestControl  
 **Stack:** Netlify + Firebase + GitHub + IndexedDB  
-**Última actualización:** 03/07/2026  
-**Estado general:** Etapa 10 cerrada
+**Última actualización:** 30/08/2026
+**Estado general:** PrestControl V1 cerrado y aprobado en pruebas locales finales
 
 ---
 
@@ -682,3 +682,72 @@ git commit -m "Corrige vista cuotas retraida y refresco"
 ```
 
 No usar `git add .` si hay documentos o archivos no relacionados pendientes.
+
+---
+
+# CIERRE PRESTCONTROL V1
+
+**Fecha de cierre local:** 30/08/2026
+**Estado:** CERRADO / LISTO PARA REVISIÓN HUMANA PRE-COMMIT
+**Service Worker validado:** `prestcontrol-shell-v61`
+
+## Resultado final
+
+- Pruebas funcionales locales finales: **APROBADAS**.
+- Smoke test final en PC y celular: **APROBADO**.
+- Backup completo y Restore autoritativo: **APROBADOS**.
+- Integridad local, Firebase y sincronización entre dispositivos: **APROBADAS**.
+- Trabajo offline y convergencia automática al recuperar conexión: **APROBADOS**.
+- Caja/Tesorería y flujos financieros V1: **APROBADOS**.
+- PIN local y desbloqueo offline en dispositivos previamente autorizados: **APROBADOS**.
+
+## Evidencia de validación manual final
+
+- Backup completo generado correctamente.
+- Restore autoritativo probado: un cliente temporal creado después del backup desapareció al restaurar.
+- Restauración convergente entre PC, Firebase y celular.
+- `PR-023` sobrevivió correctamente al Restore.
+- `PD-008` sobrevivió como prenda vendida/corregida.
+- Caja restaurada y consistente en `$6.785.999`.
+- Estado final de sincronización: `Sincronizado`.
+- PIN PrestControl validado en PC y celular.
+- Desbloqueo offline validado en PC.
+- Desbloqueo offline validado en Android mediante localhost seguro y ADB reverse.
+- Creación offline de préstamo y convergencia automática posterior validadas.
+- Pagos simples, mixtos, parciales y bonificados validados.
+- Renovaciones con saldo parcial validadas.
+- Caja/Tesorería validada.
+- Venta y corrección de garantía validadas.
+- Motor `RISK_V1` validado.
+- Backup/Restore con tombstones legítimos corregido y validado.
+- Navegación global de Android mejorada.
+- Inicio > Cliente validado sin persistencia del último cliente buscado y con vista neutral al reingresar.
+
+## Alcance funcional consolidado en V1
+
+- Clientes, préstamos, cuotas, cobros y renovaciones.
+- Prendas/garantías con inventario, ejecución, venta, historial y sincronización.
+- Caja/Tesorería con movimientos manuales y automáticos, integridad y reversas controladas.
+- Pagos simples, mixtos, parciales y bonificaciones.
+- Métricas financieras con tratamiento contable de renovaciones.
+- Motor explicable `RISK_V1` y override manual autorizado.
+- IndexedDB, `sync_queue`, Firebase, realtime, tombstones y convergencia PC/celular.
+- Backup JSON, Restore autoritativo, `restorePending` y validación de integridad.
+- Firebase Auth, bloqueo por inactividad, PIN local y operación offline segura.
+- PWA y navegación Android mediante History API.
+
+## Pendiente POST-V1 no bloqueante
+
+- En ciertos recorridos Android, al usar Atrás con un préstamo expandido, la navegación puede volver a Inicio en lugar de limitarse a contraer el préstamo.
+- Clasificación: mejora menor de navegación / **NO BLOQUEA V1**.
+- No reabrir el cierre V1 por este punto; tratarlo en una iteración POST-V1 dedicada.
+
+## Evolución futura documentada
+
+- `docs/Historial/PRESTCONTROL_RBAC_MULTI_TENANT_PLAN.md` contiene una propuesta futura de arquitectura multi-tenant con RBAC y permisos granulares.
+- Estado: **PLANIFICADO / NO INICIADO / FUERA DE V1**.
+- No implementar RBAC ni migrar el modelo actual durante este cierre.
+
+## Estado de cierre
+
+PrestControl V1 queda **CERRADO LOCALMENTE**, con pruebas finales aprobadas y pendiente únicamente de revisión humana del worktree y creación del commit final.

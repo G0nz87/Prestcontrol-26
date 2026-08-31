@@ -6,21 +6,46 @@ export class AuthService {
   constructor() {
     this._currentUser  = null;
     this._bootstrapped = false;
+    this._initialStatePromise = null;
   }
 
   // Registra el listener onAuthStateChanged contra _fbAuth (que setea _initFirebase()).
-  // Idempotente — se puede llamar varias veces. Llamar despues de que _fbAuth exista.
+  // Idempotente y devuelve el primer estado real restaurado por Firebase Auth.
+  // Llamar despues de que _fbAuth exista.
   bootstrap() {
-    if (this._bootstrapped) return;
-    if (!window._fbAuth) return;
+    if (this._initialStatePromise) return this._initialStatePromise;
+    if (!window._fbAuth) return Promise.resolve(null);
     this._bootstrapped = true;
-    window._fbAuth.onAuthStateChanged(user => {
-      this._currentUser = user || null;
-      window._fbUser    = this._currentUser; // bridge legacy
-      if (typeof window.onFirebaseAuthStateChanged === 'function') {
-        window.onFirebaseAuthStateChanged(this._currentUser);
+
+    this._initialStatePromise = (async () => {
+      try {
+        await window._fbAuth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
+      } catch (error) {
+        console.warn('No se pudo configurar persistencia LOCAL de Firebase Auth:', error?.code || error);
       }
-    });
+
+      return await new Promise((resolve, reject) => {
+        let estadoInicialPendiente = true;
+        window._fbAuth.onAuthStateChanged(user => {
+          this._currentUser = user || null;
+          window._fbUser    = this._currentUser; // bridge legacy
+          if (typeof window.onFirebaseAuthStateChanged === 'function') {
+            window.onFirebaseAuthStateChanged(this._currentUser);
+          }
+          if (estadoInicialPendiente) {
+            estadoInicialPendiente = false;
+            resolve(this._currentUser);
+          }
+        }, error => {
+          if (estadoInicialPendiente) {
+            estadoInicialPendiente = false;
+            reject(error);
+          }
+        });
+      });
+    })();
+
+    return this._initialStatePromise;
   }
 
   // Devuelve UserCredential de Firebase (.user, .credential, ...). Tira el error de
