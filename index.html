@@ -1388,6 +1388,49 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
   </div>
 </div>
 
+<!-- SHEET: COBRAR INTERÉS Y RENOVAR CAPITAL -->
+<div class="sheet form-sheet" id="sh-renovar-capital">
+  <div class="sheet-handle"></div>
+  <div class="sheet-hdr">
+    <div>
+      <div class="sheet-title">Cobrar interés y renovar capital</div>
+      <div class="form-help" id="rc-origen"></div>
+    </div>
+    <button class="icon-btn" onclick="closeSheet()">✕</button>
+  </div>
+  <div class="sheet-body form-sheet-body">
+    <div class="form-summary" id="rc-resumen-origen"></div>
+    <div class="field">
+      <label class="lbl">Interés recibido *</label>
+      <input class="inp" id="rc-interes-recibido" type="number" min="0.01" step="0.01" inputmode="decimal" oninput="calcularPreviewRenovacionCapital()">
+      <div class="form-help">Debe coincidir con el interés contractual pendiente del período.</div>
+    </div>
+    <div class="field">
+      <label class="lbl">Medio de cobro *</label>
+      <select class="inp" id="rc-medio-cobro"><option>Efectivo</option><option>Transferencia</option><option>MercadoPago</option><option>Otro</option></select>
+    </div>
+    <div class="form-section">
+      <div class="form-section-title">Nuevo préstamo</div>
+      <div class="form-grid form-grid-2">
+        <div class="field"><label class="lbl">Nueva tasa por cuota (%) *</label><input class="inp" id="rc-interes" type="number" min="0" max="100" step="0.1" oninput="calcularPreviewRenovacionCapital()"></div>
+        <div class="field"><label class="lbl">N° de cuotas *</label><input class="inp" id="rc-ncuotas" type="number" min="1" max="360" oninput="calcularPreviewRenovacionCapital()"></div>
+      </div>
+      <div class="form-grid form-grid-2">
+        <div class="field"><label class="lbl">Frecuencia</label><select class="inp" id="rc-tipo" onchange="calcularPreviewRenovacionCapital()"><option value="Mensual">Mensual</option><option value="Semanal">Semanal</option></select></div>
+        <div class="field"><label class="lbl">Fecha inicial</label><input class="inp" id="rc-fecha" type="date"></div>
+      </div>
+    </div>
+    <div class="form-summary" id="rc-preview"></div>
+    <div class="login-err" id="rc-error" style="margin-bottom:12px"></div>
+    <div class="form-alert is-info" style="margin-bottom:12px">Esta operación cobra únicamente el interés y renueva íntegramente el capital, sin entregar efectivo nuevo. Escribí <b>RENOVAR CAPITAL</b> para confirmar.</div>
+    <div class="field"><input class="inp" id="rc-confirm-text" autocomplete="off" placeholder="Escribí RENOVAR CAPITAL"></div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeSheet()">Cancelar</button>
+      <button class="btn btn-gold" id="rc-save" onclick="confirmarCobroInteresRenovacionCapital()">Confirmar operación</button>
+    </div>
+  </div>
+</div>
+
 <!-- SHEET: RENOVAR PRESTAMO -->
 <div class="sheet form-sheet" id="sh-renovar-prestamo">
   <div class="sheet-handle"></div>
@@ -1609,7 +1652,8 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
     <div style="background:var(--redBg);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:14px;margin-bottom:16px">
       <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:6px">⚠️ Vas a borrar TODO</div>
       <div style="font-size:12px;color:var(--muted);line-height:1.6">
-        Se eliminarán permanentemente todos los clientes, préstamos, cuotas y registros de bitácora.<br>
+        Se eliminarán permanentemente clientes, préstamos, cuotas, garantías, pagos, Caja y bitácora en todos los dispositivos.<br>
+        La cuenta Firebase y el PIN de este dispositivo se conservarán.<br>
         <b style="color:var(--red)">Esta acción no se puede deshacer.</b>
       </div>
     </div>
@@ -2440,7 +2484,7 @@ window.dbPutCajaAndQueueAtomic = dbPutCajaAndQueueAtomic;
 async function dbCommitOperacionPrestamoCajaAtomic(registros) {
   if (!DB) throw new Error('IndexedDB no está disponible.');
   if (await hayRestauracionLocalPendiente()) throw new Error('Modo solo lectura por restauración pendiente.');
-  const permitidos = new Set(['prestamos', 'cuotas', 'prendas', 'movimientos_caja', 'pagos_cuota']);
+  const permitidos = new Set(['prestamos', 'cuotas', 'prendas', 'movimientos_caja', 'pagos_cuota', 'bitacora']);
   const items = (Array.isArray(registros) ? registros : []).map(item => {
     if (!permitidos.has(item?.store) || !item?.data?.id) throw new Error('Registro inválido en la operación financiera.');
     return item;
@@ -3285,6 +3329,41 @@ function abrirResetApp() {
   openSheet('sh-reset-app');
 }
 
+const RESET_DATA_STORES = ['clientes','prestamos','cuotas','prendas','movimientos_caja','pagos_cuota','config','bitacora','sync_queue','sync_meta'];
+const RESET_FIREBASE_STORES = ['clientes','prestamos','cuotas','prendas','movimientos_caja','pagos_cuota'];
+const RESET_META_KEY = 'resetDataId';
+let _resetProcessing = false;
+
+async function limpiarDatosUsuarioLocales(resetId = '') {
+  if (!DB) throw new Error('IndexedDB no está disponible.');
+  await new Promise((resolve, reject) => {
+    const tx = DB.transaction(RESET_DATA_STORES, 'readwrite');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error || new Error('No se pudieron limpiar los datos locales.'));
+    tx.onabort = () => reject(tx.error || new Error('La limpieza local fue abortada.'));
+    RESET_DATA_STORES.forEach(store => tx.objectStore(store).clear());
+    if (resetId) tx.objectStore('sync_meta').put({ key: RESET_META_KEY, value: resetId });
+  });
+  drivePendingSync = false;
+  await updateSyncPendingBadge();
+}
+
+async function aplicarResetRemotoPendiente() {
+  if (!_fbUser?.uid || !_fbDb || !DB || !navigator.onLine) return false;
+  const snapshot = await _fbDb.collection('users').doc(_fbUser.uid).get({ source: 'server' });
+  const control = snapshot.data()?.prestcontrolDataReset;
+  if (!control?.id) return false;
+  if (control.status !== 'completed') {
+    throw new Error('Hay un reseteo total en curso. Esperá a que finalice antes de sincronizar.');
+  }
+  const meta = await getSyncMeta();
+  if (meta[RESET_META_KEY] === control.id) return false;
+  detenerSyncRealtime();
+  await limpiarDatosUsuarioLocales(control.id);
+  syncDebugLog('reset_remoto_aplicado', { resetId: control.id });
+  return true;
+}
+
 /* =====================================================
    REPARACIÓN — buscar y limpiar cuotas duplicadas
 ===================================================== */
@@ -3415,6 +3494,15 @@ async function ejecutarResetApp() {
   const confirmTxt  = document.getElementById('reset-confirm-txt').value.trim();
   const errEl       = document.getElementById('reset-app-err');
 
+  if (_syncProcessing) {
+    errEl.textContent = 'Hay una sincronización activa. Esperá a que finalice y reintentá.';
+    errEl.classList.add('on'); return;
+  }
+  if (!navigator.onLine) {
+    errEl.textContent = 'El reset total requiere conexión para proteger todos los dispositivos.';
+    errEl.classList.add('on'); return;
+  }
+
   // Verificar texto de confirmación
   if (confirmTxt !== 'BORRAR TODO') {
     errEl.textContent = 'Escribí exactamente BORRAR TODO para confirmar';
@@ -3449,6 +3537,7 @@ async function ejecutarResetApp() {
     return;
   }
   errEl.classList.remove('on');
+  _resetProcessing = true;
 
   // Ejecutar borrado de todas las tablas del usuario
   closeSheet();
@@ -3458,47 +3547,47 @@ async function ejecutarResetApp() {
     // 1. DETENER sync en tiempo real para que no re-baje datos viejos
     detenerSyncRealtime();
 
-    // 2. Borrar colecciones de Firebase PRIMERO (para que al reconectar no vuelvan)
-    if (_fbUser && _fbDb && navigator.onLine) {
-      toast('⏳ Borrando de Firebase...');
-      const colls = ['clientes','prestamos','cuotas','prendas','movimientos_caja','pagos_cuota'];
-      for (const col of colls) {
-        try {
-          const snap = await _fbDb.collection('users').doc(_fbUser.uid).collection(col).get();
-          // Borrar en lotes de 400 (límite Firestore: 500)
-          let batch = _fbDb.batch();
-          let count = 0;
-          for (const doc of snap.docs) {
-            batch.delete(doc.ref);
-            count++;
-            if (count >= 400) {
-              await batch.commit();
-              batch = _fbDb.batch();
-              count = 0;
-            }
-          }
-          if (count > 0) await batch.commit();
-        } catch(e) {
-          console.warn('Error borrando Firebase colección', col, e);
-        }
+    // 2. Publicar una barrera por UID. Mientras está preparando, ningún
+    // dispositivo actualizado puede subir una cola anterior al reset.
+    toast('⏳ Borrando de Firebase...');
+    const resetId = globalThis.crypto?.randomUUID?.() || `reset_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const userRef = _fbDb.collection('users').doc(_fbUser.uid);
+    await userRef.set({ prestcontrolDataReset: {
+      id: resetId, status: 'preparing', startedAt: firebase.firestore.FieldValue.serverTimestamp()
+    } }, { merge: true });
+
+    // Los stores sincronizados quedan como tombstones autoritativos. Así un
+    // dispositivo offline no puede resucitar copias activas antiguas.
+    for (const col of RESET_FIREBASE_STORES) {
+      const snap = await userRef.collection(col).get();
+      for (let offset = 0; offset < snap.docs.length; offset += 400) {
+        const batch = _fbDb.batch();
+        snap.docs.slice(offset, offset + 400).forEach(doc => batch.set(doc.ref, {
+          id: doc.id,
+          userId: _fbUser.uid,
+          _deleted: true,
+          deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          resetId
+        }));
+        await batch.commit();
       }
     }
 
-    // 3. Borrar IndexedDB local
-    const stores = ['clientes','prestamos','cuotas','prendas','movimientos_caja','pagos_cuota','config','bitacora','sync_queue','sync_meta'];
-    for (const store of stores) {
-      await new Promise(res => {
-        const tx = DB.transaction(store, 'readwrite');
-        const req = tx.objectStore(store).clear();
-        req.onsuccess = () => res(true);
-        req.onerror   = () => res(false);
-      });
+    // Bitácora no participa del sync normal: se elimina físicamente.
+    const bitacoraSnap = await userRef.collection('bitacora').get();
+    for (let offset = 0; offset < bitacoraSnap.docs.length; offset += 400) {
+      const batch = _fbDb.batch();
+      bitacoraSnap.docs.slice(offset, offset + 400).forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
     }
+    await userRef.set({ prestcontrolDataReset: {
+      id: resetId, status: 'completed', completedAt: firebase.firestore.FieldValue.serverTimestamp()
+    } }, { merge: true });
 
-    // Un reset total también revoca la autorización local de este dispositivo.
-    await eliminarAccesoOffline(uidSesionActual());
-
-    await logBitacora('sistema', 'Aplicación reseteada — todos los datos fueron eliminados (local + Firebase)');
+    // 3. Vaciar todos los stores del usuario en una sola transacción. El PIN
+    // vive en PrestamosApp_global y se conserva deliberadamente.
+    await limpiarDatosUsuarioLocales(resetId);
     toast('✅ Todo eliminado correctamente.');
 
     // 4. Reiniciar sync en tiempo real (limpio)
@@ -3512,6 +3601,8 @@ async function ejecutarResetApp() {
     }, 1200);
   } catch(e) {
     toast('❌ Error al resetear: ' + e.message);
+  } finally {
+    _resetProcessing = false;
   }
 }
 
@@ -4465,6 +4556,7 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
         ? Number(c.montoEfectivo || 0)
         : (c.montoEfectivo != null ? Number(c.montoEfectivo || 0) : m);
       if (c.origenPago === 'renovacion_descuento' && montoEfectivo === 0) compensadas++;
+      else if (c.origenPago === 'interes_cobrado_renovacion_capital') { cobradas++; compensadas++; }
       else if (montoEfectivo > 0) cobradas++;
       mCob += montoEfectivo;
       return;
@@ -5505,6 +5597,15 @@ async function renderPrestamos() {
   const el = document.getElementById('pg-prestamos');
   const [listaCompleta, todasCuotas, todasPrendas] = await Promise.all([dbAll('prestamos'), dbAll('cuotas'), dbAllIncludeDeleted('prendas')]);
   listaCompleta.sort(ordenarPrestamosPorPrioridad);
+  const elegibilidadRenovacionCapital = new Set((await Promise.all(listaCompleta.map(async prestamo => {
+    if (typeof window.evaluarCobroInteresRenovacionCapital !== 'function') return null;
+    try {
+      const evaluacion = await window.evaluarCobroInteresRenovacionCapital(prestamo.id);
+      return evaluacion.ok === true ? prestamo.id : null;
+    } catch (_) {
+      return null;
+    }
+  }))).filter(Boolean));
 
   if (!listaCompleta.length) {
     el.innerHTML = emptyHTML('📋','Sin préstamos','Tocá ＋ para crear el primer préstamo.');
@@ -5517,8 +5618,8 @@ async function renderPrestamos() {
 
   const activos    = listaCompleta.filter(p=>p.estado==='Activo').length;
   const atrasados  = listaCompleta.filter(p=>p.estado==='Atrasado').length;
-  const renovados  = listaCompleta.filter(p=>p.estado==='Pagado' && p.cerradoPor==='renovacion').length;
-  const pagados    = listaCompleta.filter(p=>p.estado==='Pagado' && p.cerradoPor!=='renovacion').length;
+  const renovados  = listaCompleta.filter(p=>p.estado==='Pagado' && ['renovacion','renovacion_capital'].includes(p.cerradoPor)).length;
+  const pagados    = listaCompleta.filter(p=>p.estado==='Pagado' && !['renovacion','renovacion_capital'].includes(p.cerradoPor)).length;
   const ejecutados = listaCompleta.filter(p=>p.estado==='Ejecutado').length;
   const cancelados = listaCompleta.filter(p=>p.estado==='Cancelado').length;
   const semanales  = listaCompleta.filter(p=>p.tipo==='Semanal' && esPrestamoTipoVisible(p)).length;
@@ -5568,11 +5669,12 @@ async function renderPrestamos() {
       </button>
     </div>
     ${pagados + renovados > 0 ? `<div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:10px">💡 Pagados y renovados permanecen disponibles en sus filtros y en <b onclick="goPage('historial')" style="color:var(--gold);cursor:pointer;text-decoration:underline">Historial</b></div>` : ''}
-    <div id="prest-list">${lista.length ? lista.map(p => loanItemHTML(p, todasCuotas, todasPrendas)).join('') : emptyHTML('🎉','Sin préstamos activos','Todos al día.')}</div>
+    <div id="prest-list">${lista.length ? lista.map(p => loanItemHTML(p, todasCuotas, todasPrendas, elegibilidadRenovacionCapital.has(p.id))).join('') : emptyHTML('🎉','Sin préstamos activos','Todos al día.')}</div>
   </div>`;
   el._data = listaCompleta;
   el._cuotas = todasCuotas;
   el._prendas = todasPrendas;
+  el._renovacionCapitalElegibles = elegibilidadRenovacionCapital;
 }
 
 function filtrarPrestamos(filtro, btn) {
@@ -5586,13 +5688,13 @@ function filtrarPrestamos(filtro, btn) {
   if (filtro === 'activos') filtrada = lista.filter(p => p.estado !== 'Pagado' && p.estado !== 'Cancelado' && p.estado !== 'Ejecutado');
   else if (filtro === 'todos') filtrada = lista;
   else if (filtro === 'Semanal' || filtro === 'Mensual') filtrada = lista.filter(p => p.tipo === filtro && esPrestamoTipoVisible(p));
-  else if (filtro === 'Renovado') filtrada = lista.filter(p => p.estado === 'Pagado' && p.cerradoPor === 'renovacion');
-  else if (filtro === 'Pagado') filtrada = lista.filter(p => p.estado === 'Pagado' && p.cerradoPor !== 'renovacion');
+  else if (filtro === 'Renovado') filtrada = lista.filter(p => p.estado === 'Pagado' && ['renovacion','renovacion_capital'].includes(p.cerradoPor));
+  else if (filtro === 'Pagado') filtrada = lista.filter(p => p.estado === 'Pagado' && !['renovacion','renovacion_capital'].includes(p.cerradoPor));
   else filtrada = lista.filter(p => p.estado === filtro);
   filtrada.sort(ordenarPrestamosPorPrioridad);
   const listEl = document.getElementById('prest-list');
   if (listEl) listEl.innerHTML = filtrada.length
-    ? filtrada.map(p => loanItemHTML(p, cuotas, prendas)).join('')
+    ? filtrada.map(p => loanItemHTML(p, cuotas, prendas, el._renovacionCapitalElegibles?.has(p.id) === true)).join('')
     : emptyHTML('🔍','Sin resultados','');
 }
 
@@ -5668,7 +5770,7 @@ function prendasActivasDePrestamo(prendas, prestamoId) {
   );
 }
 
-function loanItemHTML(p, todasCuotas, todasPrendas = []) {
+function loanItemHTML(p, todasCuotas, todasPrendas = [], puedeRenovarCapital = false) {
   const clsMap  = { Activo:'line-info', Atrasado:'line-danger', Pendiente:'line-warning', Pagado:'line-success', Ejecutado:'line-violet', Cancelado:'line-muted' };
   const badgeMap = { Activo:'badge-info', Atrasado:'badge-danger', Pendiente:'badge-warning', Pagado:'badge-success', Ejecutado:'badge-violet', Cancelado:'badge-muted' };
   const misCuotas = (todasCuotas||[]).filter(c=>c.prestamoId===p.id).sort((a,b)=>a.nro-b.nro);
@@ -5681,7 +5783,7 @@ function loanItemHTML(p, todasCuotas, todasPrendas = []) {
   const puedeRenovar = puedeEditar && misCuotas.some(c => esCuotaCobrable(c, mapaPrestamoActual));
   const prendasVinculadas = prendasActivasDePrestamo(todasPrendas, p.id);
   const puedeEjecutar = puedeEditar && prendasVinculadas.some(prenda => normalizarEstadoRelacion(prenda.estado) === 'en garantía');
-  const esRenovado = p.estado === 'Pagado' && p.cerradoPor === 'renovacion' && !!p.prestamoRenovacionId;
+  const esRenovado = p.estado === 'Pagado' && ['renovacion','renovacion_capital'].includes(p.cerradoPor) && !!p.prestamoRenovacionId;
   const esPrestamoRenovacion = p.origen === 'renovacion' && !!p.prestamoOrigenId;
   const estadoVisual = esRenovado ? 'Renovado' : p.estado;
   const agregarGarantiaHTML = puedeEditar
@@ -5747,6 +5849,7 @@ function loanItemHTML(p, todasCuotas, todasPrendas = []) {
         <span style="font-size:12px;font-weight:700;color:var(--muted)">CUOTAS (${misCuotas.length})</span>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
           ${puedeRenovar ? `<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();abrirRenovacionPrestamo('${esc(p.id)}')">Renovar préstamo</button>` : ''}
+          ${puedeRenovarCapital ? `<button class="btn btn-sm btn-gold" onclick="event.stopPropagation();abrirCobroInteresRenovacionCapital('${esc(p.id)}')">Cobrar interés y renovar capital</button>` : ''}
           ${puedeEjecutar ? `<button class="btn btn-sm btn-red" onclick="event.stopPropagation();confirmarEjecutarPrestamo('${esc(p.id)}')">Ejecutar préstamo</button>` : ''}
           ${puedeEditar ? `<button class="btn btn-sm btn-gold" onclick="event.stopPropagation();solicitarEdicionPrestamo('${esc(p.id)}')">Editar préstamo</button>` : ''}
           <button class="btn btn-sm btn-red" onclick="event.stopPropagation();confirmarBorrarPrestamo('${esc(p.id)}')">Eliminar</button>
@@ -6409,11 +6512,16 @@ async function openPrestamoDetail(id, opciones = {}) {
   const estadoUI  = prestamoEstadoUI(prestamo.estado);
   const puedeEditar = !prestamo._deleted && ['Activo', 'Atrasado'].includes(prestamo.estado);
   const puedeEjecutar = puedeEditar && prendasVinculadas.some(prenda => normalizarEstadoRelacion(prenda.estado) === 'en garantía');
-  const esRenovado = prestamo.estado === 'Pagado' && prestamo.cerradoPor === 'renovacion' && !!prestamo.prestamoRenovacionId;
+  const esRenovado = prestamo.estado === 'Pagado' && ['renovacion','renovacion_capital'].includes(prestamo.cerradoPor) && !!prestamo.prestamoRenovacionId;
   const esPrestamoRenovacion = prestamo.origen === 'renovacion' && !!prestamo.prestamoOrigenId;
   const estadoVisual = esRenovado ? 'Renovado' : prestamo.estado;
   const mapaPrestamoActual = new Map([[prestamo.id, prestamo]]);
   const puedeRenovar = puedeEditar && cuotas.some(c => esCuotaCobrable(c, mapaPrestamoActual));
+  let puedeRenovarCapital = false;
+  if (puedeEditar && typeof window.evaluarCobroInteresRenovacionCapital === 'function') {
+    try { puedeRenovarCapital = (await window.evaluarCobroInteresRenovacionCapital(prestamo.id)).ok === true; }
+    catch (_) { puedeRenovarCapital = false; }
+  }
 
   const el = document.getElementById('pg-prestamo-detail');
   el.innerHTML = `<div class="fadeIn">
@@ -6445,6 +6553,7 @@ async function openPrestamoDetail(id, opciones = {}) {
     <button class="btn btn-red btn-full" style="margin-bottom:10px" onclick="confirmarBorrarPrestamo('${esc(id)}')">🗑️ Eliminar préstamo</button>
     <button class="btn btn-ghost btn-full" style="margin-bottom:14px" onclick="imprimirComprobantePrestamo('${esc(id)}')">🖨️ Comprobante del Préstamo</button>
     ${puedeRenovar ? `<button class="btn btn-ghost btn-full" style="margin-bottom:14px" onclick="abrirRenovacionPrestamo('${esc(prestamo.id)}')">Renovar préstamo</button>` : ''}
+    ${puedeRenovarCapital ? `<button class="btn btn-gold btn-full" style="margin-bottom:14px" onclick="abrirCobroInteresRenovacionCapital('${esc(prestamo.id)}')">Cobrar interés y renovar capital</button>` : ''}
     ${puedeEditar ? `<button class="btn btn-gold btn-full" style="margin-bottom:14px" onclick="solicitarEdicionPrestamo('${esc(id)}')">Editar préstamo</button>` : ''}
 
     <div class="sec-hdr"><div class="sec-title">Garantías (${prendasVinculadas.length})</div></div>
@@ -10822,6 +10931,9 @@ function saldoPendienteCuota(c) {
   return window.saldoCobrableCuota(c);
 }
 function estadoVisualCuota(cuota) {
+  if (cuota?.estado === 'Pagado' && cuota?.origenPago === 'interes_cobrado_renovacion_capital') {
+    return 'Interés cobrado · capital renovado';
+  }
   return cuota?.estado === 'Pagado' && cuota?.bonificacionTipo === 'INTERES'
     ? 'Pagada con bonificación'
     : String(cuota?.estado || '');
@@ -11438,6 +11550,7 @@ async function fbObtenerTodos(colName) {
 
 // ── SYNC: subir datos locales a Firebase ──────────────
 async function _pushToFirebase() {
+  if (_resetProcessing) return false;
   if (_restoreApplying) {
     syncDebugLog('push_omitido_por_restauracion');
     return false;
@@ -11517,6 +11630,7 @@ function iniciarServiciosSesionDesbloqueada() {
 
 async function _pushToFirebaseSinLock() {
   if (!_fbUser || !_fbDb || !DB) return false;
+  await aplicarResetRemotoPendiente();
   if (await bloquearSyncPorRestorePending()) return false;
 
   // OPTIMIZACIÓN: Solo subir lo que está en sync_queue (cambios pendientes)
@@ -11750,6 +11864,7 @@ async function _pushCompletoAFirebase() {
   if (!_fbUser) return;
   driveSetStatus('syncing', 'Sincronización completa...');
   try {
+    await aplicarResetRemotoPendiente();
     const [clientes, prestamos, cuotas, prendas, movimientosCaja, pagosCuota] = await Promise.all([
       dbAllIncludeDeleted('clientes'),
       dbAllIncludeDeleted('prestamos'),
@@ -11798,8 +11913,10 @@ async function _pushCompletoAFirebase() {
 // ── SYNC: bajar datos de Firebase al dispositivo ──────
 async function _pullFromFirebase() {
   if (!_fbUser) return false;
+  if (_resetProcessing) return false;
   driveSetStatus('syncing', 'Sincronizando...');
   try {
+    await aplicarResetRemotoPendiente();
     const [fbClientes, fbPrestamos, fbCuotas, fbPrendas, fbMovimientosCaja, fbPagosCuota] = await Promise.all([
       fbObtenerTodos('clientes'),
       fbObtenerTodos('prestamos'),

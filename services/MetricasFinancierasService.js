@@ -61,10 +61,9 @@ export class MetricasFinancierasService {
     let interesCobrado = 0;
     let totalInteresBonificado = 0;
     cuotasPagadasLista.forEach(c => {
-      const tieneDesgloseBonificado = c.bonificacionTipo === 'INTERES'
-        && Number.isFinite(Number(c.capitalCobradoReal))
+      const tieneDesgloseExplicito = Number.isFinite(Number(c.capitalCobradoReal))
         && Number.isFinite(Number(c.interesCobradoReal));
-      const desglose = tieneDesgloseBonificado
+      const desglose = tieneDesgloseExplicito
         ? { capital: this._num(c.capitalCobradoReal), interes: this._num(c.interesCobradoReal) }
         : this._desglosarMonto(
             this._montoCobroEfectivo(c),
@@ -121,7 +120,7 @@ export class MetricasFinancierasService {
     const totalCobrado = cuotasPagadasLista.reduce((sum, c) => sum + this._montoCobroEfectivo(c), 0)
       + cuotasParcialesLista.reduce((sum, c) => sum + this._num(c.totalAbonado), 0);
     const totalCompensadoRenovaciones = cuotasPagadasLista
-      .filter(c => c.origenPago === 'renovacion_descuento')
+      .filter(c => ['renovacion_descuento', 'interes_cobrado_renovacion_capital'].includes(c.origenPago))
       .reduce((sum, c) => sum + this._num(c.montoCompensado ?? c.monto), 0);
     const capitalNominalRenovaciones = prestamos
       .filter(p => !p?._deleted && p.origen === 'renovacion')
@@ -270,7 +269,7 @@ export class MetricasFinancierasService {
           compensadas = cuotas.filter(c =>
             !c?._deleted &&
             c.prestamoId === origen.id &&
-            c.origenPago === 'renovacion_descuento' &&
+            ['renovacion_descuento', 'interes_cobrado_renovacion_capital'].includes(c.origenPago) &&
             c.prestamoRenovacionId === prestamo.id
           );
         }
@@ -303,6 +302,23 @@ export class MetricasFinancierasService {
           origenComp.capitalEconomicoNominal + origenComp.interesHeredadoNominal - nominalOrigen
         ) > tolerancia) {
           errorCadena(prestamo, 'composicion del prestamo origen inconsistente');
+        }
+
+        if (prestamo.renovacionTipo === 'interes_cobrado_capital_renovado') {
+          if (Math.abs(montoCompensado - nominal) > tolerancia || Math.abs(desembolsoNuevo) > tolerancia) {
+            errorCadena(prestamo, 'la renovacion de capital debe compensar todo el nominal sin desembolso nuevo');
+          }
+          composicion = {
+            prestamoId: prestamo.id,
+            nominal,
+            capitalEconomicoNominal: nominal,
+            interesHeredadoNominal: 0,
+            interesNuevo: this._num(prestamo.ganancia),
+            desembolsoNuevo: 0
+          };
+          visitando.delete(prestamo.id);
+          memo.set(prestamo.id, composicion);
+          return composicion;
         }
 
         let capitalHeredado = 0;

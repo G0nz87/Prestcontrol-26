@@ -153,6 +153,30 @@ export class CajaService {
         if (movimiento.pagoFingerprint !== fingerprintEsperado) throw new Error('El fingerprint del cobro no coincide con su composición.');
       }
     }
+    if (movimiento.tipo === 'COBRO_INTERES_RENOVACION') {
+      if (movimiento.direccion !== 'ingreso') throw new Error('El cobro de interés por renovación debe ser un ingreso.');
+      if (!texto(movimiento.cuotaId) || !texto(movimiento.prestamoId) || !texto(movimiento.clienteId)) {
+        throw new Error('El cobro de interés debe identificar cuota, préstamo y cliente.');
+      }
+      if (!texto(movimiento.pagoId) || !texto(movimiento.componentePagoId)) {
+        throw new Error('El cobro de interés debe identificar el pago y su componente.');
+      }
+      const sourceEsperado = `COBRO_INTERES_RENOVACION:${texto(movimiento.prestamoId)}:${texto(movimiento.cuotaId)}`;
+      if (movimiento.sourceKey !== sourceEsperado) {
+        throw new Error(`El cobro de interés debe usar sourceKey ${sourceEsperado}.`);
+      }
+      const componentes = Array.isArray(movimiento.componentesPago) ? movimiento.componentesPago : [];
+      if (componentes.length !== 1) throw new Error('El cobro de interés debe tener un único componente de pago.');
+      const componente = componentes[0];
+      if (texto(componente.componentePagoId) !== texto(movimiento.componentePagoId)
+          || Math.abs(Number(componente.monto) - monto) > 0.009) {
+        throw new Error('El componente del cobro de interés no coincide con el movimiento.');
+      }
+      const fingerprintEsperado = `${texto(componente.componentePagoId)}:${Number(componente.monto).toFixed(2)}`;
+      if (movimiento.pagoFingerprint !== fingerprintEsperado) {
+        throw new Error('El fingerprint del cobro de interés no coincide con su composición.');
+      }
+    }
     const tiposVentaPrenda = new Set([
       'VENTA_PRENDA', 'GASTO_VENTA_PRENDA',
       'REVERSA_CORRECCION_VENTA', 'REVERSA_CORRECCION_GASTO',

@@ -17,6 +17,10 @@ import {
   calcularPreviewRenovacion,
   confirmarRenovacionPrestamo,
   abrirComprobanteRenovacion,
+  evaluarCobroInteresRenovacionCapital,
+  abrirCobroInteresRenovacionCapital,
+  calcularPreviewRenovacionCapital,
+  confirmarCobroInteresRenovacionCapital,
   confirmarEjecutarPrestamo,
   confirmarBorrarPrestamo,
   selMotivo,
@@ -73,6 +77,10 @@ window.abrirRenovacionPrestamo      = abrirRenovacionPrestamo;
 window.calcularPreviewRenovacion    = calcularPreviewRenovacion;
 window.confirmarRenovacionPrestamo  = confirmarRenovacionPrestamo;
 window.abrirComprobanteRenovacion   = abrirComprobanteRenovacion;
+window.evaluarCobroInteresRenovacionCapital = evaluarCobroInteresRenovacionCapital;
+window.abrirCobroInteresRenovacionCapital = abrirCobroInteresRenovacionCapital;
+window.calcularPreviewRenovacionCapital = calcularPreviewRenovacionCapital;
+window.confirmarCobroInteresRenovacionCapital = confirmarCobroInteresRenovacionCapital;
 window.confirmarEjecutarPrestamo    = confirmarEjecutarPrestamo;
 window.confirmarBorrarPrestamo      = confirmarBorrarPrestamo;
 window.selMotivo                    = selMotivo;

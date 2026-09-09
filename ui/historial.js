@@ -46,7 +46,7 @@ export function buildHistorial(prestamos, cuotas, pagosCuota = []) {
   const conteosEstadoTotal = { Pagado: 0, Renovado: 0, Ejecutado: 0, Cancelado: 0 };
   const conteosEstadoPeriodo = {};
   prestamos.filter(p => estadosFinales.includes(p.estado)).forEach(p => {
-    const estadoVisual = p.estado === 'Pagado' && p.cerradoPor === 'renovacion' ? 'Renovado' : p.estado;
+    const estadoVisual = p.estado === 'Pagado' && ['renovacion', 'renovacion_capital'].includes(p.cerradoPor) ? 'Renovado' : p.estado;
     const key = periodoKey(estadoVisual === 'Renovado' ? (p.renovadoEn || p.fecha) : p.fecha);
     conteosEstadoTotal[estadoVisual]++;
     if (!key) return;
@@ -85,10 +85,10 @@ export function buildHistorial(prestamos, cuotas, pagosCuota = []) {
   cuotas.filter(c => c.estado === 'Pagado' && c.fechaPago && !c._deleted && Number(c.cantidadAbonos || 0) === 0).forEach(c => {
     const key = periodoKey(c.fechaPago);
     if (!key) return;
-    if (c.origenPago === 'renovacion_descuento') {
+    if (['renovacion_descuento', 'interes_cobrado_renovacion_capital'].includes(c.origenPago)) {
       if (!gruposCompensados[key]) gruposCompensados[key] = 0;
       gruposCompensados[key] += Number(c.montoCompensado ?? c.monto ?? 0);
-      return;
+      if (c.origenPago === 'renovacion_descuento') return;
     }
     if (!gruposCob[key]) gruposCob[key] = 0;
     gruposCob[key] += c.montoEfectivo != null ? Number(c.montoEfectivo || 0) : Number(c.monto || 0);

@@ -336,7 +336,7 @@ async function confirmarRenovacionParcialEnFirebase({ prestamoOrigen, cuotasOrig
   const nuevos = registros.filter(item =>
     (item.store === 'prestamos' && item.data.id !== prestamoOrigen.id) ||
     (item.store === 'cuotas' && item.data.prestamoId !== prestamoOrigen.id) ||
-    item.store === 'movimientos_caja'
+    item.store === 'movimientos_caja' || item.store === 'bitacora'
   );
 
   await db.runTransaction(async transaction => {
@@ -402,6 +402,225 @@ export function prepararGarantiasRenovacion(prendas, prestamoOrigenId, preId, no
       ],
       updatedAt: nowISO
     }));
+}
+
+const RENOVACION_CAPITAL_TIPO = 'interes_cobrado_capital_renovado';
+const ORIGEN_COBRO_INTERES_RENOVACION = 'interes_cobrado_renovacion_capital';
+
+function setRenovacionCapitalError(message) {
+  const error = document.getElementById('rc-error');
+  if (!error) return;
+  error.textContent = message || '';
+  error.classList.toggle('on', Boolean(message));
+}
+
+function datosRenovacionCapitalFormulario() {
+  return {
+    interesRecibido: Number(document.getElementById('rc-interes-recibido')?.value || 0),
+    interesPorCuota: Number(document.getElementById('rc-interes')?.value || 0),
+    nCuotas: Number.parseInt(document.getElementById('rc-ncuotas')?.value || '0', 10),
+    tipo: document.getElementById('rc-tipo')?.value || 'Mensual',
+    fechaRaw: document.getElementById('rc-fecha')?.value || '',
+    medioCobro: document.getElementById('rc-medio-cobro')?.value || ''
+  };
+}
+
+function calcularImportesRenovacionCapital(prestamo, cuota) {
+  const capitalRenovado = window.round2(Number(prestamo?.montoNominal ?? prestamo?.monto ?? 0));
+  const saldo = window.round2(saldoCobrableCuota(cuota));
+  const interesPeriodo = window.round2(saldo - capitalRenovado);
+  return { capitalRenovado, saldo, interesPeriodo };
+}
+
+export async function evaluarCobroInteresRenovacionCapital(prestamoId) {
+  const [prestamo, cuotas, movimientos] = await Promise.all([
+    window.dbGet('prestamos', prestamoId),
+    window.dbAll('cuotas'),
+    window.dbAll('movimientos_caja')
+  ]);
+  if (!prestamo || prestamo._deleted) return { ok: false, motivo: 'Préstamo no encontrado' };
+  if (!['Activo', 'Atrasado'].includes(prestamo.estado)) return { ok: false, motivo: 'El préstamo no está cobrable' };
+  if (prestamo.prestamoRenovacionId) return { ok: false, motivo: 'El préstamo ya fue renovado' };
+  if (await window.hayRestauracionLocalPendiente?.()) return { ok: false, motivo: 'Existe una restauración pendiente' };
+  if (!window.cajaService.esCajaIniciada(movimientos)) return { ok: false, motivo: 'Caja no está iniciada' };
+  const mapa = new Map([[prestamo.id, prestamo]]);
+  const cobrables = cuotas.filter(cuota => cuota.prestamoId === prestamo.id && window.esCuotaCobrable(cuota, mapa));
+  if (cobrables.length !== 1) return { ok: false, motivo: 'Se requiere exactamente una cuota cobrable' };
+  const cuota = cobrables[0];
+  if (cuota.estado === 'Parcial' || Number(cuota.totalAbonado || 0) > 0 || Number(cuota.cantidadAbonos || 0) > 0) {
+    return { ok: false, motivo: 'La cuota contiene pagos parciales incompatibles' };
+  }
+  const importes = calcularImportesRenovacionCapital(prestamo, cuota);
+  if (!(importes.capitalRenovado > 0) || !(importes.interesPeriodo > 0) || importes.saldo !== window.round2(Number(cuota.monto || 0))) {
+    return { ok: false, motivo: 'No se pudo separar capital e interés sin ambigüedad' };
+  }
+  return { ok: true, prestamo, cuota, ...importes };
+}
+
+export async function abrirCobroInteresRenovacionCapital(prestamoId) {
+  if (!navigator.onLine || !window._fbUser || !window._fbDb?.runTransaction) {
+    return window.toast('Esta operación requiere conexión para verificar el préstamo y evitar duplicados');
+  }
+  const evaluacion = await evaluarCobroInteresRenovacionCapital(prestamoId);
+  if (!evaluacion.ok) return window.toast(`No disponible: ${evaluacion.motivo}`);
+  const cliente = await window.dbGet('clientes', evaluacion.prestamo.clienteId);
+  if (cliente?.estado === 'Bloqueado') return window.toast('Cliente bloqueado. No puede recibir una renovación');
+
+  window._renovacionCapitalPrestamoId = prestamoId;
+  document.getElementById('rc-origen').innerHTML = `<b>${window.esc(evaluacion.prestamo.clienteNombre || '')}</b> · ${window.esc(prestamoId)}`;
+  document.getElementById('rc-resumen-origen').innerHTML = `
+    <div class="form-summary-row"><span>Capital que continúa</span><strong>${window.fmtMoney(evaluacion.capitalRenovado)}</strong></div>
+    <div class="form-summary-row"><span>Interés del período</span><strong>${window.fmtMoney(evaluacion.interesPeriodo)}</strong></div>`;
+  document.getElementById('rc-interes-recibido').value = String(evaluacion.interesPeriodo);
+  document.getElementById('rc-medio-cobro').value = 'Efectivo';
+  document.getElementById('rc-interes').value = evaluacion.prestamo.interesPorCuota != null
+    ? evaluacion.prestamo.interesPorCuota
+    : window.round2(Number(evaluacion.prestamo.interes || 0) * 100 / Math.max(Number(evaluacion.prestamo.nCuotas || 1), 1));
+  document.getElementById('rc-ncuotas').value = evaluacion.prestamo.nCuotas || 1;
+  document.getElementById('rc-tipo').value = evaluacion.prestamo.tipo || 'Mensual';
+  document.getElementById('rc-fecha').value = new Date().toISOString().split('T')[0];
+  document.getElementById('rc-confirm-text').value = '';
+  setRenovacionCapitalError('');
+  await calcularPreviewRenovacionCapital();
+  window.openSheet('sh-renovar-capital');
+}
+
+export async function calcularPreviewRenovacionCapital() {
+  const prestamoId = window._renovacionCapitalPrestamoId;
+  const preview = document.getElementById('rc-preview');
+  if (!prestamoId || !preview) return;
+  const evaluacion = await evaluarCobroInteresRenovacionCapital(prestamoId);
+  if (!evaluacion.ok) {
+    preview.innerHTML = `<div class="form-alert is-warning">${window.esc(evaluacion.motivo)}</div>`;
+    return;
+  }
+  const datos = datosRenovacionCapitalFormulario();
+  if (!datos.nCuotas || !Number.isFinite(datos.interesPorCuota)) return;
+  const plan = window.prestamoService.calcularPlanPagos(evaluacion.capitalRenovado, datos.interesPorCuota, datos.nCuotas);
+  const interesValido = Math.abs(window.round2(datos.interesRecibido) - evaluacion.interesPeriodo) <= 0.009;
+  preview.innerHTML = `
+    <div class="form-summary-row"><span>Interés recibido</span><strong style="color:${interesValido ? 'var(--grn)' : 'var(--red)'}">${window.fmtMoney(datos.interesRecibido)}</strong></div>
+    <div class="form-summary-row"><span>Capital renovado</span><strong>${window.fmtMoney(evaluacion.capitalRenovado)}</strong></div>
+    <div class="form-summary-row"><span>Efectivo nuevo entregado</span><strong>${window.fmtMoney(0)}</strong></div>
+    <div class="form-summary-row"><span>Nuevo total</span><strong>${window.fmtMoney(plan.total)}</strong></div>
+    <div class="form-summary-row"><span>Nueva cuota</span><strong>${window.fmtMoney(plan.cuotaMonto)}</strong></div>`;
+  setRenovacionCapitalError(interesValido ? '' : `El interés recibido debe ser ${window.fmtMoney(evaluacion.interesPeriodo)}.`);
+}
+
+export async function confirmarCobroInteresRenovacionCapital() {
+  const prestamoOrigenId = window._renovacionCapitalPrestamoId;
+  const boton = document.getElementById('rc-save');
+  if (!prestamoOrigenId) return;
+  if (document.getElementById('rc-confirm-text')?.value.trim().toUpperCase() !== 'RENOVAR CAPITAL') {
+    setRenovacionCapitalError('Escribí RENOVAR CAPITAL para confirmar la operación');
+    return document.getElementById('rc-confirm-text')?.focus();
+  }
+  const lock = window.iniciarOperacionProtegida?.(`prestamo:renovar-capital:${prestamoOrigenId}`, boton, 'Procesando...');
+  if (!lock) return;
+  let nuevoId = '';
+  try {
+    if (await window.bloquearEscrituraPorRestorePending?.()) return;
+    if (!navigator.onLine || !window._fbUser || !window._fbDb?.runTransaction) throw new Error('Esta operación requiere conexión.');
+    const evaluacion = await evaluarCobroInteresRenovacionCapital(prestamoOrigenId);
+    if (!evaluacion.ok) throw new Error(evaluacion.motivo);
+    const datos = datosRenovacionCapitalFormulario();
+    if (!MEDIOS_ENTREGA.has(datos.medioCobro)) throw new Error('Seleccioná un medio de cobro válido');
+    window.prestamoService.validarDatosPrestamo({ clienteId: evaluacion.prestamo.clienteId, monto: evaluacion.capitalRenovado, tasaPorCuota: datos.interesPorCuota, nCuotas: datos.nCuotas, fecha: datos.fechaRaw });
+    if (!['Mensual', 'Semanal'].includes(datos.tipo)) throw new Error('Seleccioná una frecuencia válida');
+    const interesRecibido = window.round2(datos.interesRecibido);
+    if (Math.abs(interesRecibido - evaluacion.interesPeriodo) > 0.009) throw new Error(`El interés recibido debe ser ${window.fmtMoney(evaluacion.interesPeriodo)}.`);
+
+    const [prestamos, cuotasTodas, prendasTodas, movimientos] = await Promise.all([
+      window.dbAllIncludeDeleted('prestamos'), window.dbAllIncludeDeleted('cuotas'),
+      window.dbAllIncludeDeleted('prendas'), window.dbAll('movimientos_caja')
+    ]);
+    const preId = window.nextId('PR', prestamos);
+    nuevoId = preId;
+    const nowISO = new Date().toISOString();
+    const fecha = new Date(`${datos.fechaRaw}T12:00:00`);
+    const plan = window.prestamoService.calcularPlanPagos(evaluacion.capitalRenovado, datos.interesPorCuota, datos.nCuotas);
+    const operationId = nuevaOperacionFinanciera('renovacion_capital');
+    const pagoId = `PAGO_INTERES_RENOVACION:${evaluacion.cuota.id}`;
+    const componentePagoId = String(datos.medioCobro).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+    const componentesPago = [{ componentePagoId, medioPago: datos.medioCobro, monto: interesRecibido }];
+    const pagoFingerprintCuota = `${componentePagoId}:${interesRecibido.toFixed(2)}|RENOVACION_CAPITAL:${evaluacion.capitalRenovado.toFixed(2)}`;
+    const pagoFingerprintCaja = `${componentePagoId}:${interesRecibido.toFixed(2)}`;
+    const cuotaAnterior = {
+      ...evaluacion.cuota, estado: 'Pagado', fechaPago: nowISO, metodo: datos.medioCobro,
+      origenPago: ORIGEN_COBRO_INTERES_RENOVACION, cerradoPor: 'renovacion_capital',
+      montoEfectivo: interesRecibido, montoCompensado: evaluacion.capitalRenovado,
+      montoCompensadoRenovacion: evaluacion.capitalRenovado, capitalCobradoReal: 0,
+      interesCobradoReal: interesRecibido, totalAbonado: interesRecibido,
+      saldoPendiente: 0, pagoId, componentesPago, pagoFingerprint: pagoFingerprintCuota,
+      prestamoRenovacionId: preId, updatedAt: nowISO
+    };
+    const prestamoAnterior = {
+      ...evaluacion.prestamo, estado: 'Pagado', cerradoPor: 'renovacion_capital',
+      renovacionTipo: RENOVACION_CAPITAL_TIPO, prestamoRenovacionId: preId,
+      renovadoEn: nowISO, updatedAt: nowISO
+    };
+    const prestamoNuevo = {
+      id: preId, clienteId: evaluacion.prestamo.clienteId, clienteNombre: evaluacion.prestamo.clienteNombre,
+      fecha: fecha.toISOString(), monto: evaluacion.capitalRenovado, montoNominal: evaluacion.capitalRenovado,
+      interes: plan.interesTotal, interesPorCuota: datos.interesPorCuota, tipo: datos.tipo,
+      nCuotas: datos.nCuotas, total: plan.total, cuota: plan.cuotaMonto, ganancia: plan.ganancia,
+      estado: 'Activo', notas: `Capital renovado de ${prestamoOrigenId}`, prenda: evaluacion.prestamo.prenda || '',
+      origen: 'renovacion', renovacionTipo: RENOVACION_CAPITAL_TIPO, prestamoOrigenId,
+      montoCompensado: evaluacion.capitalRenovado, montoEntregado: 0, montoInteresCobradoRenovacion: interesRecibido,
+      medioEntrega: null, cuotasCompensadas: [evaluacion.cuota.id], operationId,
+      creadoEn: nowISO, updatedAt: nowISO
+    };
+    const cuotasNuevas = window.prestamoService.generarCuotas({
+      prestamoId: preId, clienteId: prestamoNuevo.clienteId, clienteNombre: prestamoNuevo.clienteNombre,
+      fechaInicio: fecha, tipo: datos.tipo, nCuotas: datos.nCuotas, cuotaMonto: plan.cuotaMonto,
+      primerNumeroId: maxCuotaNumero(cuotasTodas) + 1, nowISO
+    });
+    const garantias = prepararGarantiasRenovacion(prendasTodas, prestamoOrigenId, preId, nowISO);
+    const sourceKey = `COBRO_INTERES_RENOVACION:${prestamoOrigenId}:${evaluacion.cuota.id}`;
+    const movimiento = window.cajaService.crearMovimiento({
+      id: window.cajaService.generarIdAutomatico(sourceKey), tipo: 'COBRO_INTERES_RENOVACION',
+      direccion: 'ingreso', monto: interesRecibido, fecha: nowISO,
+      concepto: `Interés cobrado y capital renovado ${prestamoOrigenId} → ${preId}`,
+      medioPago: datos.medioCobro, cuentaId: 'GENERAL', eventoTipo: 'RENOVACION_CAPITAL', eventoId: preId,
+      prestamoId: prestamoOrigenId, cuotaId: evaluacion.cuota.id, clienteId: prestamoNuevo.clienteId,
+      pagoId, componentePagoId, componentesPago, pagoFingerprint: pagoFingerprintCaja, automatico: true, sourceKey,
+      operationId, createdByUid: window._fbUser.uid, deviceId: window.DEVICE_ID || null,
+      movimientosExistentes: movimientos
+    });
+    const bitacora = {
+      id: `BIT-${operationId}`,
+      tipo: 'renovacion_capital',
+      descripcion: `Interés cobrado ${window.fmtMoney(interesRecibido)} · capital renovado ${window.fmtMoney(evaluacion.capitalRenovado)} · ${prestamoOrigenId} → ${preId}`,
+      refId: prestamoNuevo.clienteId,
+      fecha: nowISO,
+      operationId,
+      deviceId: window.DEVICE_ID || null,
+      entidad: 'prestamos',
+      recordId: preId,
+      estadoAnterior: evaluacion.prestamo.estado,
+      estadoNuevo: 'Renovado'
+    };
+    const existente = movimientos.find(item => item.id === movimiento.id || item.sourceKey === sourceKey);
+    if (existente) throw new Error('Esta operación ya tiene un movimiento de Caja. Sincronizá y revisá el préstamo.');
+    const registros = [
+      { store: 'prestamos', data: prestamoAnterior }, { store: 'cuotas', data: cuotaAnterior },
+      { store: 'prestamos', data: prestamoNuevo }, ...cuotasNuevas.map(data => ({ store: 'cuotas', data })),
+      ...garantias.map(data => ({ store: 'prendas', data })),
+      { store: 'movimientos_caja', data: movimiento }, { store: 'bitacora', data: bitacora }
+    ];
+    await confirmarRenovacionParcialEnFirebase({ prestamoOrigen: evaluacion.prestamo, cuotasOrigen: [evaluacion.cuota], registros });
+    await window.dbCommitOperacionPrestamoCajaAtomic(registros);
+    window._renovacionCapitalPrestamoId = '';
+    window.closeSheet();
+    window.toast(`Interés cobrado y capital renovado como ${preId}`);
+    await window.openPrestamoDetail(preId, { push: false });
+    void Promise.resolve(window.pushInmediato()).catch(() => window.scheduleDriveSync?.());
+  } catch (error) {
+    nuevoId = '';
+    setRenovacionCapitalError(error?.message || 'No se pudo completar la operación');
+  } finally {
+    lock.liberar();
+  }
 }
 
 export async function abrirRenovacionPrestamo(prestamoId) {
@@ -491,16 +710,24 @@ function descargarComprobanteRenovacionPDF(datos) {
   doc.setFontSize(16); doc.text('PrestControl', 52.5, y, { align: 'center' });
   y += 8; doc.setFontSize(12); doc.text('COMPROBANTE DE RENOVACION', 52.5, y, { align: 'center' });
   y += 9; doc.setFontSize(9);
+  const esRenovacionCapital = datos.renovacionTipo === RENOVACION_CAPITAL_TIPO;
+  if (esRenovacionCapital) {
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(11);
+    doc.text(`INTERES COBRADO: ${window.fmtMoney(datos.interesCobrado || 0)}`, 52.5, y, { align: 'center' });
+    y += 8;
+    doc.setFontSize(9);
+  }
   const filas = [
     ['Cliente', datos.clienteNombre || '—'],
     ['Fecha', datos.fechaTexto],
     ['Prestamo anterior', datos.prestamoOrigenId],
     ['Prestamo nuevo', datos.preId],
     ['Deuda pendiente al renovar', datos.cuotaTexto],
-    ['Abonado previamente', window.fmtMoney(datos.montoAbonadoPrevio || 0)],
-    ['Capital nominal nuevo', window.fmtMoney(datos.montoNominal)],
+    [esRenovacionCapital ? 'Interes cobrado' : 'Abonado previamente', window.fmtMoney(esRenovacionCapital ? datos.interesCobrado : (datos.montoAbonadoPrevio || 0))],
+    [esRenovacionCapital ? 'Capital renovado' : 'Capital nominal nuevo', window.fmtMoney(datos.montoNominal)],
     ['Compensado por renovacion', window.fmtMoney(datos.montoCompensado)],
-    ['Dinero realmente entregado', window.fmtMoney(datos.montoEntregado)],
+    [esRenovacionCapital ? 'Efectivo nuevo entregado' : 'Dinero realmente entregado', window.fmtMoney(datos.montoEntregado)],
     ['Total del prestamo nuevo', window.fmtMoney(datos.totalNuevo)],
     ['Plan nuevo', `${datos.nCuotasNuevas} cuotas de ${window.fmtMoney(datos.cuotaNueva)}`],
     ['Metodo', 'Renovacion'],
@@ -525,6 +752,8 @@ function mostrarComprobanteRenovacion(datos) {
   if (!body) return;
   const fechaTexto = datos.fechaTexto || new Date().toLocaleDateString('es-AR');
   const cuotaTexto = datos.cuotaTexto || 'Deuda pendiente compensada';
+  const esRenovacionCapital = datos.renovacionTipo === RENOVACION_CAPITAL_TIPO;
+  const importePrincipal = esRenovacionCapital ? Number(datos.interesCobrado || 0) : montoEntregado;
   const comprobante = { ...datos, fechaTexto, cuotaTexto };
   body.innerHTML = `
     <div class="receipt-paper">
@@ -533,7 +762,8 @@ function mostrarComprobanteRenovacion(datos) {
           <div class="receipt-head-left"><div class="receipt-kicker">Comprobante de renovación</div><div class="receipt-subtitle">Operación confirmada localmente</div></div>
           <div class="receipt-head-right"><div class="receipt-brand">PrestControl</div><div class="receipt-date">${window.esc(fechaTexto)}</div></div>
         </div>
-        <div class="receipt-amount">${window.fmtMoney(montoEntregado)}</div>
+        ${esRenovacionCapital ? '<div class="receipt-kicker">Interés cobrado</div>' : ''}
+        <div class="receipt-amount">${window.fmtMoney(importePrincipal)}</div>
       </div>
       <div class="receipt-details">
         <div class="receipt-row"><span class="receipt-label">Cliente</span><span class="receipt-value">${window.esc(datos.clienteNombre || '—')}</span></div>
@@ -541,10 +771,10 @@ function mostrarComprobanteRenovacion(datos) {
         <div class="receipt-row"><span class="receipt-label">Préstamo anterior</span><span class="receipt-value">${window.esc(prestamoOrigenId)}</span></div>
         <div class="receipt-row"><span class="receipt-label">Préstamo nuevo</span><span class="receipt-value">${window.esc(preId)}</span></div>
         <div class="receipt-row"><span class="receipt-label">Deuda pendiente al renovar</span><span class="receipt-value">${window.esc(cuotaTexto)}</span></div>
-        <div class="receipt-row"><span class="receipt-label">Abonado previamente</span><span class="receipt-value">${window.fmtMoney(datos.montoAbonadoPrevio || 0)}</span></div>
-        <div class="receipt-row"><span class="receipt-label">Capital nominal nuevo</span><span class="receipt-value">${window.fmtMoney(montoNominal)}</span></div>
+        <div class="receipt-row"><span class="receipt-label">${esRenovacionCapital ? 'Interés cobrado' : 'Abonado previamente'}</span><span class="receipt-value">${window.fmtMoney(esRenovacionCapital ? datos.interesCobrado : (datos.montoAbonadoPrevio || 0))}</span></div>
+        <div class="receipt-row"><span class="receipt-label">${esRenovacionCapital ? 'Capital renovado' : 'Capital nominal nuevo'}</span><span class="receipt-value">${window.fmtMoney(montoNominal)}</span></div>
         <div class="receipt-row"><span class="receipt-label">Compensado por renovación</span><span class="receipt-value">${window.fmtMoney(montoCompensado)}</span></div>
-        <div class="receipt-row"><span class="receipt-label">Dinero realmente entregado</span><span class="receipt-value">${window.fmtMoney(montoEntregado)}</span></div>
+        <div class="receipt-row"><span class="receipt-label">${esRenovacionCapital ? 'Efectivo nuevo entregado' : 'Dinero realmente entregado'}</span><span class="receipt-value">${window.fmtMoney(montoEntregado)}</span></div>
         <div class="receipt-row"><span class="receipt-label">Total del préstamo nuevo</span><span class="receipt-value">${window.fmtMoney(datos.totalNuevo)}</span></div>
         <div class="receipt-row"><span class="receipt-label">Plan nuevo</span><span class="receipt-value">${window.esc(`${datos.nCuotasNuevas} cuotas de ${window.fmtMoney(datos.cuotaNueva)}`)}</span></div>
         <div class="receipt-row"><span class="receipt-label">Método</span><span class="receipt-value">Renovación</span></div>
@@ -566,7 +796,12 @@ function mostrarComprobanteRenovacion(datos) {
     try {
       const cliente = datos.clienteId ? await window.dbGet('clientes', datos.clienteId) : null;
       if (!cliente?.telefono) return window.toast('El cliente no tiene teléfono registrado');
-      const mensaje = `*PrestControl · Renovación*\nCliente: *${datos.clienteNombre || cliente.nombre || '—'}*\nFecha: ${fechaTexto}\nPréstamo anterior: ${prestamoOrigenId}\nPréstamo nuevo: ${preId}\nDeuda pendiente al renovar: ${cuotaTexto}\nAbonado previamente: ${window.fmtMoney(datos.montoAbonadoPrevio || 0)}\nCompensado: ${window.fmtMoney(montoCompensado)} (sin ingreso de efectivo)\nCapital nominal nuevo: ${window.fmtMoney(montoNominal)}\nDinero entregado: *${window.fmtMoney(montoEntregado)}*\nTotal nuevo: ${window.fmtMoney(datos.totalNuevo)}\nPlan nuevo: ${datos.nCuotasNuevas} cuotas de ${window.fmtMoney(datos.cuotaNueva)}\nEstado: *RENOVADO*`;
+      const lineaCobro = esRenovacionCapital
+        ? `Interés cobrado: ${window.fmtMoney(datos.interesCobrado || 0)}`
+        : `Abonado previamente: ${window.fmtMoney(datos.montoAbonadoPrevio || 0)}`;
+      const lineaCapital = esRenovacionCapital ? 'Capital renovado' : 'Capital nominal nuevo';
+      const lineaEntrega = esRenovacionCapital ? 'Efectivo nuevo entregado' : 'Dinero entregado';
+      const mensaje = `*PrestControl · Renovación*\nCliente: *${datos.clienteNombre || cliente.nombre || '—'}*\nFecha: ${fechaTexto}\nPréstamo anterior: ${prestamoOrigenId}\nPréstamo nuevo: ${preId}\nDeuda pendiente al renovar: ${cuotaTexto}\n${lineaCobro}\nCompensado: ${window.fmtMoney(montoCompensado)} (sin ingreso de efectivo)\n${lineaCapital}: ${window.fmtMoney(montoNominal)}\n${lineaEntrega}: *${window.fmtMoney(montoEntregado)}*\nTotal nuevo: ${window.fmtMoney(datos.totalNuevo)}\nPlan nuevo: ${datos.nCuotasNuevas} cuotas de ${window.fmtMoney(datos.cuotaNueva)}\nEstado: *RENOVADO*`;
       window.abrirWhatsAppSeguro(cliente.telefono, mensaje);
     } finally {
       btnWA.disabled = false; delete btnWA.dataset.submitting;
@@ -588,7 +823,7 @@ export async function abrirComprobanteRenovacion(prestamoId) {
     return window.toast('Préstamo no encontrado');
   }
 
-  const prestamoOrigen = seleccionado.cerradoPor === 'renovacion'
+  const prestamoOrigen = ['renovacion', 'renovacion_capital'].includes(seleccionado.cerradoPor)
     ? seleccionado
     : porId.get(seleccionado.prestamoOrigenId);
   const prestamoNuevo = seleccionado.origen === 'renovacion'
@@ -607,7 +842,7 @@ export async function abrirComprobanteRenovacion(prestamoId) {
     .filter(cuota =>
       cuota?._deleted !== true &&
       cuota.prestamoId === prestamoOrigen.id &&
-      cuota.origenPago === 'renovacion_descuento' &&
+      ['renovacion_descuento', ORIGEN_COBRO_INTERES_RENOVACION].includes(cuota.origenPago) &&
       (idsPersistidos.size === 0 || idsPersistidos.has(cuota.id))
     )
     .sort((a, b) => Number(a.nro || 0) - Number(b.nro || 0));
@@ -637,6 +872,8 @@ export async function abrirComprobanteRenovacion(prestamoId) {
     montoNominal: Number(prestamoNuevo.montoNominal ?? prestamoNuevo.monto ?? 0),
     montoCompensado,
     montoAbonadoPrevio,
+    renovacionTipo: prestamoNuevo.renovacionTipo || prestamoOrigen.renovacionTipo || '',
+    interesCobrado: Number(prestamoNuevo.montoInteresCobradoRenovacion ?? compensadas.reduce((total, cuota) => total + Number(cuota.interesCobradoReal || 0), 0)),
     montoEntregado: Number(prestamoNuevo.montoEntregado ?? 0),
     totalNuevo: Number(prestamoNuevo.total || 0),
     nCuotasNuevas: Number(prestamoNuevo.nCuotas || 0),
