@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'prestcontrol-';
-const CACHE_NAME = `${CACHE_PREFIX}shell-v65`;
+const CACHE_NAME = `${CACHE_PREFIX}shell-v66`;
 
 const FIREBASE_SDK_OFFLINE = [
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',

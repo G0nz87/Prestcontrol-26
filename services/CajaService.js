@@ -49,6 +49,7 @@ export class CajaService {
       nota: datos.nota || '',
       medioPago: datos.medioPago || null,
       cuentaId: datos.cuentaId || CUENTA_GENERAL,
+      resetId: datos.resetId || null,
       eventoTipo: datos.eventoTipo || null,
       eventoId: datos.eventoId || null,
       clienteId: datos.clienteId || null,
@@ -93,7 +94,7 @@ export class CajaService {
       if (movimiento.direccion !== 'ingreso') {
         throw new Error('El saldo inicial debe ser un ingreso.');
       }
-      const sourceEsperado = `SALDO_INICIAL:${movimiento.cuentaId}`;
+      const sourceEsperado = `SALDO_INICIAL:${movimiento.cuentaId}${texto(movimiento.resetId) ? `:${texto(movimiento.resetId)}` : ''}`;
       if (movimiento.sourceKey !== sourceEsperado) {
         throw new Error(`El saldo inicial debe usar sourceKey ${sourceEsperado}.`);
       }
@@ -254,7 +255,7 @@ export class CajaService {
 
   generarSourceKey(datos = {}) {
     const cuentaId = texto(datos.cuentaId) || CUENTA_GENERAL;
-    if (datos.tipo === 'SALDO_INICIAL') return `SALDO_INICIAL:${cuentaId}`;
+    if (datos.tipo === 'SALDO_INICIAL') return `SALDO_INICIAL:${cuentaId}${texto(datos.resetId) ? `:${texto(datos.resetId)}` : ''}`;
     if (texto(datos.pagoId)) {
       return `COBRO:${texto(datos.pagoId)}:${texto(datos.componentePagoId) || 'UNICO'}`;
     }
@@ -265,11 +266,9 @@ export class CajaService {
   }
 
   buscarSaldoInicial(movimientos, cuentaId = CUENTA_GENERAL) {
-    const sourceKey = `SALDO_INICIAL:${cuentaId}`;
     const saldos = movimientosActivos(movimientos).filter(movimiento =>
       movimiento.tipo === 'SALDO_INICIAL'
       && (movimiento.cuentaId || CUENTA_GENERAL) === cuentaId
-      && movimiento.sourceKey === sourceKey
     );
     if (saldos.length > 1) throw new Error(`Existe más de un saldo inicial activo para ${cuentaId}.`);
     return saldos[0] || null;

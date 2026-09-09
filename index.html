@@ -3364,6 +3364,12 @@ async function aplicarResetRemotoPendiente() {
   return true;
 }
 
+async function getDataResetIdActual() {
+  const meta = await getSyncMeta();
+  return String(meta[RESET_META_KEY] || '');
+}
+window.getDataResetIdActual = getDataResetIdActual;
+
 /* =====================================================
    REPARACIÓN — buscar y limpiar cuotas duplicadas
 ===================================================== */

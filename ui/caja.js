@@ -129,8 +129,9 @@ export async function confirmarSaldoInicial() {
     const existentes = await window.dbAll('movimientos_caja');
     if (window.cajaService.esCajaIniciada(existentes)) throw new Error('Caja ya tiene un saldo inicial activo.');
     if (!valor('caja-fecha-inicial')) throw new Error('Ingresá la fecha de inicio.');
-    const sourceKey = 'SALDO_INICIAL:GENERAL';
-    const m = window.cajaService.crearMovimiento({ id:window.cajaService.generarIdAutomatico(sourceKey), tipo:'SALDO_INICIAL', direccion:'ingreso', monto:Number(valor('caja-saldo-inicial')), fecha:valor('caja-fecha-inicial'), concepto:'Inicio de Caja', nota:valor('caja-nota-inicial'), medioPago:'Efectivo', cuentaId:'GENERAL', automatico:false, sourceKey, operationId:operationId || nuevaOperacion(), createdByUid:window._fbUser?.uid || null, deviceId:window.DEVICE_ID || null, movimientosExistentes:existentes });
+    const resetId = await window.getDataResetIdActual?.() || '';
+    const sourceKey = window.cajaService.generarSourceKey({ tipo:'SALDO_INICIAL', cuentaId:'GENERAL', resetId });
+    const m = window.cajaService.crearMovimiento({ id:window.cajaService.generarIdAutomatico(sourceKey), tipo:'SALDO_INICIAL', direccion:'ingreso', monto:Number(valor('caja-saldo-inicial')), fecha:valor('caja-fecha-inicial'), concepto:'Inicio de Caja', nota:valor('caja-nota-inicial'), medioPago:'Efectivo', cuentaId:'GENERAL', resetId:resetId || null, automatico:false, sourceKey, operationId:operationId || nuevaOperacion(), createdByUid:window._fbUser?.uid || null, deviceId:window.DEVICE_ID || null, movimientosExistentes:existentes });
     await guardarLocalYEncolar(m); await window.logBitacora?.('caja_saldo_inicial', `Caja iniciada con ${window.fmtMoney(m.monto)}`, m.id);
     operationId = null; window.closeSheet(); window.toast('✅ Caja iniciada'); await renderCaja();
   } catch (e) { window.toast('⚠️ ' + (e.message || 'No se pudo iniciar Caja')); } finally { lock.liberar(); }
