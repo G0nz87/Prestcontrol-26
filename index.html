@@ -6384,6 +6384,15 @@ async function openClienteDetail(id, opciones = {}) {
   const cuotasCreditoVigente = misCuotas.filter(c => !c._deleted && idsPrestamosVigentes.has(c.prestamoId));
   const cuotasCobradasCreditoVigente = cuotasCreditoVigente.filter(c => c.estado === 'Pagado').length;
   const credTotal    = misPrestamos.length;
+  const elegibilidadRenovacionCapital = new Set((await Promise.all(misPrestamos.map(async prestamo => {
+    if (typeof window.evaluarCobroInteresRenovacionCapital !== 'function') return null;
+    try {
+      const evaluacion = await window.evaluarCobroInteresRenovacionCapital(prestamo.id);
+      return evaluacion.ok === true ? prestamo.id : null;
+    } catch (_) {
+      return null;
+    }
+  }))).filter(Boolean));
 
   const el = document.getElementById('pg-cliente-detail');
   const waBtn = cliente.telefono
@@ -6445,6 +6454,7 @@ async function openClienteDetail(id, opciones = {}) {
       const cuotaBadgeMap = {Pagado:'badge-success',Pendiente:'badge-warning',Atrasado:'badge-danger',Ejecutada:'badge-muted',Ejecutado:'badge-muted',Cancelada:'badge-muted',Cancelado:'badge-muted'};
       const puedeRenovar = !p._deleted && ['Activo', 'Atrasado'].includes(p.estado)
         && cuotasPrestamo.some(c => esCuotaCobrable(c, new Map([[p.id, p]])));
+      const puedeRenovarCapital = elegibilidadRenovacionCapital.has(p.id);
       const cuotasMini = cuotasOrdenadas.length
         ? cuotasOrdenadas.map(c => {
           const esCobrable = esCuotaCobrable(c, new Map([[p.id, p]]));
@@ -6491,6 +6501,7 @@ async function openClienteDetail(id, opciones = {}) {
             <div style="display:flex;gap:6px;flex-wrap:wrap">
               <button class="btn btn-sm btn-gold" onclick="event.stopPropagation();openPrestamoDetail('${esc(p.id)}')">Ver detalle</button>
               ${puedeRenovar ? `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();abrirRenovacionPrestamo('${esc(p.id)}')">Renovar préstamo</button>` : ''}
+              ${puedeRenovarCapital ? `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();abrirCobroInteresRenovacionCapital('${esc(p.id)}')">Cobrar interés y renovar capital</button>` : ''}
             </div>
           </div>
           ${cuotasMini}
