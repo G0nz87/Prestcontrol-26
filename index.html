@@ -6769,9 +6769,10 @@ async function abrirEdicionPrestamoInformativa(id) {
   }
   _prestamoEdicionAutorizado = null;
 
-  const [prestamo, cuotas] = await Promise.all([
+  const [prestamo, cuotas, pagosCuota] = await Promise.all([
     dbGet('prestamos', id),
-    dbAll('cuotas')
+    dbAll('cuotas'),
+    dbAll('pagos_cuota')
   ]);
   if (!prestamo) { closeSheet(); toast('Préstamo no encontrado'); return; }
   if (prestamo._deleted || ESTADOS_PRESTAMO_NO_COBRABLE.includes(prestamo.estado)) {
@@ -6780,17 +6781,32 @@ async function abrirEdicionPrestamoInformativa(id) {
     return;
   }
 
-  const pagadas = cuotas.filter(c => c.prestamoId === id && !c._deleted && c.estado === 'Pagado').length;
-  _editarPrestamoPermiteFinanzas = pagadas === 0;
+  const cuotasPrestamo = cuotas.filter(c => c.prestamoId === id && !c._deleted);
+  const tienePagosRegistrados = cuotasPrestamo.some(c =>
+    ['Parcial', 'Pagado'].includes(c.estado)
+    || Number(c.totalAbonado || 0) !== 0
+    || Number(c.cantidadAbonos || 0) !== 0
+    || !!c.ultimoPagoId
+    || !!c.pagoId
+    || Number(c.montoEfectivo || 0) !== 0
+    || Number(c.montoCompensado || 0) !== 0
+    || !!c.origenPago
+    || !!c.cerradoPor
+    || (Array.isArray(c.componentesPago) && c.componentesPago.length > 0)
+    || !!c.pagoFingerprint
+  ) || pagosCuota.some(p => p.prestamoId === id && !p._deleted);
+  _editarPrestamoPermiteFinanzas = !tienePagosRegistrados && !prestamo.prestamoRenovacionId;
   const warning = document.getElementById('edit-pre-warning');
   const error = document.getElementById('edit-pre-error');
   document.getElementById('edit-pre-id').textContent = `${prestamo.id} · ${prestamo.clienteNombre || ''}`;
   error.classList.remove('on');
-  warning.style.display = pagadas ? '' : 'none';
-  warning.textContent = pagadas
+  warning.style.display = _editarPrestamoPermiteFinanzas ? 'none' : '';
+  warning.textContent = tienePagosRegistrados
     ? 'Este préstamo ya tiene pagos registrados. No se puede modificar monto, fecha ni cuotas.'
+    : !_editarPrestamoPermiteFinanzas
+      ? 'Este préstamo ya fue renovado. No se pueden modificar sus condiciones financieras.'
     : '';
-  document.getElementById('edit-pre-info').textContent = pagadas
+  document.getElementById('edit-pre-info').textContent = !_editarPrestamoPermiteFinanzas
     ? 'Solo podés modificar la prenda o garantía y las notas.'
     : 'El préstamo no tiene cuotas pagadas. Podés modificar sus condiciones financieras; las cuotas se recalcularán al guardar.';
 
@@ -6830,10 +6846,11 @@ async function guardarEdicionPrestamo() {
   try {
     if (await bloquearEscrituraPorRestorePending()) return;
     errEl.classList.remove('on');
-    const [prestamo, cuotas, todasCuotas] = await Promise.all([
+    const [prestamo, cuotas, todasCuotas, pagosCuota] = await Promise.all([
       dbGet('prestamos', id),
       dbAll('cuotas'),
-      dbAllIncludeDeleted('cuotas')
+      dbAllIncludeDeleted('cuotas'),
+      dbAll('pagos_cuota')
     ]);
     if (!prestamo) throw new Error('Préstamo no encontrado');
     if (prestamo._deleted || ESTADOS_PRESTAMO_NO_COBRABLE.includes(prestamo.estado)) {
@@ -6841,12 +6858,25 @@ async function guardarEdicionPrestamo() {
     }
 
     const cuotasPrestamo = cuotas.filter(c => c.prestamoId === id && !c._deleted);
-    const pagadas = cuotasPrestamo.filter(c => c.estado === 'Pagado');
+    const tienePagosRegistrados = cuotasPrestamo.some(c =>
+      ['Parcial', 'Pagado'].includes(c.estado)
+      || Number(c.totalAbonado || 0) !== 0
+      || Number(c.cantidadAbonos || 0) !== 0
+      || !!c.ultimoPagoId
+      || !!c.pagoId
+      || Number(c.montoEfectivo || 0) !== 0
+      || Number(c.montoCompensado || 0) !== 0
+      || !!c.origenPago
+      || !!c.cerradoPor
+      || (Array.isArray(c.componentesPago) && c.componentesPago.length > 0)
+      || !!c.pagoFingerprint
+    ) || pagosCuota.some(p => p.prestamoId === id && !p._deleted);
+    const permiteEditarFinanzas = !tienePagosRegistrados && !prestamo.prestamoRenovacionId;
     const prenda = document.getElementById('edit-pre-prenda').value.trim();
     const notas = document.getElementById('edit-pre-notas').value.trim();
     const nowISO = new Date().toISOString();
 
-    if (pagadas.length) {
+    if (!permiteEditarFinanzas) {
       if (prenda === (prestamo.prenda || '') && notas === (prestamo.notas || '')) {
         toast('No hay cambios para guardar');
         return;
@@ -6878,6 +6908,7 @@ async function guardarEdicionPrestamo() {
       const actualizado = {
         ...prestamo,
         monto,
+        ...('montoNominal' in prestamo ? { montoNominal: monto } : {}),
         fecha: fecha.toISOString(),
         interes: interesTotal,
         interesPorCuota,
@@ -6917,9 +6948,21 @@ async function guardarEdicionPrestamo() {
               nro,
               fechaVenc: vencimiento.toISOString(),
               monto: cuotaMonto,
+              saldoPendiente: cuotaMonto,
+              totalAbonado: 0,
+              cantidadAbonos: 0,
+              ultimoPagoId: null,
               estado,
               fechaPago: null,
               metodo: null,
+              montoEfectivo: 0,
+              montoCompensado: 0,
+              pagoId: null,
+              metodoPago: null,
+              componentesPago: [],
+              pagoFingerprint: null,
+              origenPago: null,
+              cerradoPor: null,
               updatedAt: nowISO
             }
           : {
@@ -6930,6 +6973,10 @@ async function guardarEdicionPrestamo() {
               nro,
               fechaVenc: vencimiento.toISOString(),
               monto: cuotaMonto,
+              saldoPendiente: cuotaMonto,
+              totalAbonado: 0,
+              cantidadAbonos: 0,
+              ultimoPagoId: null,
               estado,
               fechaPago: null,
               metodo: null,
