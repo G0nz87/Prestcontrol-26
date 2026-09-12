@@ -60,6 +60,9 @@ export class CajaService {
       componentePagoId: datos.componentePagoId || null,
       componentesPago: Array.isArray(datos.componentesPago) ? datos.componentesPago.map(item => ({ ...item })) : [],
       pagoFingerprint: datos.pagoFingerprint || null,
+      capitalAnterior: datos.capitalAnterior != null ? Number(datos.capitalAnterior) : null,
+      capitalNuevo: datos.capitalNuevo != null ? Number(datos.capitalNuevo) : null,
+      diferencia: datos.diferencia != null ? Number(datos.diferencia) : null,
       automatico: datos.automatico === true,
       sourceKey: datos.sourceKey || null,
       reversaDeMovimientoId: datos.reversaDeMovimientoId || null,
@@ -176,6 +179,27 @@ export class CajaService {
       const fingerprintEsperado = `${texto(componente.componentePagoId)}:${Number(componente.monto).toFixed(2)}`;
       if (movimiento.pagoFingerprint !== fingerprintEsperado) {
         throw new Error('El fingerprint del cobro de interés no coincide con su composición.');
+      }
+    }
+    if (movimiento.tipo === 'AJUSTE_DESEMBOLSO_EDICION_PRESTAMO') {
+      const anterior = Number(movimiento.capitalAnterior);
+      const nuevo = Number(movimiento.capitalNuevo);
+      const diferencia = Number(movimiento.diferencia);
+      const sourceEsperado = `AJUSTE_DESEMBOLSO_EDICION_PRESTAMO:${texto(movimiento.prestamoId)}:${texto(movimiento.operationId)}`;
+      if (!texto(movimiento.prestamoId) || !texto(movimiento.clienteId) || !texto(movimiento.operationId)) {
+        throw new Error('El ajuste de desembolso debe identificar préstamo, cliente y operación.');
+      }
+      if (![anterior, nuevo, diferencia].every(Number.isFinite) || anterior <= 0 || nuevo <= 0 || Math.abs(diferencia) <= 0.009) {
+        throw new Error('Los capitales del ajuste de desembolso son inválidos.');
+      }
+      if (Math.abs((nuevo - anterior) - diferencia) > 0.009 || Math.abs(Math.abs(diferencia) - monto) > 0.009) {
+        throw new Error('La diferencia del ajuste no coincide con los capitales informados.');
+      }
+      if (movimiento.direccion !== (diferencia > 0 ? 'egreso' : 'ingreso')) {
+        throw new Error('La dirección del ajuste no coincide con la variación de capital.');
+      }
+      if (movimiento.sourceKey !== sourceEsperado) {
+        throw new Error(`El ajuste de desembolso debe usar sourceKey ${sourceEsperado}.`);
       }
     }
     const tiposVentaPrenda = new Set([

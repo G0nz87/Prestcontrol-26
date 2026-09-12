@@ -2542,7 +2542,7 @@ async function dbCommitOperacionPrestamoCajaAtomic(registros) {
         escribirTodo();
       } else {
         let lecturasPendientes = cajaItems.length;
-        const campos = ['tipo', 'direccion', 'monto', 'medioPago', 'sourceKey', 'prestamoId', 'cuotaId', 'clienteId', 'prendaId', 'eventoTipo', 'eventoId', 'pagoId', 'componentePagoId', 'pagoFingerprint'];
+        const campos = ['tipo', 'direccion', 'monto', 'medioPago', 'sourceKey', 'prestamoId', 'cuotaId', 'clienteId', 'prendaId', 'eventoTipo', 'eventoId', 'pagoId', 'componentePagoId', 'pagoFingerprint', 'capitalAnterior', 'capitalNuevo', 'diferencia'];
         for (const cajaItem of cajaItems) {
           const getReq = tx.objectStore('movimientos_caja').get(cajaItem.data.id);
           getReq.onerror = () => { try { tx.abort(); } catch (_) {} };
@@ -4562,7 +4562,7 @@ function buildDashGlobal(cuotas, clientes, prestamos) {
         ? Number(c.montoEfectivo || 0)
         : (c.montoEfectivo != null ? Number(c.montoEfectivo || 0) : m);
       if (c.origenPago === 'renovacion_descuento' && montoEfectivo === 0) compensadas++;
-      else if (c.origenPago === 'interes_cobrado_renovacion_capital') { cobradas++; compensadas++; }
+      else if (c.origenPago === 'interes_cobrado_renovacion_capital') compensadas++;
       else if (montoEfectivo > 0) cobradas++;
       mCob += montoEfectivo;
       return;
@@ -4692,6 +4692,18 @@ function buildDashCliente(cuotas, clientes, prestamos) {
     const cAtr = cuotasAtrasadas.length;
     const mAtr = cuotasAtrasadas.reduce((s,c)=>s+saldoPendienteCuota(c),0);
     const cEjecutadas = misCuo.filter(c => c.estado === 'Ejecutada' || c.estado === 'Ejecutado').length;
+    const cuotasRenovadasCompensadas = misCuo.filter(c =>
+      c.estado === 'Pagado'
+      && ['interes_cobrado_renovacion_capital', 'renovacion_descuento'].includes(c.origenPago)
+    );
+    const cuotasPagadasReales = misCuo.filter(c =>
+      c.estado === 'Pagado'
+      && !['interes_cobrado_renovacion_capital', 'renovacion_descuento'].includes(c.origenPago)
+    );
+    const pagosRealesVisuales = misCuo.filter(c =>
+      c.estado === 'Pagado'
+      && (c.origenPago !== 'renovacion_descuento' || montoPagoRealVisual(c) > 0)
+    );
     const metricas = window.metricasFinancierasService.calcularMetricasCliente(selId, {
       prestamos, cuotas, clientes, hoy, esCuotaCobrable
     });
@@ -4728,7 +4740,8 @@ function buildDashCliente(cuotas, clientes, prestamos) {
       <section class="dash-client-section">
         <div class="dash-client-section-title">🧾 Estado de cuotas</div>
         <div class="dash-client-grid">
-          <div class="dash-client-kpi is-green"><div class="dash-client-kpi-label">Pagadas</div><div class="dash-client-kpi-value">${metricas.cuotasPagadas}</div><div class="dash-client-kpi-meta">Pagos reales registrados</div></div>
+          <div class="dash-client-kpi is-green"><div class="dash-client-kpi-label">Pagadas reales</div><div class="dash-client-kpi-value">${cuotasPagadasReales.length}</div><div class="dash-client-kpi-meta">Cobros normales confirmados</div></div>
+          <div class="dash-client-kpi is-accent"><div class="dash-client-kpi-label">Renovadas / compensadas</div><div class="dash-client-kpi-value">${cuotasRenovadasCompensadas.length}</div><div class="dash-client-kpi-meta">Cierre contable por renovación</div></div>
           <div class="dash-client-kpi is-red"><div class="dash-client-kpi-label">Ejecutadas</div><div class="dash-client-kpi-value">${cEjecutadas}</div><div class="dash-client-kpi-meta">No cuentan como pagadas</div></div>
           <div class="dash-client-kpi is-red"><div class="dash-client-kpi-label">Capital ejecutado</div><div class="dash-client-kpi-value">${fmtMoney(metricas.capitalEjecutado)}</div><div class="dash-client-kpi-meta">Capital de cuotas ejecutadas</div></div>
           <div class="dash-client-kpi is-green"><div class="dash-client-kpi-label">Total cobrado</div><div class="dash-client-kpi-value">${fmtMoney(metricas.totalCobrado)}</div><div class="dash-client-kpi-meta">Capital e interés cobrados</div></div>
@@ -4763,11 +4776,11 @@ function buildDashCliente(cuotas, clientes, prestamos) {
       <section class="dash-client-section dash-client-history-section">
         <div class="dash-client-section-title">🕘 Últimos pagos reales</div>
         <div class="dash-client-history">
-        ${misCuo.filter(c=>c.estado==='Pagado').sort((a,b)=>new Date(b.fechaPago||0)-new Date(a.fechaPago||0)).slice(0,15).map(c=>`
+        ${pagosRealesVisuales.sort((a,b)=>new Date(b.fechaPago||0)-new Date(a.fechaPago||0)).slice(0,15).map(c=>`
           <div class="hist-item">
             <div class="hist-dot"></div>
-            <div class="hist-body"><div class="hist-name">Cuota ${c.nro} · ${esc(c.prestamoId)}</div><div class="hist-meta">${fmtDate(c.fechaPago)} · ${esc(c.metodo||'—')}</div></div>
-            <div class="hist-amt">${fmtMoney(c.monto)}</div>
+            <div class="hist-body"><div class="hist-name">${c.origenPago === 'interes_cobrado_renovacion_capital' ? `${esc(c.prestamoId)} · Interés cobrado / renovación` : `Cuota ${c.nro} · ${esc(c.prestamoId)}`}</div><div class="hist-meta">${fmtDate(c.fechaPago)} · ${esc(c.metodo||'—')}</div></div>
+            <div class="hist-amt">${fmtMoney(montoPagoRealVisual(c))}</div>
           </div>`).join('') || '<div style="font-size:13px;color:var(--muted);text-align:center;padding:12px">Sin pagos registrados</div>'}
         </div>
       </section>`;
@@ -4850,6 +4863,16 @@ function debeConservarRestauracionLocal(local, remoto) {
 function montoCobroEfectivo(cuota) {
   if (cuota?.origenPago === 'renovacion_descuento') return Number(cuota.montoEfectivo || 0);
   return cuota?.montoEfectivo != null ? Number(cuota.montoEfectivo || 0) : Number(cuota?.monto || 0);
+}
+function montoPagoRealVisual(cuota) {
+  if (cuota?.origenPago !== 'interes_cobrado_renovacion_capital') return montoCobroEfectivo(cuota);
+  const interes = Number(cuota.interesCobradoReal);
+  if (cuota.interesCobradoReal != null && Number.isFinite(interes) && interes >= 0) return interes;
+  const efectivo = Number(cuota.montoEfectivo);
+  if (cuota.montoEfectivo != null && Number.isFinite(efectivo) && efectivo >= 0) return efectivo;
+  const componentes = Array.isArray(cuota.componentesPago) ? cuota.componentesPago : [];
+  const suma = componentes.reduce((total, componente) => total + Number(componente?.monto || 0), 0);
+  return Number.isFinite(suma) && suma >= 0 ? suma : 0;
 }
 const prestamosMap = prestamos => new Map((prestamos || []).map(p => [p.id, p]));
 function esEstadoCuotaCerrado(estado) {
@@ -6586,6 +6609,42 @@ let _pinAdminModo = 'validar';
 let _editarPrestamoId = null;
 let _prestamoEdicionAutorizado = null;
 let _editarPrestamoPermiteFinanzas = false;
+function cuotaTieneEvidenciaPago(cuota) {
+  return ['Parcial', 'Pagado'].includes(cuota?.estado)
+    || Number(cuota?.totalAbonado || 0) !== 0
+    || Number(cuota?.cantidadAbonos || 0) !== 0
+    || !!cuota?.ultimoPagoId
+    || !!cuota?.pagoId
+    || Number(cuota?.montoEfectivo || 0) !== 0
+    || Number(cuota?.montoCompensado || 0) !== 0
+    || !!cuota?.origenPago
+    || !!cuota?.cerradoPor
+    || (Array.isArray(cuota?.componentesPago) && cuota.componentesPago.length > 0)
+    || !!cuota?.pagoFingerprint;
+}
+function prestamoTienePagosRegistrados(prestamoId, cuotas, pagosCuota) {
+  return cuotas.some(cuota => cuota.prestamoId === prestamoId && !cuota._deleted && cuotaTieneEvidenciaPago(cuota))
+    || pagosCuota.some(pago => pago.prestamoId === prestamoId && !pago._deleted);
+}
+function validarDesembolsoCajaParaEdicion(prestamo, movimientos) {
+  const activos = movimientos.filter(movimiento => movimiento && movimiento._deleted !== true && movimiento.prestamoId === prestamo.id);
+  const originales = activos.filter(movimiento =>
+    movimiento.tipo === 'DESEMBOLSO_PRESTAMO'
+    && movimiento.direccion === 'egreso'
+    && movimiento.sourceKey === `DESEMBOLSO_PRESTAMO:${prestamo.id}`
+  );
+  if (originales.length !== 1) {
+    throw new Error('No se encontró un único desembolso original compatible en Caja. La edición de capital requiere revisión.');
+  }
+  const ajustes = activos.filter(movimiento => movimiento.tipo === 'AJUSTE_DESEMBOLSO_EDICION_PRESTAMO');
+  const capitalDesembolsado = ajustes.reduce((total, movimiento) =>
+    total + (movimiento.direccion === 'egreso' ? Number(movimiento.monto || 0) : -Number(movimiento.monto || 0)),
+  Number(originales[0].monto || 0));
+  if (Math.abs(round2(capitalDesembolsado) - round2(Number(prestamo.monto || 0))) > 0.009) {
+    throw new Error('El capital del préstamo no coincide con sus desembolsos registrados en Caja. Requiere revisión antes de editarse.');
+  }
+  return originales[0];
+}
 
 function pinAdminConfigKey() {
   return `admin_pin_${currentUser || 'default'}`;
@@ -6782,19 +6841,7 @@ async function abrirEdicionPrestamoInformativa(id) {
   }
 
   const cuotasPrestamo = cuotas.filter(c => c.prestamoId === id && !c._deleted);
-  const tienePagosRegistrados = cuotasPrestamo.some(c =>
-    ['Parcial', 'Pagado'].includes(c.estado)
-    || Number(c.totalAbonado || 0) !== 0
-    || Number(c.cantidadAbonos || 0) !== 0
-    || !!c.ultimoPagoId
-    || !!c.pagoId
-    || Number(c.montoEfectivo || 0) !== 0
-    || Number(c.montoCompensado || 0) !== 0
-    || !!c.origenPago
-    || !!c.cerradoPor
-    || (Array.isArray(c.componentesPago) && c.componentesPago.length > 0)
-    || !!c.pagoFingerprint
-  ) || pagosCuota.some(p => p.prestamoId === id && !p._deleted);
+  const tienePagosRegistrados = prestamoTienePagosRegistrados(id, cuotasPrestamo, pagosCuota);
   _editarPrestamoPermiteFinanzas = !tienePagosRegistrados && !prestamo.prestamoRenovacionId;
   const warning = document.getElementById('edit-pre-warning');
   const error = document.getElementById('edit-pre-error');
@@ -6846,11 +6893,12 @@ async function guardarEdicionPrestamo() {
   try {
     if (await bloquearEscrituraPorRestorePending()) return;
     errEl.classList.remove('on');
-    const [prestamo, cuotas, todasCuotas, pagosCuota] = await Promise.all([
+    const [prestamo, cuotas, todasCuotas, pagosCuota, movimientosCaja] = await Promise.all([
       dbGet('prestamos', id),
       dbAll('cuotas'),
       dbAllIncludeDeleted('cuotas'),
-      dbAll('pagos_cuota')
+      dbAll('pagos_cuota'),
+      dbAll('movimientos_caja')
     ]);
     if (!prestamo) throw new Error('Préstamo no encontrado');
     if (prestamo._deleted || ESTADOS_PRESTAMO_NO_COBRABLE.includes(prestamo.estado)) {
@@ -6858,19 +6906,7 @@ async function guardarEdicionPrestamo() {
     }
 
     const cuotasPrestamo = cuotas.filter(c => c.prestamoId === id && !c._deleted);
-    const tienePagosRegistrados = cuotasPrestamo.some(c =>
-      ['Parcial', 'Pagado'].includes(c.estado)
-      || Number(c.totalAbonado || 0) !== 0
-      || Number(c.cantidadAbonos || 0) !== 0
-      || !!c.ultimoPagoId
-      || !!c.pagoId
-      || Number(c.montoEfectivo || 0) !== 0
-      || Number(c.montoCompensado || 0) !== 0
-      || !!c.origenPago
-      || !!c.cerradoPor
-      || (Array.isArray(c.componentesPago) && c.componentesPago.length > 0)
-      || !!c.pagoFingerprint
-    ) || pagosCuota.some(p => p.prestamoId === id && !p._deleted);
+    const tienePagosRegistrados = prestamoTienePagosRegistrados(id, cuotasPrestamo, pagosCuota);
     const permiteEditarFinanzas = !tienePagosRegistrados && !prestamo.prestamoRenovacionId;
     const prenda = document.getElementById('edit-pre-prenda').value.trim();
     const notas = document.getElementById('edit-pre-notas').value.trim();
@@ -6905,6 +6941,44 @@ async function guardarEdicionPrestamo() {
       if (Number.isNaN(fecha.getTime())) throw new Error('Ingresá una fecha válida');
       const { interesTotal, total, cuotaMonto, ganancia } =
         window.prestamoService.calcularPlanPagos(monto, interesPorCuota, nCuotas);
+      const capitalAnterior = round2(Number(prestamo.monto || 0));
+      const capitalNuevo = round2(monto);
+      const diferenciaCapital = round2(capitalNuevo - capitalAnterior);
+      let ajusteCaja = null;
+      if (Math.abs(diferenciaCapital) > 0.009) {
+        if (prestamo.origen === 'renovacion' || prestamo.montoEntregado != null || prestamo.montoCompensado != null) {
+          throw new Error('Los préstamos originados por renovación requieren su flujo específico para modificar el capital.');
+        }
+        if (!window.cajaService.esCajaIniciada(movimientosCaja)) {
+          throw new Error('Caja debe estar iniciada para modificar el capital del préstamo.');
+        }
+        const desembolsoOriginal = validarDesembolsoCajaParaEdicion(prestamo, movimientosCaja);
+        const operationId = globalThis.crypto?.randomUUID?.() || `edicion_capital_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const sourceKey = `AJUSTE_DESEMBOLSO_EDICION_PRESTAMO:${id}:${operationId}`;
+        ajusteCaja = window.cajaService.crearMovimiento({
+          id: window.cajaService.generarIdAutomatico(sourceKey),
+          tipo: 'AJUSTE_DESEMBOLSO_EDICION_PRESTAMO',
+          direccion: diferenciaCapital > 0 ? 'egreso' : 'ingreso',
+          monto: Math.abs(diferenciaCapital),
+          fecha: nowISO,
+          concepto: `Ajuste de desembolso por edición ${id} · capital ${fmtMoney(capitalAnterior)} → ${fmtMoney(capitalNuevo)}`,
+          medioPago: desembolsoOriginal.medioPago || prestamo.medioEntrega || 'Otro',
+          cuentaId: desembolsoOriginal.cuentaId || 'GENERAL',
+          eventoTipo: 'EDICION_CAPITAL_PRESTAMO',
+          eventoId: id,
+          prestamoId: id,
+          clienteId: prestamo.clienteId,
+          capitalAnterior,
+          capitalNuevo,
+          diferencia: diferenciaCapital,
+          automatico: true,
+          sourceKey,
+          operationId,
+          createdByUid: _fbUser?.uid || null,
+          deviceId: DEVICE_ID || null,
+          movimientosExistentes: movimientosCaja
+        });
+      }
       const actualizado = {
         ...prestamo,
         monto,
@@ -6990,16 +7064,19 @@ async function guardarEdicionPrestamo() {
 
       const cuotasSobrantes = cuotasPrestamo.filter(c => !idsUsados.has(c.id));
       actualizado.estado = cuotasActualizadas.some(c => c.estado === 'Atrasado') ? 'Atrasado' : 'Activo';
-
-      await dbPut('prestamos', actualizado);
-      await addToSyncQueueOrThrow('prestamos', id, actualizado, 'upsert');
-      for (const cuota of cuotasActualizadas) {
-        await dbPut('cuotas', cuota);
-        await addToSyncQueueOrThrow('cuotas', cuota.id, cuota, 'upsert');
-      }
-      for (const cuota of cuotasSobrantes) {
-        await dbSoftDeleteAndQueue('cuotas', cuota.id);
-      }
+      const cuotasEliminadas = cuotasSobrantes.map(cuota => ({
+        ...cuota,
+        _deleted: true,
+        deletedAt: cuota.deletedAt || nowISO,
+        updatedAt: nowISO
+      }));
+      const registrosEdicion = [
+        { store: 'prestamos', data: actualizado },
+        ...cuotasActualizadas.map(data => ({ store: 'cuotas', data })),
+        ...cuotasEliminadas.map(data => ({ store: 'cuotas', data })),
+        ...(ajusteCaja ? [{ store: 'movimientos_caja', data: ajusteCaja }] : [])
+      ];
+      await dbCommitOperacionPrestamoCajaAtomic(registrosEdicion);
 
       await logBitacora('edicion',
         `Préstamo editado: ${prestamo.clienteNombre || id} · ${fmtMoney(prestamo.monto)} → ${fmtMoney(monto)} · ${prestamo.nCuotas} → ${nCuotas} cuotas · ${prestamo.tipo} → ${tipo}`,
