@@ -751,3 +751,16 @@ No usar `git add .` si hay documentos o archivos no relacionados pendientes.
 ## Estado de cierre
 
 PrestControl V1 queda **CERRADO LOCALMENTE**, con pruebas finales aprobadas y pendiente únicamente de revisión humana del worktree y creación del commit final.
+
+---
+
+## POST-V1 — Header responsive móvil (05/11/2026)
+
+- Causa: título y acciones compartían una fila; el nombre sin límite de ancho desplazaba los controles fuera del viewport.
+- Corrección hasta 600 px: título en su propia fila, usuario compacto con ellipsis, avatar visible y botones de 40 px sin encogerse; salto de línea si hace falta.
+- Validación local en Chrome con emulación móvil vertical: 360, 375, 390, 412 y 430 px; Matias y Respaldo Express; en línea/sin conexión; inicial/foto/inicial de respaldo. Pasaron 60 casos y 300 toques simulados sin solapamiento ni overflow.
+- Pasaron 7 casos adicionales con nombre/título extensos y botón Agregar visible; 24 comparaciones de desktop conservaron las mismas medidas.
+- Shell: `prestcontrol-shell-v70`; solo bump de versión en `sw.js`. Sin cambios de lógica financiera, datos, Auth ni sync.
+- Estado: **CERRADO LOCALMENTE EN CÓDIGO Y SIMULACIÓN**. La PWA comparte el header; pendiente validación física en Samsung, Motorola y PWA instalada después de publicar.
+- Commit asociado: el que incorpora esta entrada, `Corrige header responsive en dispositivos moviles`.
+- Publicación autorizada: push normal a `origin/main`; Netlify debe publicar automáticamente. Sin force push, rebase ni deploy manual.

@@ -104,7 +104,7 @@ input,select,textarea{font-family:'DM Sans',sans-serif}
 .hdr{background:rgba(30,41,59,.9);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:14px 20px 12px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;border-bottom:1px solid var(--border)}
 .hdr-title{font-size:20px;font-weight:700;letter-spacing:-.3px}
 .hdr-sub{font-size:12px;color:var(--muted);margin-top:2px}
-.hdr-actions{display:flex;gap:8px}
+.hdr-actions{display:flex;gap:6px}
 .icon-btn{width:40px;height:40px;background:var(--card2);border:1px solid var(--border);color:var(--txt);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:.2s}
 .icon-btn:active{background:var(--card)}
 .voice-btn.listening{color:#fff;background:var(--red);border-color:var(--red);animation:voice-pulse 1s ease-in-out infinite}
@@ -697,6 +697,18 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 /* USUARIO BADGE */
 #usr-badge{font-size:11px;color:var(--txt);background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-weight:600;cursor:pointer;white-space:nowrap;display:none;align-items:center;gap:5px}
 
+/* HEADER MÓVIL: el nombre cede espacio, los controles conservan su tamaño. */
+@media (max-width:600px){
+  .hdr{flex-direction:column;align-items:stretch;gap:8px;padding:10px 12px}
+  .hdr > div{min-width:0}
+  .hdr-title,.hdr-sub{overflow-wrap:anywhere}
+  .hdr-actions{width:100%;min-width:0;align-items:center;flex-wrap:wrap;gap:4px}
+  .hdr-actions .icon-btn{flex:0 0 40px}
+  #connection-status{flex:0 0 auto;padding:4px 5px}
+  #usr-badge{flex:1 1 58px;min-width:58px;max-width:112px;min-height:40px;padding:4px;gap:4px}
+  #usr-badge .usr-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+
 /* MENÚ USUARIO */
 #user-menu{position:fixed;top:58px;right:12px;background:var(--card2);border:1px solid var(--border);border-radius:12px;z-index:500;min-width:190px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:none;overflow:hidden}
 #user-menu.on{display:block}
@@ -935,7 +947,7 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
     <div class="hdr-title" id="hdr-title">💰 Préstamos</div>
     <div class="hdr-sub" id="hdr-sub"></div>
   </div>
-  <div class="hdr-actions" style="gap:6px">
+  <div class="hdr-actions">
     <span id="connection-status" aria-live="polite" title="Estado de conexión">● En línea</span>
     <span id="usr-badge" onclick="toggleUserMenu()" title="Menú de usuario">👤 —</span>
     <button class="icon-btn hdr-alert-btn" onclick="goPage('alertas')" title="Alertas">🔔<span class="hdr-badge" id="alertas-badge">0</span></button>
@@ -3768,7 +3780,7 @@ function showUserBadge(username) {
   const inicial = (username || '?')[0].toUpperCase();
   const colors  = ['#3B82F6','#8B5CF6','#EC4899','#10B981','#F59E0B','#EF4444'];
   const color   = colors[inicial.charCodeAt(0) % colors.length];
-  badge.innerHTML = `<span style="width:22px;height:22px;border-radius:50%;background:${color};display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${inicial}</span> ${username}`;
+  badge.innerHTML = `<span style="width:22px;height:22px;border-radius:50%;background:${color};display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${inicial}</span> <span class="usr-name">${username}</span>`;
   badge.style.display = 'inline-flex';
 }
 
@@ -12926,13 +12938,13 @@ function actualizarFotoBadge(fotoBase64) {
   const badge = document.getElementById('usr-badge');
   if (!badge) return;
   if (fotoBase64) {
-    badge.innerHTML = `<img src="${fotoBase64}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;flex-shrink:0"> ${currentUser || ''}`;
+    badge.innerHTML = `<img src="${fotoBase64}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;flex-shrink:0"> <span class="usr-name">${currentUser || ''}</span>`;
   } else {
     // Avatar con inicial y color
     const inicial = (currentUser || '?')[0].toUpperCase();
     const colors = ['#3B82F6','#8B5CF6','#EC4899','#10B981','#F59E0B','#EF4444'];
     const color  = colors[inicial.charCodeAt(0) % colors.length];
-    badge.innerHTML = `<span style="width:22px;height:22px;border-radius:50%;background:${color};display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${inicial}</span> ${currentUser || ''}`;
+    badge.innerHTML = `<span style="width:22px;height:22px;border-radius:50%;background:${color};display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${inicial}</span> <span class="usr-name">${currentUser || ''}</span>`;
   }
   badge.style.display = 'inline-flex';
 }
