@@ -188,6 +188,13 @@ export async function borrarCliente(id) {
     window.toast('Escribí ELIMINAR para confirmar');
     return;
   }
+  const carteraHistorica = (await window.dbAllIncludeDeleted('prestamos')).some(p => p.clienteId === id && p.cargaInicial);
+  if (carteraHistorica) {
+    window.toast('Este cliente tiene cartera histórica auditada y no puede eliminarse. Podés actualizar sus datos de contacto.');
+    return;
+  }
+  try { await window.validarEliminacionClienteHistorico?.(id); }
+  catch(error) { window.toast(error.message);return; }
   window.closeSheet();
   const cli = await window.dbGet('clientes', id);
   // Borrado logico — marca como eliminado, no destruye datos

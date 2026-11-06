@@ -76,9 +76,27 @@ async function guardarLocalYEncolar(movimiento) {
 
 export async function renderCaja() {
   const el = document.getElementById('pg-caja'); if (!el) return;
-  const movimientos = await window.dbAll('movimientos_caja');
-  if (!window.cajaService.esCajaIniciada(movimientos)) {
-    el.innerHTML = `<div class="fadeIn"><div class="card empty" style="padding:28px 20px;text-align:center"><div style="font-size:42px">💰</div><h2>Caja / Tesorería</h2><p style="color:var(--muted);line-height:1.6">Todavía no comenzaste el control de Caja.</p><p style="color:var(--muted);line-height:1.6">El saldo inicial representa el dinero real disponible al momento de comenzar a usar Tesorería. Las operaciones anteriores no se reconstruirán automáticamente.</p><button class="btn btn-gold btn-full" onclick="openIniciarCaja()">Iniciar Caja</button></div></div>`;
+  let movimientos = await window.dbAll('movimientos_caja');
+  let sinConfirmar = false;
+  let aviso = '';
+  if (navigator.onLine) {
+    try {
+      sinConfirmar = !(await window.confirmarAperturaCajaAutoritativa());
+      movimientos = await window.dbAll('movimientos_caja');
+    } catch (e) { aviso = e.message || 'No se pudo verificar la apertura con el servidor.'; }
+  } else {
+    const pendientes = await window.getSyncQueuePending?.() || [];
+    sinConfirmar = pendientes.some(op => op.store === 'movimientos_caja' && (op.payload?.tipo === 'SALDO_INICIAL' || movimientos.some(m => m.id === op.recordId && m.tipo === 'SALDO_INICIAL')));
+  }
+  let iniciada;
+  try { iniciada = window.cajaService.esCajaIniciada(movimientos); }
+  catch (e) { el.innerHTML = `<div class="card" role="alert">${window.esc(e.message)} No se modificó Caja; se requiere revisión.</div>`; return; }
+  if (sinConfirmar || !iniciada) {
+    el.innerHTML = `<div class="fadeIn"><div class="card empty" style="padding:28px 20px;text-align:center"><div style="font-size:42px">💰</div><h2>Caja / Tesorería</h2><p style="color:var(--muted);line-height:1.6">Todavía no comenzaste el control de Caja.</p><p style="color:var(--muted);line-height:1.6">El saldo inicial representa el dinero real disponible al momento de comenzar a usar Tesorería. Para registrar cartera anterior, usá la carga histórica antes de abrir Caja.</p><button class="btn btn-ghost btn-full" onclick="openCargaHistorica()">Carga histórica / verificar corte</button><button class="btn btn-gold btn-full" style="margin-top:10px" onclick="openIniciarCaja()">Iniciar Caja</button></div></div>`;
+    if (sinConfirmar && movimientos.some(m => m.tipo === 'SALDO_INICIAL' && m._deleted !== true)) {
+      el.insertAdjacentHTML('afterbegin', '<div class="card" role="alert">Hay un intento local de apertura sin confirmación del servidor. No se publicará automáticamente. Revisá el importe e iniciá Caja con conexión.</div>');
+    }
+    if (aviso) el.insertAdjacentHTML('afterbegin', `<div class="card" role="alert">${window.esc(aviso)}</div>`);
     return;
   }
   const visibles = filtrar(movimientos);
@@ -106,6 +124,7 @@ export async function renderCaja() {
     return `<div class="card" style="padding:13px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;gap:12px"><div><div style="font-size:11px;color:var(--muted)">${fechaMs(m) ? fecha.toLocaleDateString('es-AR') : 'Sin fecha'} · ${window.esc(m.medioPago === 'Mixto' ? 'Pago mixto' : (m.medioPago || 'Sin medio'))}</div><div style="font-weight:800;margin-top:4px">${window.esc(nombreTipo(m.tipo))}</div><div style="font-size:12px;color:var(--muted);margin-top:3px">${window.esc(m.concepto || 'Sin concepto')}</div>${componentes}${automatico}${trazabilidad}</div><div style="text-align:right;white-space:nowrap"><div style="font-weight:900;color:${ingreso ? 'var(--grn)' : 'var(--red)'}">${ingreso ? 'Ingreso +' : 'Egreso −'}${window.fmtMoney(m.monto)}</div><div style="font-size:11px;color:var(--muted);margin-top:4px">Saldo ${window.fmtMoney(saldos.get(m.id) || 0)}</div></div></div>${elegible ? `<button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="openReversaCaja('${window.esc(m.id)}')">Corregir / Revertir</button>` : ''}</div>`;
   }).join('');
   el.innerHTML = `<div class="fadeIn"><div class="card" style="padding:16px;margin-bottom:12px"><div class="form-section-title">Caja disponible</div><div style="font-size:30px;font-weight:900;margin:5px 0 14px">${window.fmtMoney(saldoTotal)}</div><div class="info-grid"><div class="info-cell"><div class="info-lbl">Ingresos del período</div><div class="info-val">${window.fmtMoney(resumen.ingresos)}</div></div><div class="info-cell"><div class="info-lbl">Egresos del período</div><div class="info-val">${window.fmtMoney(resumen.egresos)}</div></div><div class="info-cell"><div class="info-lbl">Gastos operativos</div><div class="info-val">${window.fmtMoney(resumen.gastosOperativos)}</div></div><div class="info-cell"><div class="info-lbl">Retiros personales</div><div class="info-val">${window.fmtMoney(resumen.retirosPersonales)}</div></div></div></div><button class="btn btn-gold btn-full" style="margin-bottom:12px" onclick="openMovimientoCaja()">＋ Movimiento</button><div class="card" style="padding:12px;margin-bottom:12px"><div class="form-grid form-grid-2"><select class="inp" onchange="setPeriodoCaja(this.value)"><option value="hoy"${periodo==='hoy'?' selected':''}>Hoy</option><option value="mes"${periodo==='mes'?' selected':''}>Este mes</option><option value="todos"${periodo==='todos'?' selected':''}>Todos</option></select><select class="inp" onchange="setTipoFiltroCaja(this.value)"><option value="todos"${filtroTipo==='todos'?' selected':''}>Todos</option><option value="ingresos"${filtroTipo==='ingresos'?' selected':''}>Ingresos</option><option value="egresos"${filtroTipo==='egresos'?' selected':''}>Egresos</option><option value="gastos"${filtroTipo==='gastos'?' selected':''}>Gastos</option><option value="retiros"${filtroTipo==='retiros'?' selected':''}>Retiros</option></select></div></div><div class="form-section-title" style="margin:14px 2px 9px">Historial (${visibles.length})</div>${historial || '<div class="empty">No hay movimientos para este filtro.</div>'}</div>`;
+  if (aviso) el.insertAdjacentHTML('afterbegin', `<div class="card" role="alert">Vista local: ${window.esc(aviso)}</div>`);
 }
 
 export function setPeriodoCaja(v) { periodo = ['hoy','mes','todos'].includes(v) ? v : 'mes'; return renderCaja(); }
@@ -113,8 +132,12 @@ export function setTipoFiltroCaja(v) { filtroTipo = ['todos','ingresos','egresos
 
 export async function openIniciarCaja() {
   if (await window.bloquearEscrituraPorRestorePending?.()) return;
-  const existentes = await window.dbAll('movimientos_caja');
-  if (window.cajaService.esCajaIniciada(existentes)) return window.toast('Caja ya está iniciada');
+  try {
+    if (await window.confirmarAperturaCajaAutoritativa()) {
+      await renderCaja();
+      return window.toast('Caja ya tiene una apertura confirmada. Se recuperó su estado.');
+    }
+  } catch (e) { return window.toast('⚠️ ' + e.message); }
   operationId = nuevaOperacion();
   document.getElementById('caja-saldo-inicial').value = '';
   document.getElementById('caja-fecha-inicial').value = hoy();
@@ -126,14 +149,15 @@ export async function confirmarSaldoInicial() {
   const lock = window.iniciarOperacionProtegida?.('caja:saldo-inicial', document.getElementById('caja-inicial-save'), 'Guardando...'); if (!lock) return;
   try {
     if (await window.bloquearEscrituraPorRestorePending?.()) return;
-    const existentes = await window.dbAll('movimientos_caja');
-    if (window.cajaService.esCajaIniciada(existentes)) throw new Error('Caja ya tiene un saldo inicial activo.');
     if (!valor('caja-fecha-inicial')) throw new Error('Ingresá la fecha de inicio.');
     const resetId = await window.getDataResetIdActual?.() || '';
     const sourceKey = window.cajaService.generarSourceKey({ tipo:'SALDO_INICIAL', cuentaId:'GENERAL', resetId });
-    const m = window.cajaService.crearMovimiento({ id:window.cajaService.generarIdAutomatico(sourceKey), tipo:'SALDO_INICIAL', direccion:'ingreso', monto:Number(valor('caja-saldo-inicial')), fecha:valor('caja-fecha-inicial'), concepto:'Inicio de Caja', nota:valor('caja-nota-inicial'), medioPago:'Efectivo', cuentaId:'GENERAL', resetId:resetId || null, automatico:false, sourceKey, operationId:operationId || nuevaOperacion(), createdByUid:window._fbUser?.uid || null, deviceId:window.DEVICE_ID || null, movimientosExistentes:existentes });
-    await guardarLocalYEncolar(m); await window.logBitacora?.('caja_saldo_inicial', `Caja iniciada con ${window.fmtMoney(m.monto)}`, m.id);
-    operationId = null; window.closeSheet(); window.toast('✅ Caja iniciada'); await renderCaja();
+    const candidato = window.cajaService.crearMovimiento({ id:window.cajaService.generarIdAutomatico(sourceKey), tipo:'SALDO_INICIAL', direccion:'ingreso', monto:Number(valor('caja-saldo-inicial')), fecha:valor('caja-fecha-inicial'), concepto:'Inicio de Caja', nota:valor('caja-nota-inicial'), medioPago:'Efectivo', cuentaId:'GENERAL', resetId:resetId || null, automatico:false, sourceKey, operationId:operationId || nuevaOperacion(), createdByUid:window._fbUser?.uid || null, deviceId:window.DEVICE_ID || null });
+    const confirmada = await window.confirmarAperturaCajaAutoritativa(candidato);
+    if (!confirmada) throw new Error('El servidor no confirmó la apertura. Reintentá con conexión.');
+    operationId = null; window.closeSheet();
+    window.toast(confirmada.creada ? '✅ Apertura confirmada por el servidor' : `Caja ya estaba iniciada. Saldo inicial confirmado: ${window.fmtMoney(confirmada.movimiento.monto)}`);
+    await renderCaja();
   } catch (e) { window.toast('⚠️ ' + (e.message || 'No se pudo iniciar Caja')); } finally { lock.liberar(); }
 }
 

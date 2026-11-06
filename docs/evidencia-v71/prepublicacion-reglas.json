@@ -1,0 +1,19 @@
+{
+  "verified": true,
+  "readAt": "2026-11-06T03:36:38.807Z",
+  "project": "prestcontrol-5e965",
+  "release": "projects/prestcontrol-5e965/releases/cloud.firestore",
+  "ruleset": "projects/prestcontrol-5e965/rulesets/f4b33485-8e2c-4c09-8d70-755ab88da6f6",
+  "releaseUpdateTime": "2026-07-22T00:54:23.143808Z",
+  "sourceName": "firestore.rules",
+  "productionSha256": "ff33035e7cc439bf3a9504f9702433c2e4a6df938f65272afe4a01349bc6809e",
+  "localSha256": "0be09e6f72b0b1a12e215b611a2be6ad5af812ebaa00394edc515836b7acb904",
+  "productionMatchesV70": true,
+  "productionMatchesLocalV71": false,
+  "methods": [
+    "GET release",
+    "GET active ruleset"
+  ],
+  "financialDocumentsRead": false,
+  "productionWrites": false
+}

@@ -1932,6 +1932,7 @@ window.iniciarOperacionProtegida = iniciarOperacionProtegida;
    DATABASE — IndexedDB (por usuario)
 ===================================================== */
 let DB;
+function obtenerDBLocalHistorica() { return DB; }
 const DB_VER = 7;
 const GLOBAL_DB_NAME = 'PrestamosApp_global';
 const GLOBAL_DB_VER  = 2;
@@ -2426,6 +2427,8 @@ async function addToSyncQueue(store, recordId, payload, operation = 'upsert') {
 async function dbPutCajaAndQueueAtomic(movimiento, operation = 'upsert') {
   if (!DB) throw new Error('IndexedDB no está disponible.');
   if (!movimiento?.id) throw new Error('El movimiento de Caja no tiene ID.');
+  if (movimiento.tipo === 'SALDO_INICIAL') throw new Error('La apertura solo puede confirmarse en el servidor; no se encola.');
+  await window.validarOperacionFinancieraNormal?.();
   if (await hayRestauracionLocalPendiente()) {
     throw new Error('Modo solo lectura por restauración pendiente.');
   }
@@ -2491,14 +2494,66 @@ async function dbPutCajaAndQueueAtomic(movimiento, operation = 'upsert') {
 }
 window.dbPutCajaAndQueueAtomic = dbPutCajaAndQueueAtomic;
 
+// Réplica local de una decisión YA confirmada en Firestore. No genera sync.
+// Conserva los intentos incompatibles en config antes de reemplazar la copia.
+function dbAplicarAperturaConfirmadaAtomic(confirmada, dbLocal = DB) {
+  const { movimiento, autoridad } = confirmada;
+  return new Promise((resolve, reject) => {
+    const tx = dbLocal.transaction(['movimientos_caja', 'sync_queue', 'config'], 'readwrite');
+    tx.oncomplete = () => resolve();
+    tx.onabort = tx.onerror = () => reject(tx.error || new Error('No se pudo guardar la apertura confirmada. Reintentá su recuperación.'));
+    const filas = tx.objectStore('movimientos_caja').getAll();
+    const cola = tx.objectStore('sync_queue').getAll();
+    let listas = 0;
+    const aplicar = () => {
+      if (++listas !== 2) return;
+      const now = new Date().toISOString();
+      const ids = new Set([movimiento.id]);
+      for (const local of filas.result) {
+        if (local.tipo !== 'SALDO_INICIAL' || (local.cuentaId || 'GENERAL') !== 'GENERAL') continue;
+        ids.add(local.id);
+        if (local._deleted === true || window.cajaAperturaService.mismaApertura(local, movimiento)) continue;
+        // Solo la réplica obsoleta cambia: el registro remoto no se modifica.
+        tx.objectStore('config').put({ key: `cajaAperturaReplicaAnterior:${local.id}:${local.operationId || local.monto}`, value: { registro: local, confirmadaId: movimiento.id, fecha: now } });
+        if (local.id !== movimiento.id) tx.objectStore('movimientos_caja').put({ ...local, _deleted: true, deletedAt: now, aperturaRechazadaPor: movimiento.id });
+      }
+      for (const op of cola.result) {
+        if (op.store === 'movimientos_caja' && (ids.has(op.recordId) || op.payload?.tipo === 'SALDO_INICIAL') && ['pending', 'error'].includes(op.estado)) {
+          tx.objectStore('sync_queue').put({ ...op, estado: 'superseded', updatedAt: now, lastError: `Apertura resuelta por autoridad ${autoridad.movimientoId}; intento no publicado.` });
+        }
+      }
+      tx.objectStore('movimientos_caja').put(movimiento);
+      tx.objectStore('config').put({ key: 'cajaAperturaConfirmadaV1', value: { ...autoridad, movimiento } });
+    };
+    filas.onsuccess = aplicar;
+    cola.onsuccess = aplicar;
+  });
+}
+
+async function confirmarAperturaCajaAutoritativa(candidato = null, { aplicarLocal = true } = {}) {
+  if (!navigator.onLine || !_fbUser?.uid || !_fbDb || !DB) throw new Error('Conectate a Internet para confirmar o recuperar la apertura de Caja.');
+  const uid = _fbUser.uid;
+  const dbLocal = DB;
+  const confirmada = await window.cajaAperturaService.resolver({ db: _fbDb, uid, candidato, serverTimestamp: () => firebase.firestore.FieldValue.serverTimestamp() });
+  if (_fbUser?.uid !== uid || DB !== dbLocal) throw new Error('La sesión cambió. No se aplicó la apertura a otra cuenta.');
+  if (confirmada && aplicarLocal) {
+    await dbAplicarAperturaConfirmadaAtomic(confirmada, dbLocal);
+    await updateSyncPendingBadge();
+  }
+  return confirmada;
+}
+window.confirmarAperturaCajaAutoritativa = confirmarAperturaCajaAutoritativa;
+
 // Commit local acotado para operaciones económicas que implican Caja. Confirma
 // todos los registros y todas sus entradas de sync_queue en bloque.
 async function dbCommitOperacionPrestamoCajaAtomic(registros) {
   if (!DB) throw new Error('IndexedDB no está disponible.');
+  await window.validarOperacionFinancieraNormal?.();
   if (await hayRestauracionLocalPendiente()) throw new Error('Modo solo lectura por restauración pendiente.');
   const permitidos = new Set(['prestamos', 'cuotas', 'prendas', 'movimientos_caja', 'pagos_cuota', 'bitacora']);
   const items = (Array.isArray(registros) ? registros : []).map(item => {
     if (!permitidos.has(item?.store) || !item?.data?.id) throw new Error('Registro inválido en la operación financiera.');
+    if (item.store === 'movimientos_caja' && item.data.tipo === 'SALDO_INICIAL') throw new Error('La apertura no puede publicarse mediante la cola financiera.');
     return item;
   });
   if (!items.length) throw new Error('La operación financiera no contiene registros.');
@@ -3486,6 +3541,7 @@ async function ejecutarLimpiezaDuplicadas(ids) {
   const operacion = iniciarOperacionProtegida('mantenimiento:limpiar-duplicadas', document.activeElement, 'Limpiando...');
   if (!operacion) return;
   try {
+  await window.validarMantenimientoHistorico?.();
   if (await bloquearEscrituraPorRestorePending()) return;
   if (!Array.isArray(ids) || ids.length === 0) return;
   closeSheet();
@@ -3552,6 +3608,13 @@ async function ejecutarResetApp() {
     errEl.textContent = 'Contraseña incorrecta';
     errEl.classList.add('on');
     document.getElementById('reset-master-pass').value = '';
+    return;
+  }
+  try {
+    if (await confirmarAperturaCajaAutoritativa()) throw new Error('La cuenta tiene una apertura de Caja confirmada que no puede reiniciarse ni eliminarse.');
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.add('on');
     return;
   }
   errEl.classList.remove('on');
@@ -3638,6 +3701,8 @@ async function ejecutarBorrarPrestamos() {
   const passInput  = document.getElementById('bp-pass').value;
   const confirmTxt = document.getElementById('bp-confirm-txt').value.trim();
   const errEl      = document.getElementById('bp-err');
+  try { await window.validarMantenimientoHistorico?.(); }
+  catch(e) { errEl.textContent=e.message;errEl.classList.add('on');return; }
 
   if (confirmTxt !== 'BORRAR PRESTAMOS') {
     errEl.textContent = 'Escribí exactamente BORRAR PRESTAMOS para confirmar';
@@ -6110,7 +6175,10 @@ async function renderConfig() {
   const accesoOffline = accesoOfflineEstado.configured;
 
   el.innerHTML = `<div class="fadeIn">
-    <div class="cfg-section">🔔 Notificaciones del sistema</div>
+    <div class="cfg-section">Carga inicial de cartera</div>
+    <div class="card" style="line-height:1.6;margin-bottom:12px">Registrá la cartera anterior al inicio operativo sin afectar Caja. Los clientes existentes se conservan. La activación es explícita y requiere conexión.</div>
+    <button class="btn btn-gold btn-full" onclick="openCargaHistorica()">Carga histórica / verificar corte</button>
+    <div class="cfg-section" style="margin-top:24px">🔔 Notificaciones del sistema</div>
     <div class="card" style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px">
       Recibí alertas locales sobre cuotas vencidas, que vencen hoy o durante los próximos 7 días mientras PrestControl está en ejecución.
     </div>
@@ -6865,18 +6933,22 @@ async function abrirEdicionPrestamoInformativa(id) {
 
   const cuotasPrestamo = cuotas.filter(c => c.prestamoId === id && !c._deleted);
   const tienePagosRegistrados = prestamoTienePagosRegistrados(id, cuotasPrestamo, pagosCuota);
-  _editarPrestamoPermiteFinanzas = !tienePagosRegistrados && !prestamo.prestamoRenovacionId;
+  _editarPrestamoPermiteFinanzas = !prestamo.cargaInicial && !tienePagosRegistrados && !prestamo.prestamoRenovacionId;
   const warning = document.getElementById('edit-pre-warning');
   const error = document.getElementById('edit-pre-error');
   document.getElementById('edit-pre-id').textContent = `${prestamo.id} · ${prestamo.clienteNombre || ''}`;
   error.classList.remove('on');
   warning.style.display = _editarPrestamoPermiteFinanzas ? 'none' : '';
-  warning.textContent = tienePagosRegistrados
+  warning.textContent = prestamo.cargaInicial
+    ? 'Préstamo histórico auditado. Las condiciones se corrigen únicamente desde Carga histórica antes del cierre; después requieren revisión administrativa.'
+    : tienePagosRegistrados
     ? 'Este préstamo ya tiene pagos registrados. No se puede modificar monto, fecha ni cuotas.'
     : !_editarPrestamoPermiteFinanzas
       ? 'Este préstamo ya fue renovado. No se pueden modificar sus condiciones financieras.'
     : '';
-  document.getElementById('edit-pre-info').textContent = !_editarPrestamoPermiteFinanzas
+  document.getElementById('edit-pre-info').textContent = prestamo.cargaInicial
+    ? 'Podés guardar notas con conexión y confirmación del servidor. No se modificará Caja.'
+    : !_editarPrestamoPermiteFinanzas
     ? 'Solo podés modificar la prenda o garantía y las notas.'
     : 'El préstamo no tiene cuotas pagadas. Podés modificar sus condiciones financieras; las cuotas se recalcularán al guardar.';
 
@@ -6894,7 +6966,7 @@ async function abrirEdicionPrestamoInformativa(id) {
 
   ['edit-pre-monto','edit-pre-interes','edit-pre-ncuotas','edit-pre-tipo','edit-pre-fecha']
     .forEach(campoId => { document.getElementById(campoId).disabled = !_editarPrestamoPermiteFinanzas; });
-  document.getElementById('edit-pre-prenda').disabled = false;
+  document.getElementById('edit-pre-prenda').disabled = !!prestamo.cargaInicial;
   document.getElementById('edit-pre-notas').disabled = false;
   document.getElementById('edit-pre-save').disabled = false;
 
@@ -6924,6 +6996,22 @@ async function guardarEdicionPrestamo() {
       dbAll('movimientos_caja')
     ]);
     if (!prestamo) throw new Error('Préstamo no encontrado');
+    if (prestamo.cargaInicial) {
+      const tasa = prestamo.interesPorCuota != null ? Number(prestamo.interesPorCuota) : round2(Number(prestamo.interes || 0) * 100 / Math.max(Number(prestamo.nCuotas || 1),1));
+      const cambioFinanciero = Number(document.getElementById('edit-pre-monto').value) !== Number(prestamo.monto)
+        || Number(document.getElementById('edit-pre-interes').value) !== tasa
+        || Number(document.getElementById('edit-pre-ncuotas').value) !== Number(prestamo.nCuotas)
+        || document.getElementById('edit-pre-tipo').value !== prestamo.tipo
+        || document.getElementById('edit-pre-fecha').value !== String(prestamo.fecha).slice(0,10)
+        || document.getElementById('edit-pre-prenda').value.trim() !== (prestamo.prenda || '');
+      if(cambioFinanciero)throw new Error('No se pueden editar las condiciones de un préstamo histórico por este editor. Antes del cierre usá Deshacer último evento en Carga histórica; después se requiere revisión administrativa. No se guardó ningún cambio.');
+      if(!window.guardarNotasPrestamoHistorico)throw new Error('No está disponible el guardado histórico. Recargá la aplicación con conexión.');
+      await window.guardarNotasPrestamoHistorico(prestamo,document.getElementById('edit-pre-notas').value.trim());
+      closeSheet();toast('Notas confirmadas por el servidor');
+      await renderPrestamos();await updateBadges();await renderDashboard();await openPrestamoDetail(id,true);
+      return;
+    }
+    await window.validarOperacionFinancieraNormal?.();
     if (prestamo._deleted || ESTADOS_PRESTAMO_NO_COBRABLE.includes(prestamo.estado)) {
       throw new Error('Este préstamo está cerrado y no se puede editar');
     }
@@ -7108,7 +7196,7 @@ async function guardarEdicionPrestamo() {
     }
 
     closeSheet();
-    toast('Préstamo actualizado correctamente');
+    toast('Edición guardada en este dispositivo · pendiente de sincronización');
     await renderPrestamos();
     await updateBadges();
     await renderDashboard();
@@ -8001,6 +8089,7 @@ async function syncEstadoPrestamo(prestamoId, pendingGroups = null) {
     dbGet('prestamos', prestamoId), dbAll('cuotas')
   ]);
   if (!prestamo || prestamo._deleted) return;
+  if (prestamo.cargaInicial && !window.cajaService.esCajaIniciada(await dbAll('movimientos_caja'))) return;
   // Los estados terminales son monotónicos. Solo una futura acción administrativa
   // explícita podrá reabrirlos; el recálculo automático nunca debe hacerlo.
   if (ESTADOS_PRESTAMO_TERMINALES.has(prestamo.estado)) return;
@@ -8752,7 +8841,7 @@ async function exportarBackup() {
       getConfig('waPhone')
     ]);
     const fecha = new Date();
-    const data = limpiarDatoParaRespaldo({
+    let data = limpiarDatoParaRespaldo({
       v: 6,
       tipo: 'prestcontrol-respaldo-manual',
       fecha: fecha.toISOString(),
@@ -8788,6 +8877,7 @@ async function exportarBackup() {
         }
       }
     });
+    if (window.prepararBackupHistorico) data = limpiarDatoParaRespaldo(await window.prepararBackupHistorico(data));
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
@@ -8860,6 +8950,10 @@ async function importarBackup(input) {
       `Los datos más nuevos prevalecerán.`
     )) return;
 
+    await window.validarRespaldoHistorico?.(data);
+    const aperturaConfirmada = await confirmarAperturaCajaAutoritativa(null, { aplicarLocal: false });
+    window.cajaAperturaService.preservarEnRespaldo(data, aperturaConfirmada);
+    if (aperturaConfirmada) await dbAplicarAperturaConfirmadaAtomic(aperturaConfirmada);
     let importados = 0;
     const registrosImportados = [];
     // Merge inteligente — no destruye datos locales más nuevos
@@ -8902,6 +8996,7 @@ async function importarBackup(input) {
     }
     for (const movimiento of (data.movimientosCaja || [])) {
       if (!movimiento?.id) continue;
+      if (movimiento.tipo === 'SALDO_INICIAL') continue;
       if (movimiento._deleted !== true) window.cajaService?.validarMovimiento(movimiento);
       const local = await dbGet('movimientos_caja', movimiento.id).catch(() => null);
       const backupEsMasNuevo = !local || (movimiento.updatedAt && (!local.updatedAt || movimiento.updatedAt > local.updatedAt));
@@ -9168,6 +9263,10 @@ async function aplicarRestauracionBackupCompleto(data) {
     throw new Error(msg);
   }
 
+  await window.validarRespaldoHistorico?.(data);
+  const apertura = await confirmarAperturaCajaAutoritativa(null, { aplicarLocal: false });
+  data = window.cajaAperturaService.preservarEnRespaldo(data, apertura);
+
   const pending = await getSyncQueuePending();
   if (pending.length > 0) {
     const msg = `Hay ${pending.length} operación${pending.length !== 1 ? 'es' : ''} pendiente${pending.length !== 1 ? 's' : ''} de sincronizar. Guardá ahora antes de restaurar.`;
@@ -9248,6 +9347,11 @@ async function construirPlanSubidaRestauracionFirebase() {
   if (!_fbUser || !_fbDb) {
     throw new Error('No hay usuario Firebase conectado.');
   }
+
+  // También cubre restauraciones locales pendientes de versiones anteriores.
+  const apertura = await confirmarAperturaCajaAutoritativa(null, { aplicarLocal: false });
+  window.cajaAperturaService.preservarEnRespaldo({ movimientosCaja: await dbAllIncludeDeleted('movimientos_caja') }, apertura);
+  if (apertura) await dbAplicarAperturaConfirmadaAtomic(apertura);
 
   const restorePending = await getConfig('restorePending');
   if (!restorePending?.authority?.id) {
@@ -9353,6 +9457,7 @@ async function publicarRestauracionFirebaseDesdePlan(plan) {
     const bloque = plan[store] || {};
     for (const item of (bloque.subir || [])) {
       if (!item?.id) continue;
+      if (store === 'movimientos_caja' && item.tipo === 'SALDO_INICIAL') continue;
       operaciones.push({
         ref: _userDoc(store, item.id),
         data: {
@@ -9366,6 +9471,7 @@ async function publicarRestauracionFirebaseDesdePlan(plan) {
     }
     for (const remoto of (bloque.sobrantesRemotos || [])) {
       if (!remoto?.id) continue;
+      if (store === 'movimientos_caja' && remoto.tipo === 'SALDO_INICIAL') continue;
       operaciones.push({
         ref: _userDoc(store, remoto.id),
         data: {
@@ -9407,12 +9513,14 @@ async function verificarPublicacionRestauracionFirebase(plan, stores) {
     const bloque = plan[store] || {};
     for (const item of (bloque.subir || [])) {
       const remoto = remotoMap.get(item.id);
+      if (store === 'movimientos_caja' && item.tipo === 'SALDO_INICIAL') continue;
       if (!remoto || idAutoridadRestauracion(remoto) !== plan.authority.id) {
         throw new Error(`Firebase no confirmo el snapshot restaurado para ${store}::${item.id}`);
       }
     }
     for (const item of (bloque.sobrantesRemotos || [])) {
       const remoto = remotoMap.get(item.id);
+      if (store === 'movimientos_caja' && item.tipo === 'SALDO_INICIAL') continue;
       if (!remoto?._deleted || idAutoridadRestauracion(remoto) !== plan.authority.id) {
         throw new Error(`Firebase no confirmo el tombstone restaurado para ${store}::${item.id}`);
       }
@@ -11788,7 +11896,11 @@ async function _pushToFirebaseSinLock() {
 
   // OPTIMIZACIÓN: Solo subir lo que está en sync_queue (cambios pendientes)
   // En vez de subir TODOS los clientes/prestamos/cuotas, subimos solo los IDs modificados
-  const pending = await getSyncQueuePending();
+  let pending = await getSyncQueuePending();
+  if (pending.some(op => op.store === 'movimientos_caja' && op.payload?.tipo === 'SALDO_INICIAL')) {
+    if (!(await confirmarAperturaCajaAutoritativa())) throw new Error('Hay una apertura antigua pendiente sin confirmación del servidor. No se publicará automáticamente; revisá Caja.');
+    pending = await getSyncQueuePending();
+  }
 
   // Si no hay nada pendiente, no hacer nada
   if (!pending.length) {
@@ -11826,10 +11938,18 @@ async function _pushToFirebaseSinLock() {
         }
 
         const ref = _userDoc(op.store, op.recordId);
+        if (op.store === 'movimientos_caja' && data?.tipo === 'SALDO_INICIAL') {
+          if (!(await confirmarAperturaCajaAutoritativa())) throw new Error('La apertura pendiente requiere confirmación explícita desde Caja.');
+          continue;
+        }
         const remoteSnap = await ref.get();
         const remote = remoteSnap.exists
           ? normalizarUpdatedAtRemoto({ id: remoteSnap.id, ...remoteSnap.data() })
           : null;
+        if (op.store === 'movimientos_caja' && remote?.tipo === 'SALDO_INICIAL') {
+          await confirmarAperturaCajaAutoritativa();
+          continue;
+        }
         if (remote && debePrevalecerRestauracionRemota(data, remote)) {
           await dbPut(op.store, remote);
           await removePendingSyncOperations(group.opIds);
@@ -12018,6 +12138,7 @@ async function _pushCompletoAFirebase() {
   driveSetStatus('syncing', 'Sincronización completa...');
   try {
     await aplicarResetRemotoPendiente();
+    await confirmarAperturaCajaAutoritativa();
     const [clientes, prestamos, cuotas, prendas, movimientosCaja, pagosCuota] = await Promise.all([
       dbAllIncludeDeleted('clientes'),
       dbAllIncludeDeleted('prestamos'),
@@ -12034,6 +12155,7 @@ async function _pushCompletoAFirebase() {
 
     const addToBatch = async (store, items) => {
       for (const item of items) {
+        if (store === 'movimientos_caja' && item.tipo === 'SALDO_INICIAL') continue;
         batch.set(_userDoc(store, item.id), { ...item, userId: _fbUser.uid }, { merge: true });
         opsInBatch++;
         if (opsInBatch >= BATCH_LIMIT) {
@@ -12101,7 +12223,10 @@ async function _pullFromFirebase() {
     await merge('prestamos', fbPrestamos);
     await merge('cuotas',    fbCuotas);
     await merge('prendas',   fbPrendas);
-    await merge('movimientos_caja', fbMovimientosCaja);
+    // La apertura se recupera desde su autoridad aun si su réplica local es
+    // más nueva o proviene de un respaldo anterior.
+    if (fbMovimientosCaja.some(m => m.tipo === 'SALDO_INICIAL' && m._deleted !== true)) await confirmarAperturaCajaAutoritativa();
+    await merge('movimientos_caja', fbMovimientosCaja.filter(m => m.tipo !== 'SALDO_INICIAL'));
     await merge('pagos_cuota', fbPagosCuota);
 
     if (changed) {
@@ -12850,6 +12975,12 @@ function iniciarSyncRealtime() {
           for (const change of snapshot.docChanges()) {
             if (change.type === 'added' || change.type === 'modified') {
               const data = normalizarUpdatedAtRemoto({ id: change.doc.id, ...change.doc.data() });
+              if (store === 'movimientos_caja' && data.tipo === 'SALDO_INICIAL') {
+                if (snapshot.metadata.fromCache || change.doc.metadata.hasPendingWrites || _fbUser?.uid !== uid) continue;
+                try { await confirmarAperturaCajaAutoritativa(); changed = true; }
+                catch (e) { console.warn('[CAJA APERTURA] Recuperación pendiente:', e.message); }
+                continue;
+              }
               const pendingGroup = getPendingSyncGroup(pendingGroups, store, data.id);
               if (await shouldSkipRemoteForPending(pendingGroup, store, data)) continue;
               const local = await dbGet(store, data.id).catch(() => null);
@@ -13292,8 +13423,10 @@ async function autoUpdateEstados() {
   if (await hayRestauracionLocalPendiente()) return;
   const pendingGroups = pendingSyncGroupMap(await getPendingSyncGroups());
   const cuotas = await dbAll('cuotas');
+  const cajaIniciada = window.cajaService.esCajaIniciada(await dbAll('movimientos_caja'));
   const hoy = today();
   for (const c of cuotas) {
+    if (c.cargaInicial && !cajaIniciada) continue;
     const pendingGroup = getPendingSyncGroup(pendingGroups, 'cuotas', c.id);
     if (pendingGroup && isDeleteSyncOperation(pendingGroup.op)) continue;
     if (esEstadoCuotaCerrado(c.estado)) continue;

@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'prestcontrol-';
-const CACHE_NAME = `${CACHE_PREFIX}shell-v70`;
+const CACHE_NAME = `${CACHE_PREFIX}shell-v71`;
 
 const FIREBASE_SDK_OFFLINE = [
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
@@ -27,13 +27,16 @@ const APP_SHELL = [
   './services/AuthService.js',
   './services/MetricasFinancierasService.js',
   './services/CajaService.js',
+  './services/CajaAperturaService.js',
+  './services/CargaHistoricaService.js',
   './services/RiesgoClienteService.js',
   './ui/historial.js',
   './ui/index.js',
   './ui/clientes.js',
   './ui/prestamos.js',
   './ui/prendas.js',
-  './ui/caja.js'
+  './ui/caja.js',
+  './ui/carga-historica.js'
 ];
 
 self.addEventListener('install', event => {

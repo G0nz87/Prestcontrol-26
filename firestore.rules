@@ -7,10 +7,238 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read, write: if isOwner(uid);
+      function controlPath() {
+        return /databases/$(database)/documents/users/$(uid)/control_caja/apertura_GENERAL;
+      }
+      function movimientoPath(id) {
+        return /databases/$(database)/documents/users/$(uid)/movimientos_caja/$(id);
+      }
+      function historicaPath() {
+        return /databases/$(database)/documents/users/$(uid)/carga_inicial/estado;
+      }
+      function eventoPath(id) {
+        return /databases/$(database)/documents/users/$(uid)/carga_inicial_eventos/$(id);
+      }
+      function clienteHistoricoPath(id) {
+        return /databases/$(database)/documents/users/$(uid)/carga_inicial_clientes/$(id);
+      }
+      function historicaProtegida() {
+        return exists(historicaPath()) && get(historicaPath()).data.estado != 'rechazada';
+      }
+      function puedeAbrirCaja() {
+        return !historicaProtegida() || get(historicaPath()).data.estado == 'finalizada';
+      }
+      function operacionNormal() {
+        return !historicaProtegida() || (get(historicaPath()).data.estado == 'finalizada' && exists(controlPath()));
+      }
+      function soloMetadata() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt', '_restoreAuthority', 'userId']);
+      }
+      function marcaConservada() {
+        return request.resource.data.get('cargaInicial', null) == resource.data.get('cargaInicial', null)
+          && request.resource.data.get('ultimaOperacionHistorica', null) == resource.data.get('ultimaOperacionHistorica', null)
+          && request.resource.data.get('eventoHistoricoVigente', null) == resource.data.get('eventoHistoricoVigente', null)
+          && request.resource.data.get('revertidoPor', null) == resource.data.get('revertidoPor', null);
+      }
+      function altaNormal() {
+        return operacionNormal() && !request.resource.data.keys().hasAny(['cargaInicial', 'ultimaOperacionHistorica'])
+          && (!historicaProtegida() || request.resource.data.get('_restoreAuthority', null) == null);
+      }
+      function contratoHistoricoConservado(coleccion) {
+        return resource.data.get('cargaInicial', null) == null
+          || (coleccion == 'prestamos'
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['monto','total','ganancia','interes','interesPorCuota','tipo','nCuotas','fecha','cuotasIds','cuota','origen','prestamoOrigenId','montoNominal','montoCompensado','montoEntregado'])
+            && (request.resource.data.get('estado','') != 'Cancelado' || resource.data.get('estado','') == 'Cancelado'))
+          || (coleccion == 'cuotas'
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['monto','nro','fechaVenc','prestamoId','clienteId']))
+          || (coleccion == 'pagos_cuota' && soloMetadata());
+      }
+      function cambioNormal(coleccion) {
+        return operacionNormal() && marcaConservada()
+          && contratoHistoricoConservado(coleccion)
+          && (!historicaProtegida() || request.resource.data.get('_restoreAuthority', null) == resource.data.get('_restoreAuthority', null) || soloMetadata())
+          && (resource.data.get('cargaInicial', null) == null || request.resource.data.get('_deleted', false) == resource.data.get('_deleted', false));
+      }
+      function noAnulaCadena(coleccion) {
+        return coleccion != 'prestamos' || request.resource.data.get('estado','') != 'Cancelado'
+          || (request.resource.data.get('origen','') != 'renovacion'
+            && request.resource.data.get('prestamoOrigenId',null) == null
+            && request.resource.data.get('prestamoRenovacionId',null) == null
+            && (resource == null || (resource.data.get('origen','') != 'renovacion'
+              && resource.data.get('prestamoOrigenId',null) == null
+              && resource.data.get('prestamoRenovacionId',null) == null)));
+      }
+      // Las dos imágenes quedan ligadas al registro realmente leído/escrito.
+      // Esto impide falsificar una imagen anterior para "corregir" otro importe.
+      function imagenHistoricaValida(coleccion, id, evento) {
+        let key = coleccion + '__' + id;
+        return evento.formato == 2 && evento.registrosPorClave[key] == request.resource.data
+          && evento.anterioresPorClave[key] == (resource == null ? null : resource.data);
+      }
+      function reversionValida(coleccion,id,evento) {
+        let original = get(eventoPath(evento.eventoOriginalId)).data;
+        let key = coleccion + '__' + id;
+        let anterior = original.anterioresPorClave[key];
+        return resource != null && original.tipo != 'reversion'
+          && resource.data.eventoHistoricoVigente == original.id
+          && (anterior != null
+            ? request.resource.data.diff(anterior).affectedKeys().hasOnly(['updatedAt','ultimaOperacionHistorica'])
+            : (request.resource.data.get('_deleted',false) == true
+              && request.resource.data.revertidoPor == evento.id
+              && request.resource.data.eventoHistoricoVigente == null
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt','ultimaOperacionHistorica','eventoHistoricoVigente','_deleted','revertidoPor'])))
+          && (coleccion != 'prestamos'
+            || (resource.data.get('prestamoOrigenId',null) == null
+              || !request.resource.data.get('_deleted',false)
+              || getAfter(/databases/$(database)/documents/users/$(uid)/prestamos/$(resource.data.prestamoOrigenId)).data.get('prestamoRenovacionId',null) != id)
+            && (resource.data.get('prestamoRenovacionId',null) == null
+              || request.resource.data.get('prestamoRenovacionId',null) == resource.data.prestamoRenovacionId
+              || getAfter(/databases/$(database)/documents/users/$(uid)/prestamos/$(resource.data.prestamoRenovacionId)).data.get('_deleted',false) == true));
+      }
+      function escrituraHistorica(coleccion,id) {
+        let estado = get(historicaPath()).data;
+        let posterior = getAfter(historicaPath()).data;
+        let evento = getAfter(eventoPath(request.resource.data.ultimaOperacionHistorica)).data;
+        return estado.estado == 'activa' && !exists(controlPath())
+          && request.resource.data.cargaInicial.version == 1
+          && request.resource.data.cargaInicial.userId == uid
+          && request.resource.data.cargaInicial.sesionId == estado.sesionId
+          && posterior.estado == 'activa' && posterior.revision == estado.revision + 1
+          && posterior.ultimaOperacion == request.resource.data.ultimaOperacionHistorica
+          && evento.revision == posterior.revision && evento.confirmadaAt == request.time
+          && evento.sesionId == estado.sesionId
+          && imagenHistoricaValida(coleccion,id,evento)
+          && (evento.tipo == 'reversion' ? reversionValida(coleccion,id,evento)
+            : (request.resource.data.get('_deleted', false) == false
+              && request.resource.data.eventoHistoricoVigente == evento.id
+              && noAnulaCadena(coleccion)))
+          && getAfter(clienteHistoricoPath(request.resource.data.clienteId)).data.sesionId == estado.sesionId;
+      }
+      function esApertura(data) {
+        return data.get('tipo', '') == 'SALDO_INICIAL';
+      }
+      function aperturaValida(data, id) {
+        return esApertura(data) && data.id == id
+          && data.cuentaId == 'GENERAL' && data.direccion == 'ingreso'
+          && data.monto is number && data.monto > 0
+          && data.get('_deleted', false) == false;
+      }
 
-      match /{document=**} {
-        allow read, write: if isOwner(uid);
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid) && ((!exists(controlPath()) && !historicaProtegida()) || !request.resource.data.keys().hasAny(['prestcontrolDataReset']));
+      allow update: if isOwner(uid) && ((!exists(controlPath()) && !historicaProtegida())
+        || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['prestcontrolDataReset']));
+      allow delete: if isOwner(uid) && !exists(controlPath()) && !historicaProtegida();
+
+      match /carga_inicial/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && id == 'estado' && !exists(controlPath())
+          && request.resource.data.keys().hasOnly(['version','userId','sesionId','estado','revision','creadaAt','actualizadaAt'])
+          && request.resource.data.version == 1 && request.resource.data.userId == uid
+          && request.resource.data.sesionId is string && request.resource.data.estado == 'preparando'
+          && request.resource.data.revision == 0 && request.resource.data.creadaAt == request.time
+          && request.resource.data.actualizadaAt == request.time;
+        allow update: if isOwner(uid) && id == 'estado' && !exists(controlPath())
+          && request.resource.data.actualizadaAt == request.time && (
+            (resource.data.estado == 'preparando' && request.resource.data.estado in ['activa','rechazada']
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado','actualizadaAt']))
+            || (resource.data.estado == 'activa' && request.resource.data.estado == 'activa'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revision','ultimaOperacion','actualizadaAt'])
+              && request.resource.data.revision == resource.data.revision + 1
+              && getAfter(eventoPath(request.resource.data.ultimaOperacion)).data.revision == request.resource.data.revision
+              && getAfter(eventoPath(request.resource.data.ultimaOperacion)).data.confirmadaAt == request.time)
+            || (resource.data.estado == 'activa' && request.resource.data.estado == 'finalizada'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado','corteOperativoAt','verificacion','actualizadaAt'])
+              && request.resource.data.corteOperativoAt == request.time
+              && request.resource.data.verificacion.revision == resource.data.revision
+              && request.resource.data.verificacion.sesionId == resource.data.sesionId));
+        allow delete: if false;
+      }
+
+      match /carga_inicial_eventos/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && request.resource.data.id == id
+          && request.resource.data.userId == uid && request.resource.data.version == 1
+          && request.resource.data.formato == 2
+          && (request.resource.data.tipo != 'reversion'
+            ? id.matches('H-[A-Z0-9][A-Z0-9_-]{0,47}')
+            : (id == 'R-' + request.resource.data.eventoOriginalId
+              && request.resource.data.motivo is string && request.resource.data.motivo.size() > 0
+              && get(eventoPath(request.resource.data.eventoOriginalId)).data.formato == 2
+              && get(eventoPath(request.resource.data.eventoOriginalId)).data.tipo != 'reversion'
+              && request.resource.data.registrosPorClave.keys() == get(eventoPath(request.resource.data.eventoOriginalId)).data.registrosPorClave.keys()
+              && request.resource.data.anterioresPorClave.keys() == request.resource.data.registrosPorClave.keys()))
+          && request.resource.data.confirmadaAt == request.time
+          && request.resource.data.fechaEconomica is timestamp && request.resource.data.fechaEconomica <= request.time
+          && get(historicaPath()).data.estado == 'activa'
+          && request.resource.data.sesionId == get(historicaPath()).data.sesionId
+          && getAfter(historicaPath()).data.estado == 'activa'
+          && getAfter(historicaPath()).data.ultimaOperacion == id
+          && getAfter(historicaPath()).data.revision == request.resource.data.revision
+          && request.resource.data.revision == get(historicaPath()).data.revision + 1;
+        allow update, delete: if false;
+      }
+
+      match /carga_inicial_clientes/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && request.resource.data.keys().hasOnly(['clienteId','userId','sesionId','eventoId','creadoAt'])
+          && request.resource.data.clienteId == id && request.resource.data.userId == uid
+          && request.resource.data.creadoAt == request.time
+          && get(historicaPath()).data.estado == 'activa'
+          && request.resource.data.sesionId == get(historicaPath()).data.sesionId
+          && getAfter(eventoPath(request.resource.data.eventoId)).data.confirmadaAt == request.time
+          && getAfter(eventoPath(request.resource.data.eventoId)).data.sesionId == request.resource.data.sesionId
+          && getAfter(/databases/$(database)/documents/users/$(uid)/clientes/$(id)).data.get('_deleted',false) == false;
+        allow update, delete: if false;
+      }
+
+      match /clientes/{id} {
+        allow read, create: if isOwner(uid);
+        allow update: if isOwner(uid) && (!exists(clienteHistoricoPath(id))
+          || request.resource.data.get('_deleted',false) == false);
+        allow delete: if isOwner(uid) && !exists(clienteHistoricoPath(id));
+      }
+
+      match /{coleccion}/{id} {
+        allow create: if isOwner(uid) && coleccion in ['prestamos','cuotas','pagos_cuota','prendas']
+          && (altaNormal() || (coleccion != 'prendas' && escrituraHistorica(coleccion,id)));
+        allow update: if isOwner(uid) && coleccion in ['prestamos','cuotas','pagos_cuota','prendas']
+          && (cambioNormal(coleccion) || (coleccion != 'prendas' && marcaConservadaHistorica() && escrituraHistorica(coleccion,id)));
+        allow delete: if isOwner(uid) && coleccion in ['prestamos','cuotas','pagos_cuota','prendas']
+          && operacionNormal() && resource.data.get('cargaInicial', null) == null;
+        allow read: if isOwner(uid) && coleccion in ['prestamos','cuotas','pagos_cuota','prendas'];
+      }
+      function marcaConservadaHistorica() {
+        return request.resource.data.get('cargaInicial', null) == resource.data.get('cargaInicial', null);
+      }
+
+      match /control_caja/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && id == 'apertura_GENERAL' && puedeAbrirCaja()
+          && request.resource.data.keys().hasOnly(['version', 'cuentaId', 'movimientoId', 'userId', 'confirmadaAt'])
+          && request.resource.data.version == 1
+          && request.resource.data.cuentaId == 'GENERAL'
+          && request.resource.data.userId == uid
+          && request.resource.data.confirmadaAt == request.time
+          && aperturaValida(getAfter(movimientoPath(request.resource.data.movimientoId)).data, request.resource.data.movimientoId);
+        allow update, delete: if false;
+      }
+
+      match /movimientos_caja/{id} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && ((!esApertura(request.resource.data) && altaNormal())
+          || (puedeAbrirCaja() && aperturaValida(request.resource.data, id)
+            && getAfter(controlPath()).data.movimientoId == id));
+        allow update: if isOwner(uid) && (
+          (!esApertura(resource.data) && !esApertura(request.resource.data) && cambioNormal('movimientos_caja'))
+          || (esApertura(resource.data) && esApertura(request.resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt', '_restoreAuthority', 'userId'])
+            && request.resource.data.get('userId', uid) == uid));
+        allow delete: if isOwner(uid) && !esApertura(resource.data) && operacionNormal();
+      }
+
+      match /{collection}/{document=**} {
+        allow read, write: if isOwner(uid) && !(collection in ['movimientos_caja','control_caja','carga_inicial','carga_inicial_eventos','carga_inicial_clientes','clientes','prestamos','cuotas','pagos_cuota','prendas']);
       }
     }
 

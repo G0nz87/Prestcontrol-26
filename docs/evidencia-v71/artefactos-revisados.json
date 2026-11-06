@@ -1,0 +1,62 @@
+{
+  "readAt": "2026-11-06T02:51:06.640Z",
+  "head": "3ed27bc7cd7a0f2f58bab439ee502c220d74c0bc",
+  "files": [
+    {
+      "path": "index.html",
+      "sha256": "9769f18e594c840254277670c32efb278b780ce5e525e711973cca506d9d1fa7"
+    },
+    {
+      "path": "firestore.rules",
+      "sha256": "f05aba4344fc36551d2130434ccccd68ae8eeb5ca8466a116f97bf3397b4093d"
+    },
+    {
+      "path": "services/CajaAperturaService.js",
+      "sha256": "b0a4b83b708d30671ca8a7f7c177d9b34385c29da3ac9988c733ffc4d26e7f23"
+    },
+    {
+      "path": "services/CargaHistoricaService.js",
+      "sha256": "1404030fd8ac74f1178257f263224d9f3f41c64de3d8ef611a003b5dd83a5f6a"
+    },
+    {
+      "path": "services/MetricasFinancierasService.js",
+      "sha256": "f888b3ec03a55e623655ea92b13f76f38b3ece67d5e260d2b17ee79eda1da1b0"
+    },
+    {
+      "path": "services/index.js",
+      "sha256": "d5fa27a0f99ab3d0dd0c0be87928046d2e5f6432c6421ff5cccfa199c9be8121"
+    },
+    {
+      "path": "ui/caja.js",
+      "sha256": "5af8ecaa62056d031021c7423557b009d80027c5c9ed460d3f9fe070659b7d88"
+    },
+    {
+      "path": "ui/carga-historica.js",
+      "sha256": "574150b6adc4fc15bb85902704bf82d4a536f7b0a72be1048264e9e1dc3a66f6"
+    },
+    {
+      "path": "ui/clientes.js",
+      "sha256": "bb5297b995a9ca9e57cb13eadd1a1975c18a15de39d7a8cc537a2615c7b8ec1d"
+    },
+    {
+      "path": "ui/historial.js",
+      "sha256": "0228fd342f3d6f135609cddfec288ee5d43166c87d90eb370d9ad6b2b3727800"
+    },
+    {
+      "path": "ui/index.js",
+      "sha256": "10484bff951e5afa096b9b4c0ae29b0136faf7911c8c9b6034e1446cd62b3420"
+    },
+    {
+      "path": "ui/prestamos.js",
+      "sha256": "4ee76da7f3120e8782e3c4e6a85b8d11d14cd01f2878f7bdb809986cb4f5849f"
+    },
+    {
+      "path": "ui/prendas.js",
+      "sha256": "63829a421d1491371f64661ef9d6fb9548a12cb849b8a9117ceeccd7763aa8f8"
+    },
+    {
+      "path": "sw.js",
+      "sha256": "bbef6b1061d640818d1de2984e42138d785d50cfa263f15151a4d9e29bd453cf"
+    }
+  ]
+}

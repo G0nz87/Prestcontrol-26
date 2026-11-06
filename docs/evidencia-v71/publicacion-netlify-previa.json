@@ -1,0 +1,48 @@
+{
+  "checkedAt": "2026-11-06T04:03:11.769Z",
+  "base": "https://prestcontrol-26.netlify.app",
+  "results": [
+    {
+      "path": "/",
+      "status": 200,
+      "url": "https://prestcontrol-26.netlify.app/",
+      "headers": {
+        "cache-control": "public,max-age=0,must-revalidate",
+        "etag": "W/\"3c8ffb3c059811cef2b2e798d111a0b4-ssl\"",
+        "server": "Netlify",
+        "x-nf-request-id": "01M6QGCKYFAYDJDRASD5ANK6F5"
+      },
+      "sha256": "2dcf578219084d3d2f4d4a98c657f06f3b3c9b9405009ad4faec79b99f027178",
+      "matchesV70": false
+    },
+    {
+      "path": "/sw.js",
+      "status": 200,
+      "url": "https://prestcontrol-26.netlify.app/sw.js",
+      "headers": {
+        "cache-control": "public,max-age=0,must-revalidate",
+        "etag": "W/\"fb0aab3a1300f6ba35ab10d6a04e3bb3-ssl\"",
+        "server": "Netlify",
+        "x-nf-request-id": "01M6QGCKYBEQRJWXYYC05038S0"
+      },
+      "sha256": "6ecec7421ee41c3e4632f79ee86c7504d56dd6a5a5740bc30d1bf633dd5bb634",
+      "matchesV70": true,
+      "shell": [
+        "shell-v70"
+      ]
+    },
+    {
+      "path": "/index.html",
+      "status": 200,
+      "url": "https://prestcontrol-26.netlify.app/index.html",
+      "headers": {
+        "cache-control": "public,max-age=0,must-revalidate",
+        "etag": "W/\"3c8ffb3c059811cef2b2e798d111a0b4-ssl\"",
+        "server": "Netlify",
+        "x-nf-request-id": "01M6QGCKYFYRZFXZ2F077QTZFY"
+      },
+      "sha256": "2dcf578219084d3d2f4d4a98c657f06f3b3c9b9405009ad4faec79b99f027178",
+      "matchesV70": false
+    }
+  ]
+}

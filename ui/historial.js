@@ -28,6 +28,10 @@ export function switchHistPeriodo(p) {
 
 export function buildHistorial(prestamos, cuotas, pagosCuota = []) {
   const prestamosPorId = new Map(prestamos.map(prestamo => [prestamo.id, prestamo]));
+  const tieneCargaHistorica = prestamos.some(p => p.cargaInicial);
+  const interesPorPeriodo = tieneCargaHistorica
+    ? window.metricasFinancierasService.calcularInteresPorPeriodo({ prestamos, cuotas, pagosCuota, periodoKey })
+    : null;
   // Agrupar préstamos creados por período
   // EXCLUIR préstamos cancelados por error de carga (motivo 'error' u 'otro' → _deleted o estado Cancelado)
   // INCLUIR préstamos Pagado (total), Ejecutado (prenda), Activo, Atrasado — son préstamos reales
@@ -36,7 +40,7 @@ export function buildHistorial(prestamos, cuotas, pagosCuota = []) {
     const key = periodoKey(p.fecha);
     if (!key) return;
     if (!gruposPre[key]) gruposPre[key] = { prestado:0, ganancia:0, cantidad:0 };
-    gruposPre[key].prestado  += Number(p.monto    || 0);
+    gruposPre[key].prestado  += Number(tieneCargaHistorica && p.origen === 'renovacion' ? p.montoEntregado || 0 : p.monto || 0);
     gruposPre[key].ganancia  += Number(p.ganancia || 0);
     gruposPre[key].cantidad++;
   });
@@ -45,7 +49,7 @@ export function buildHistorial(prestamos, cuotas, pagosCuota = []) {
   const estadosFinales = ['Pagado', 'Ejecutado', 'Cancelado'];
   const conteosEstadoTotal = { Pagado: 0, Renovado: 0, Ejecutado: 0, Cancelado: 0 };
   const conteosEstadoPeriodo = {};
-  prestamos.filter(p => estadosFinales.includes(p.estado)).forEach(p => {
+  prestamos.filter(p => !p.revertidoPor && estadosFinales.includes(p.estado)).forEach(p => {
     const estadoVisual = p.estado === 'Pagado' && ['renovacion', 'renovacion_capital'].includes(p.cerradoPor) ? 'Renovado' : p.estado;
     const key = periodoKey(estadoVisual === 'Renovado' ? (p.renovadoEn || p.fecha) : p.fecha);
     conteosEstadoTotal[estadoVisual]++;
@@ -82,7 +86,7 @@ export function buildHistorial(prestamos, cuotas, pagosCuota = []) {
   // NO incluye cuotas Ejecutadas (prenda) porque no hubo cobro en efectivo
   const gruposCob = {};
   const gruposCompensados = {};
-  cuotas.filter(c => c.estado === 'Pagado' && c.fechaPago && !c._deleted && Number(c.cantidadAbonos || 0) === 0).forEach(c => {
+  cuotas.filter(c => c.estado === 'Pagado' && c.fechaPago && !c._deleted && (Number(c.cantidadAbonos || 0) === 0 || (tieneCargaHistorica && c.origenPago === 'renovacion_descuento'))).forEach(c => {
     const key = periodoKey(c.fechaPago);
     if (!key) return;
     if (['renovacion_descuento', 'interes_cobrado_renovacion_capital'].includes(c.origenPago)) {
@@ -93,7 +97,7 @@ export function buildHistorial(prestamos, cuotas, pagosCuota = []) {
     if (!gruposCob[key]) gruposCob[key] = 0;
     gruposCob[key] += c.montoEfectivo != null ? Number(c.montoEfectivo || 0) : Number(c.monto || 0);
   });
-  pagosCuota.filter(pago => pago && pago._deleted !== true && pago.tipo === 'ABONO_CUOTA').forEach(pago => {
+  pagosCuota.filter(pago => pago && pago._deleted !== true && (pago.tipo === 'ABONO_CUOTA' || (tieneCargaHistorica && pago.tipo === 'PAGO_CUOTA_BONIFICADO'))).forEach(pago => {
     const key = periodoKey(pago.fechaPago);
     if (!key) return;
     if (!gruposCob[key]) gruposCob[key] = 0;
@@ -111,9 +115,12 @@ export function buildHistorial(prestamos, cuotas, pagosCuota = []) {
   const totCobrado   = Object.values(gruposCob).reduce((s,v) => s + v, 0);
   const totCompensado = Object.values(gruposCompensados).reduce((s,v) => s + v, 0);
   const totCantidad  = Object.values(gruposPre).reduce((s,g) => s + g.cantidad, 0);
-  const totGananciaReal = Math.max(0, totCobrado - totPrestado);
+  const totGananciaReal = tieneCargaHistorica
+    ? window.metricasFinancierasService.calcularMetricasGlobales({ prestamos, cuotas }).gananciaReal
+    : Math.max(0, totCobrado - totPrestado);
 
   const resumen = `
+    ${tieneCargaHistorica ? '<div class="form-alert is-info">Incluye cartera y cobros históricos. Las operaciones de carga inicial no generan movimientos de Caja; las compensaciones de renovación no son efectivo cobrado.</div>' : ''}
     <div class="card" style="margin-bottom:16px;background:linear-gradient(135deg,rgba(34,197,94,.08),rgba(59,130,246,.06));border-color:rgba(34,197,94,.25)">
       <div style="font-size:12px;font-weight:800;color:var(--gold);margin-bottom:10px;letter-spacing:.5px">📊 RESUMEN TOTAL — ${histPeriodo === 'mes' ? 'Todos los meses' : 'Todas las semanas'}</div>
       <div class="srow">
@@ -151,7 +158,7 @@ export function buildHistorial(prestamos, cuotas, pagosCuota = []) {
     const pre = gruposPre[key] || { prestado:0, ganancia:0, cantidad:0 };
     const cobrado = gruposCob[key] || 0;
     const compensado = gruposCompensados[key] || 0;
-    const gananciaReal = Math.max(0, cobrado - pre.prestado);
+    const gananciaReal = tieneCargaHistorica ? (interesPorPeriodo[key] || 0) : Math.max(0, cobrado - pre.prestado);
     const label = periodoLabel(key);
     const estados = conteosEstadoPeriodo[key] || { Pagado:0, Renovado:0, Ejecutado:0, Cancelado:0 };
     const renovaciones = (renovacionesPorPeriodo[key] || []).sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
@@ -215,7 +222,7 @@ export function buildHistorial(prestamos, cuotas, pagosCuota = []) {
         </div>`).join('')}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
           <span style="font-size:12px;color:var(--muted)">📋 ${pre.cantidad} préstamo${pre.cantidad!==1?'s':''} otorgado${pre.cantidad!==1?'s':''}</span>
-          ${cobrado > 0 ? `<span style="font-size:11px;color:var(--grn);font-weight:700">✅ ${window.fmtMoney(cobrado)} ingresado</span>` : ''}
+          ${cobrado > 0 ? `<span style="font-size:11px;color:var(--grn);font-weight:700">✅ ${window.fmtMoney(cobrado)} ${tieneCargaHistorica ? 'cobrado' : 'ingresado'}</span>` : ''}
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;font-size:11px;font-weight:700">
           <span class="badge badge-success">Pagados: ${estados.Pagado}</span>

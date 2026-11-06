@@ -1,0 +1,17 @@
+{
+  "verified": true,
+  "readAt": "2026-11-06T02:45:45.052Z",
+  "project": "prestcontrol-5e965",
+  "release": "projects/prestcontrol-5e965/releases/cloud.firestore",
+  "ruleset": "projects/prestcontrol-5e965/rulesets/f4b33485-8e2c-4c09-8d70-755ab88da6f6",
+  "releaseUpdateTime": "2026-07-22T00:54:23.143808Z",
+  "sourceName": "firestore.rules",
+  "productionSha256": "ff33035e7cc439bf3a9504f9702433c2e4a6df938f65272afe4a01349bc6809e",
+  "localSha256": "f05aba4344fc36551d2130434ccccd68ae8eeb5ca8466a116f97bf3397b4093d",
+  "productionMatchesV70": true,
+  "productionMatchesLocalV71": false,
+  "methods": [
+    "GET release",
+    "GET active ruleset"
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "finishedAt": "2026-11-06T02:51:50.613Z",
+  "project": "demo-prestcontrol-apertura",
+  "host": "127.0.0.1:8089",
+  "productionDataUsed": false,
+  "productFilesUnchanged": true,
+  "results": [
+    {
+      "suite": "tests/carga-historica.test.cjs",
+      "passed": 33,
+      "exitCode": 0,
+      "durationMs": 18568
+    },
+    {
+      "suite": "tests/carga-historica-ui.test.cjs",
+      "passed": 13,
+      "exitCode": 0,
+      "durationMs": 5287
+    },
+    {
+      "suite": "tests/apertura-caja.test.cjs",
+      "passed": 25,
+      "exitCode": 0,
+      "durationMs": 8450
+    },
+    {
+      "suite": "tests/despliegue-v71.test.cjs",
+      "passed": 11,
+      "exitCode": 0,
+      "durationMs": 5844
+    },
+    {
+      "suite": "tests/revision-correcciones-v71.test.cjs",
+      "passed": 9,
+      "exitCode": 0,
+      "durationMs": 5745
+    }
+  ]
+}

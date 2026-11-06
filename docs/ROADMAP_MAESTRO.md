@@ -764,3 +764,62 @@ PrestControl V1 queda **CERRADO LOCALMENTE**, con pruebas finales aprobadas y pe
 - Estado: **CERRADO LOCALMENTE EN CÓDIGO Y SIMULACIÓN**. La PWA comparte el header; pendiente validación física en Samsung, Motorola y PWA instalada después de publicar.
 - Commit asociado: el que incorpora esta entrada, `Corrige header responsive en dispositivos moviles`.
 - Publicación autorizada: push normal a `origin/main`; Netlify debe publicar automáticamente. Sin force push, rebase ni deploy manual.
+
+## POST-V1 — Apertura única autoritativa de Caja (05/11/2026)
+
+- Alcance: resolver la carrera de apertura antes de implementar la carga histórica. Esta última sigue pendiente.
+- Transacción por UID con autoridad permanente `control_caja/apertura_GENERAL`; una apertura nueva o recuperación de la existente, sin publicar altas pendientes desde la cola.
+- Confirmación remota antes de éxito y persistencia local atómica; recuperación de reintentos, desconexiones y réplicas antiguas. Guardas de restauración preservan la apertura confirmada.
+- Reglas necesarias justificadas en `docs/CAJA_APERTURA_UNICA.md` antes de modificarlas localmente. Protegen aperturas frente a clientes viejos y evitan el reset de una apertura protegida. No se desplegaron reglas.
+- 25 pruebas aisladas aprobadas con Firestore Emulator, SDK compat 10.12.0 e IndexedDB en memoria: concurrencia, reintentos, fallos, legado, backup, cola, aislamiento y reglas.
+- Shell local: `prestcontrol-shell-v71`; versión publicada conservada en v70. Sin cambios de cálculos financieros, Auth, clientes/préstamos/cobros reales ni datos de producción.
+- Estado: **VALIDADO EN CÓDIGO Y EMULADOR / PENDIENTE REVISIÓN Y PUBLICACIÓN**. Pendiente validación física. Commit asociado: ninguno; sin commit, push ni deploy.
+
+## POST-V1 — Carga inicial histórica sobre v71 (05/11/2026, local)
+
+- Autoridad remota explícita por UID: preparación, carga activa, cierre irreversible con corte del servidor. Sin habilitación automática ni conversión de cuentas con finanzas previas.
+- Clientes ya cargados en v70 conservados: sin migrar/limpiar IndexedDB ni modificar sus documentos. Vínculos auditados separados protegen contra borrado en cascada; altas y edición de contacto disponibles.
+- Préstamos con plan/fechas originales, pagos completos/parciales y renovaciones históricas atómicas y auditables, sin movimientos de Caja ni ajustes compensatorios. Referencias idempotentes y procedencia explícita.
+- Verificación por revisión, reconstrucción del libro, métricas y riesgo; apertura única v71 coordinada con el cierre. Cobros nuevos de deuda histórica y préstamos nuevos afectan Caja normalmente, aunque se ingrese fecha antigua.
+- Respaldos históricos v7 con autoridad/eventos informativos; el servidor conserva el cierre. Restauraciones divergentes o durante carga se rechazan antes de escribir; restauración idéntica posterior validada.
+- Reglas extendidas justificadas antes de prepararlas; sin deploy. Shell local sin publicar `prestcontrol-shell-v71`, con precache de módulos históricos. Versión de IndexedDB sin cambios.
+- Pruebas aisladas: 33/33 de dominio/reglas históricos, 13/13 de DOM/IndexedDB/restauración/push, 25/25 regresiones de apertura y 11/11 escenarios de revisión de despliegue (estos últimos incluyen riesgos reproducidos).
+- Procedimiento conjunto y limitaciones en `docs/CARGA_HISTORICA.md`. Publicación requiere pausa, conciliación de colas, reglas primero, frontend después y actualización de todas las PWA; pendiente validación física.
+- Estado: **IMPLEMENTADO LOCALMENTE / PENDIENTE REVISIÓN Y PUBLICACIÓN**. Sin datos reales modificados, commit, push, publicación Netlify ni deploy de reglas.
+
+## POST-V1 — Revisión final de seguridad v71 (06/11/2026, local)
+
+- Estado vigente: **NO APTO PARA PUBLICACIÓN CONTROLADA**. Se conserva la implementación local; esta revisión no modifica código productivo ni reglas.
+- Bloqueos reproducidos: anulación del sucesor de una renovación elimina deuda sin reversión; reducción de cuotas históricas posterior al corte deja cambios locales rechazados por reglas; edición de notas durante carga puede encolar una escritura incompatible.
+- La carga manual requiere un corrector mínimo auditado previo al cierre, sin borrar eventos ni generar movimientos de Caja. Propuesta y procedimiento condicionado en `docs/REVISION_FINAL_V71.md`.
+- Se reejecutaron cinco suites: 91 aserciones cumplidas, incluidas las 25 de apertura y reproducciones de riesgos que siguen pendientes de corregir. No equivale a aprobación de publicación.
+- Reglas ACTIVAS productivas consultadas solo por GET de configuración: siguen siendo las de v70 y difieren de las locales. Sin lecturas de documentos financieros ni escrituras productivas.
+- Pendientes: correcciones y regresiones, conciliación de colas/dispositivos reales, respaldos verificados, configuración Netlify y validación física PC/Samsung. Sin commit, push ni deploy.
+
+## POST-V1 — Corrección de bloqueos financieros v71 (06/11/2026, local)
+
+- B1: anulación de segmentos renovados rechazada por servicio/reglas; cierre comprueba continuidad de las cadenas y representación de la deuda.
+- B2: condiciones históricas bloqueadas antes de escrituras del editor y protegidas en reglas posteriores al corte. Ediciones normales conservadas, con aviso explícito de sincronización pendiente.
+- B3: notas históricas confirmadas remotamente antes de replicar, con eventos durante carga y actualización acotada después del cierre/apertura. Sin cola financiera incompatible.
+- Corrector previo al cierre: deshacer último evento vigente de la cadena mediante evento inmutable, motivo e imágenes anterior/posterior; transacción única, ID idempotente, reversiones en orden inverso y tombstones auditados, sin Caja.
+- Cierre irreversible conservado. No se implementa corrección financiera administrativa posterior ni conversión automática de prototipos locales sin imágenes originales. Clientes v70 e IndexedDB 7 conservados; shell local v71, sin publicar.
+- Pruebas y resultados finales en `docs/evidencia-v71/pruebas-correcciones.json`; reproducciones anteriores conservadas separadamente. Riesgos de despliegue/PWA no contabilizados como defectos solucionados.
+- Resultado final: 120 comprobaciones cumplidas, cero suites fallidas; 112 de comportamiento/regresión y 8 reproducciones de riesgos de despliegue. Apertura única: 25/25 conservadas.
+- Estado: **CORREGIDO Y VALIDADO LOCALMENTE / PENDIENTE REVISIÓN OPERATIVA PARA PUBLICAR**. Detalles y limitaciones en `docs/CORRECCION_BLOQUEOS_V71.md`. Sin datos reales, commit, push, deploy de reglas ni publicación.
+
+## POST-V1 — Preparación de publicación controlada v71 (06/11/2026)
+
+- Procedimiento operativo A–E en `docs/PUBLICACION_CONTROLADA_V71.md`: respaldos por dispositivo, conciliación de clientes/colas, control de PWA, reglas primero, frontend después y recuperación sin restauraciones destructivas.
+- Código idéntico en sus 14 archivos a la ejecución aprobada de 112 verificaciones y 8 reproducciones de riesgo; no se repitieron auditorías ni se agregaron funciones.
+- Reglas ACTIVAS nuevamente verificadas por GET de configuración: continúan en v70. Git remoto consultado por lectura coincide con HEAD `3ed27bc`. Evidencias `docs/evidencia-v71/prepublicacion-*`.
+- Publicación sin ejecutar ni autorizar: pendientes controles del operador en cuentas/dispositivos y panel Netlify. Sin documentos reales consultados, escrituras productivas, commit, push ni deploy.
+
+## POST-V1 — Publicación autorizada v71 (06/11/2026)
+
+- El operador confirmó clientes sincronizados, copias de seguridad realizadas, carga histórica aún no iniciada y todas las pestañas/PWA cerradas durante la transición. Autorizó reglas, commit y push normal a main; sin operaciones financieras de prueba.
+- Destino verificado por API pública Netlify: sitio `prestcontrol-26`, ID `c8543976-1247-451c-9a04-1fefc3c692b1`, repositorio `G0nz87/Prestcontrol-26`, rama productiva `main`, despliegue anterior `3ed27bc`. URL `https://prestcontrol-26.netlify.app`.
+- Reglas v71 desplegadas primero y leídas del servidor: ruleset `861cec43-494d-428c-94bb-8eda09efbffb`, SHA-256 `0be09e6f72b0b1a12e215b611a2be6ad5af812ebaa00394edc515836b7acb904`, idéntico al aprobado. Sin cambios de documentos financieros ni clientes.
+- Artefacto de aplicación conservado, idéntico al probado: 112 verificaciones satisfactorias y 8 reproducciones de riesgos conocidas; sin nuevas funciones ni repetición de auditorías. Shell `prestcontrol-shell-v71`.
+- Este commit contiene la implementación, pruebas y documentación v71 para publicación automática por Netlify después de la propagación de reglas. Su publicación efectiva se comprueba contra el commit y los archivos servidos, sin deploy manual.
+- Tras publicar, el operador debe verificar en PC la recarga efectiva, clientes conservados, ausencia de errores y acceso a Carga histórica antes de activarla. La comprobación física en celulares sigue pendiente; no operar desde ventanas v70. Cierre histórico y apertura de Caja se realizan únicamente al terminar toda la cartera.
+- Commit asociado: el que incorpora esta entrada. No se ejecutan restauraciones, resets, borrado de IndexedDB/colas ni rollback a reglas permisivas.

@@ -1,0 +1,13 @@
+{
+  "verifiedAt": "2026-11-06T04:06:10.333Z",
+  "project": "prestcontrol-5e965",
+  "release": "projects/prestcontrol-5e965/releases/cloud.firestore",
+  "ruleset": "projects/prestcontrol-5e965/rulesets/861cec43-494d-428c-94bb-8eda09efbffb",
+  "releaseUpdateTime": "2026-11-06T04:05:37.743442Z",
+  "sourceSha256": "0be09e6f72b0b1a12e215b611a2be6ad5af812ebaa00394edc515836b7acb904",
+  "approvedSha256": "0be09e6f72b0b1a12e215b611a2be6ad5af812ebaa00394edc515836b7acb904",
+  "matchesApproved": true,
+  "cliExitCode": 0,
+  "productionFinancialWrites": false,
+  "conservativePropagationUntil": "2026-11-06T04:15:42.743Z"
+}

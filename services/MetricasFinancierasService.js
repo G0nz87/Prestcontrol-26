@@ -5,6 +5,33 @@ import { saldoCobrableCuota } from '../core/helpers.js';
 // la relacion monto/total y ganancia/total del prestamo asociado.
 
 export class MetricasFinancierasService {
+  // Distribución de interés real por fecha de cobro, sin considerar una
+  // compensación de renovación como dinero. Reutiliza la composición existente.
+  calcularInteresPorPeriodo({ prestamos = [], cuotas = [], pagosCuota = [], periodoKey } = {}) {
+    const composiciones = this._construirComposicionEconomica(prestamos, cuotas);
+    const porId = new Map(prestamos.filter(p=>!p._deleted).map(p=>[p.id,p]));
+    const resultado = {};
+    const sumar = (fecha,interes) => {
+      const key = periodoKey(fecha);
+      if(key) resultado[key] = (resultado[key] || 0) + interes;
+    };
+    cuotas.filter(q=>!q._deleted && q.estado==='Pagado' && Number(q.cantidadAbonos||0)===0).forEach(q=>{
+      const p=porId.get(q.prestamoId);
+      const interes=Number.isFinite(Number(q.interesCobradoReal))
+        ? Number(q.interesCobradoReal)
+        : this._desglosarMonto(this._montoCobroEfectivo(q),p,composiciones.get(q.prestamoId)).interes;
+      sumar(q.fechaPago,interes);
+    });
+    pagosCuota.filter(p=>!p._deleted && ['ABONO_CUOTA','PAGO_CUOTA_BONIFICADO'].includes(p.tipo)).forEach(pago=>{
+      const p=porId.get(pago.prestamoId),composicion=composiciones.get(pago.prestamoId);
+      const interes=Number.isFinite(Number(pago.interesCobradoReal)) && pago.esPagoFinal
+        ? Number(pago.interesCobradoReal)-this._desglosarMonto(Number(pago.totalAbonadoAntes||0),p,composicion).interes
+        : this._desglosarMonto(pago.monto,p,composicion).interes;
+      sumar(pago.fechaPago,interes);
+    });
+    return Object.fromEntries(Object.entries(resultado).map(([key,n])=>[key,this._round2(n)]));
+  }
+
   calcularMetricasGlobales({ prestamos = [], cuotas = [], clientes = [], hoy = new Date(), esCuotaCobrable } = {}) {
     return this._calcularMetricas({ prestamos, cuotas, clientes, hoy, esCuotaCobrable });
   }

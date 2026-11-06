@@ -91,6 +91,7 @@ export async function savePrestamo() {
 
   try {
   if (await window.bloquearEscrituraPorRestorePending?.()) return;
+  if (await window.bloquearFinanzasDuranteCargaHistorica?.()) return;
   const clienteId = document.getElementById('pre-cliente').value;
   const montoRaw  = document.getElementById('pre-monto').value;
   const interesRaw= document.getElementById('pre-interes').value;
@@ -520,6 +521,7 @@ export async function confirmarCobroInteresRenovacionCapital() {
   let nuevoId = '';
   try {
     if (await window.bloquearEscrituraPorRestorePending?.()) return;
+    if (await window.bloquearFinanzasDuranteCargaHistorica?.()) return;
     if (!navigator.onLine || !window._fbUser || !window._fbDb?.runTransaction) throw new Error('Esta operación requiere conexión.');
     const evaluacion = await evaluarCobroInteresRenovacionCapital(prestamoOrigenId);
     if (!evaluacion.ok) throw new Error(evaluacion.motivo);
@@ -898,6 +900,7 @@ export async function confirmarRenovacionPrestamo() {
 
   try {
     if (await window.bloquearEscrituraPorRestorePending?.()) return;
+    if (await window.bloquearFinanzasDuranteCargaHistorica?.()) return;
     const { montoNominal, interesPorCuota, nCuotas, tipo, fechaRaw } = getRenovacionInputs();
     window.prestamoService.validarDatosPrestamo({
       clienteId: 'renovacion',
@@ -1221,6 +1224,7 @@ export async function confirmarBorrarPrestamoFinal() {
   if (!operacion) return;
   try {
   if (await window.bloquearEscrituraPorRestorePending?.()) return;
+  if (await window.bloquearFinanzasDuranteCargaHistorica?.()) return;
 
   if (!motivo) { window.toast('⚠️ Seleccioná un motivo'); return; }
   if (!pass)   { errEl.textContent = 'Ingresá tu contraseña para confirmar'; errEl.classList.add('on'); return; }
@@ -1250,6 +1254,7 @@ export async function confirmarBorrarPrestamoFinal() {
   errEl.classList.remove('on');
 
   const pre = await window.dbGet('prestamos', id);
+  if (pre?.cargaInicial && ['error','otro'].includes(motivo)) throw new Error('El registro histórico auditado no puede eliminarse. Se requiere revisión de la corrección.');
   const cuotas = await window.dbAll('cuotas');
   const motivoLabel = { pago:'Se pagó completo', perdon:'Se ejecutó la prenda', error:'Error de carga', otro:'Otro motivo' }[motivo] || motivo;
   const motivoFinal = motTexto ? `${motivoLabel}: ${motTexto}` : motivoLabel;

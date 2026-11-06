@@ -1,0 +1,250 @@
+{
+  "startedAt": "2026-11-06T03:27:17.228Z",
+  "project": "demo-prestcontrol-apertura",
+  "host": "127.0.0.1:8089",
+  "productionDataUsed": false,
+  "results": [
+    {
+      "suite": "tests/carga-historica.test.cjs",
+      "exitCode": 0,
+      "passed": 33,
+      "durationMs": 21772,
+      "assertions": [
+        "Clientes cargados en v70 se preservan íntegros al activar; no se habilita automáticamente",
+        "Datos financieros previos: sin conversión ni autoridad histórica",
+        "Caja iniciada impide activar y conserva su apertura",
+        "Carrera de activación: escritura previa a la barrera se detecta y no se convierte",
+        "PWA antigua bloqueada para finanzas durante carga; clientes siguen admitidos",
+        "Préstamo original, fechas, cuotas y total exactos; cero egresos",
+        "Plan original personalizado conserva vencimientos e importes",
+        "Pago histórico completo cancela préstamo sin ingreso de Caja y calcula interés",
+        "Pago parcial histórico: capital e interés pendientes y ganancia correctos",
+        "Renovación con parcial: relaciones y composición económica correctas, sin Caja",
+        "Interés real cobrado y capital renovado: ganancia sin ingreso de Caja",
+        "Reintento idempotente y referencia incompatible: sin duplicados ni sobrescritura",
+        "Pagos simultáneos no exceden saldo ni se aplican parcialmente",
+        "Caja se bloquea antes de finalizar, incluso cliente antiguo y operación directa",
+        "Verificación desactualizada impide cerrar; cierre confirmado fija corte irreversible",
+        "Carrera pago/cierre: no se acepta una operación después del corte",
+        "Dispositivo desactualizado no modifica históricos ni publica operaciones antes de Caja",
+        "Aperturas posteriores concurrentes conservan una sola autoridad y saldo real",
+        "Primer préstamo nuevo y cobro nuevo afectan Caja; fecha antigua no implica histórico",
+        "Pago normal de deuda histórica parcial usa ingreso normal sin reclasificar el préstamo",
+        "Respaldo incluye estado/auditoría; respaldo anterior no reabre ni sustituye finanzas",
+        "Restauración idéntica admite metadatos; restauración vieja no sobrescribe movimiento",
+        "Anulación sin cobros y rechazo de anulación con pagos reales",
+        "Falla de red no crea históricos ni una cola pendiente",
+        "Verificación detecta registro financiero alterado y bloquea cierre",
+        "Plan máximo de 120 cuotas se confirma atómicamente sin diferencias de centavos",
+        "Réplicas IndexedDB no encolan históricos y conservan clientes locales",
+        "Renovación normal posterior de deuda histórica mantiene composición y genera solo su egreso real",
+        "Comprobación interrumpida se retoma explícitamente y el estado persiste en otro dispositivo",
+        "Aislamiento por cuenta y protección contra cambio de procedencia tras el corte",
+        "Cliente histórico: sin mutación al vincular, contacto editable, borrado antiguo y cascada rechazados",
+        "Validaciones rechazan fechas futuras, plan inconsistente y renovación que invente dinero",
+        "Riesgo conserva atrasos y fechas reales; parcial vencido mantiene préstamo Atrasado"
+      ],
+      "output": "OK Clientes cargados en v70 se preservan íntegros al activar; no se habilita automáticamente\nOK Datos financieros previos: sin conversión ni autoridad histórica\nOK Caja iniciada impide activar y conserva su apertura\nOK Carrera de activación: escritura previa a la barrera se detecta y no se convierte\nOK PWA antigua bloqueada para finanzas durante carga; clientes siguen admitidos\nOK Préstamo original, fechas, cuotas y total exactos; cero egresos\nOK Plan original personalizado conserva vencimientos e importes\nOK Pago histórico completo cancela préstamo sin ingreso de Caja y calcula interés\nOK Pago parcial histórico: capital e interés pendientes y ganancia correctos\nOK Renovación con parcial: relaciones y composición económica correctas, sin Caja\nOK Interés real cobrado y capital renovado: ganancia sin ingreso de Caja\nOK Reintento idempotente y referencia incompatible: sin duplicados ni sobrescritura\nOK Pagos simultáneos no exceden saldo ni se aplican parcialmente\nOK Caja se bloquea antes de finalizar, incluso cliente antiguo y operación directa\nOK Verificación desactualizada impide cerrar; cierre confirmado fija corte irreversible\nOK Carrera pago/cierre: no se acepta una operación después del corte\nOK Dispositivo desactualizado no modifica históricos ni publica operaciones antes de Caja\nOK Aperturas posteriores concurrentes conservan una sola autoridad y saldo real\nOK Primer préstamo nuevo y cobro nuevo afectan Caja; fecha antigua no implica histórico\nOK Pago normal de deuda histórica parcial usa ingreso normal sin reclasificar el préstamo\nOK Respaldo incluye estado/auditoría; respaldo anterior no reabre ni sustituye finanzas\nOK Restauración idéntica admite metadatos; restauración vieja no sobrescribe movimiento\nOK Anulación sin cobros y rechazo de anulación con pagos reales\nOK Falla de red no crea históricos ni una cola pendiente\nOK Verificación detecta registro financiero alterado y bloquea cierre\nOK Plan máximo de 120 cuotas se confirma atómicamente sin diferencias de centavos\nOK Réplicas IndexedDB no encolan históricos y conservan clientes locales\nOK Renovación normal posterior de deuda histórica mantiene composición y genera solo su egreso real\nOK Comprobación interrumpida se retoma explícitamente y el estado persiste en otro dispositivo\nOK Aislamiento por cuenta y protección contra cambio de procedencia tras el corte\nOK Cliente histórico: sin mutación al vincular, contacto editable, borrado antiguo y cascada rechazados\nOK Validaciones rechazan fechas futuras, plan inconsistente y renovación que invente dinero\nOK Riesgo conserva atrasos y fechas reales; parcial vencido mantiene préstamo Atrasado\n{\n  \"passed\": 33,\n  \"project\": \"demo-prestcontrol-apertura\",\n  \"backend\": \"Firestore Emulator 127.0.0.1:8089\",\n  \"results\": [\n    \"Clientes cargados en v70 se preservan íntegros al activar; no se habilita automáticamente\",\n    \"Datos financieros previos: sin conversión ni autoridad histórica\",\n    \"Caja iniciada impide activar y conserva su apertura\",\n    \"Carrera de activación: escritura previa a la barrera se detecta y no se convierte\",\n    \"PWA antigua bloqueada para finanzas durante carga; clientes siguen admitidos\",\n    \"Préstamo original, fechas, cuotas y total exactos; cero egresos\",\n    \"Plan original personalizado conserva vencimientos e importes\",\n    \"Pago histórico completo cancela préstamo sin ingreso de Caja y calcula interés\",\n    \"Pago parcial histórico: capital e interés pendientes y ganancia correctos\",\n    \"Renovación con parcial: relaciones y composición económica correctas, sin Caja\",\n    \"Interés real cobrado y capital renovado: ganancia sin ingreso de Caja\",\n    \"Reintento idempotente y referencia incompatible: sin duplicados ni sobrescritura\",\n    \"Pagos simultáneos no exceden saldo ni se aplican parcialmente\",\n    \"Caja se bloquea antes de finalizar, incluso cliente antiguo y operación directa\",\n    \"Verificación desactualizada impide cerrar; cierre confirmado fija corte irreversible\",\n    \"Carrera pago/cierre: no se acepta una operación después del corte\",\n    \"Dispositivo desactualizado no modifica históricos ni publica operaciones antes de Caja\",\n    \"Aperturas posteriores concurrentes conservan una sola autoridad y saldo real\",\n    \"Primer préstamo nuevo y cobro nuevo afectan Caja; fecha antigua no implica histórico\",\n    \"Pago normal de deuda histórica parcial usa ingreso normal sin reclasificar el préstamo\",\n    \"Respaldo incluye estado/auditoría; respaldo anterior no reabre ni sustituye finanzas\",\n    \"Restauración idéntica admite metadatos; restauración vieja no sobrescribe movimiento\",\n    \"Anulación sin cobros y rechazo de anulación con pagos reales\",\n    \"Falla de red no crea históricos ni una cola pendiente\",\n    \"Verificación detecta registro financiero alterado y bloquea cierre\",\n    \"Plan máximo de 120 cuotas se confirma atómicamente sin diferencias de centavos\",\n    \"Réplicas IndexedDB no encolan históricos y conservan clientes locales\",\n    \"Renovación normal posterior de deuda histórica mantiene composición y genera solo su egreso real\",\n    \"Comprobación interrumpida se retoma explícitamente y el estado persiste en otro dispositivo\",\n    \"Aislamiento por cuenta y protección contra cambio de procedencia tras el corte\",\n    \"Cliente histórico: sin mutación al vincular, contacto editable, borrado antiguo y cascada rechazados\",\n    \"Validaciones rechazan fechas futuras, plan inconsistente y renovación que invente dinero\",\n    \"Riesgo conserva atrasos y fechas reales; parcial vencido mantiene préstamo Atrasado\"\n  ]\n}\n",
+      "error": null
+    },
+    {
+      "suite": "tests/carga-historica-ui.test.cjs",
+      "exitCode": 0,
+      "passed": 13,
+      "durationMs": 4401,
+      "assertions": [
+        "Pantalla: activación explícita conserva cliente v70 y replica estado sin cola",
+        "Commit financiero normal real se rechaza durante carga antes de escribir IndexedDB",
+        "Pantalla: préstamo, vista de plan y pagos completos/parciales sin movimientos",
+        "Respaldo durante carga conserva auditoría pero no puede restaurarse sobre carga activa",
+        "Pantalla: renovación mantiene vínculos y dinero adicional histórico sin Caja",
+        "Historial real: fechas originales, cobros sin duplicar e interés/compensación correctos",
+        "Pantalla: verificación, confirmación escrita y cierre con corte remoto",
+        "Pantalla: reapertura desde otro dispositivo recupera cierre; ya no hay formularios históricos",
+        "Después del corte y antes de Caja, el commit normal y el borrado general siguen bloqueados",
+        "Respaldo desde UI incorpora libro remoto y auditoría, conservando clientes",
+        "Restauración completa real: rechazo previo sin mutaciones de respaldo anterior",
+        "Restauración completa real y publicación idéntica preservan autoridad histórica y apertura",
+        "Commit IndexedDB y push reales después del corte: préstamo nuevo genera solo el egreso nuevo"
+      ],
+      "output": "OK Pantalla: activación explícita conserva cliente v70 y replica estado sin cola\nOK Commit financiero normal real se rechaza durante carga antes de escribir IndexedDB\nOK Pantalla: préstamo, vista de plan y pagos completos/parciales sin movimientos\nOK Respaldo durante carga conserva auditoría pero no puede restaurarse sobre carga activa\nOK Pantalla: renovación mantiene vínculos y dinero adicional histórico sin Caja\nOK Historial real: fechas originales, cobros sin duplicar e interés/compensación correctos\nOK Pantalla: verificación, confirmación escrita y cierre con corte remoto\nOK Pantalla: reapertura desde otro dispositivo recupera cierre; ya no hay formularios históricos\nOK Después del corte y antes de Caja, el commit normal y el borrado general siguen bloqueados\nOK Respaldo desde UI incorpora libro remoto y auditoría, conservando clientes\nOK Restauración completa real: rechazo previo sin mutaciones de respaldo anterior\nOK Restauración completa real y publicación idéntica preservan autoridad histórica y apertura\nOK Commit IndexedDB y push reales después del corte: préstamo nuevo genera solo el egreso nuevo\n{\n  \"passed\": 13,\n  \"scope\": \"JSDOM + fake-indexeddb + Firestore Emulator demo\",\n  \"results\": [\n    \"Pantalla: activación explícita conserva cliente v70 y replica estado sin cola\",\n    \"Commit financiero normal real se rechaza durante carga antes de escribir IndexedDB\",\n    \"Pantalla: préstamo, vista de plan y pagos completos/parciales sin movimientos\",\n    \"Respaldo durante carga conserva auditoría pero no puede restaurarse sobre carga activa\",\n    \"Pantalla: renovación mantiene vínculos y dinero adicional histórico sin Caja\",\n    \"Historial real: fechas originales, cobros sin duplicar e interés/compensación correctos\",\n    \"Pantalla: verificación, confirmación escrita y cierre con corte remoto\",\n    \"Pantalla: reapertura desde otro dispositivo recupera cierre; ya no hay formularios históricos\",\n    \"Después del corte y antes de Caja, el commit normal y el borrado general siguen bloqueados\",\n    \"Respaldo desde UI incorpora libro remoto y auditoría, conservando clientes\",\n    \"Restauración completa real: rechazo previo sin mutaciones de respaldo anterior\",\n    \"Restauración completa real y publicación idéntica preservan autoridad histórica y apertura\",\n    \"Commit IndexedDB y push reales después del corte: préstamo nuevo genera solo el egreso nuevo\"\n  ]\n}\n",
+      "error": null
+    },
+    {
+      "suite": "tests/apertura-caja.test.cjs",
+      "exitCode": 0,
+      "passed": 25,
+      "durationMs": 6814,
+      "assertions": [
+        "Dos dispositivos concurrentes: 20000000 / 30000000",
+        "Dos dispositivos concurrentes: 20000000 / 20000000",
+        "Dos pestañas con la misma IndexedDB convergen",
+        "Reintento con importe distinto recupera la apertura, sin reescribirla",
+        "Sin conexión: no se crea apertura local ni operación pendiente",
+        "Red caída aunque navigator diga online: lectura del servidor rechazada",
+        "Respuesta perdida tras commit real: el reintento recupera una sola apertura",
+        "Fallo atómico local después del commit remoto: recuperación sin duplicación",
+        "Réplica y cola obsoletas se reconcilian con auditoría; otro movimiento queda intacto",
+        "Respaldo anterior conserva la apertura remota; importe incompatible se rechaza",
+        "Apertura legacy se vincula sin alterar ningún movimiento",
+        "Duplicados anteriores o apertura eliminada: bloqueo sin conversión",
+        "PWA antigua no puede crear apertura sin autoridad ni sobrescribir la ganadora",
+        "Autoridad inmutable, no puede crearse sin movimiento ni reiniciarse la cuenta protegida",
+        "Aislamiento de usuarios y permisos financieros restantes conservados",
+        "La cola local rechaza altas nuevas de SALDO_INICIAL",
+        "Push de cola vieja recupera autoridad, sin batch de apertura",
+        "Cola pendiente sin autoridad nunca abre Caja automáticamente",
+        "Publicación de restauración omite apertura y su tombstone, preservando otros registros",
+        "Interfaz: sin éxito ni cierre del formulario antes de confirmación autoritativa",
+        "Restauración incompatible se rechaza antes de escribir stores locales",
+        "Intento legacy pendiente sin servidor muestra la opción de confirmar explícitamente",
+        "Cambio de sesión durante la confirmación no escribe en otra cuenta local",
+        "Cuenta anterior con reset completado: adopta solo su apertura activa sin cambiar movimientos",
+        "Restauración completa real en IndexedDB de un respaldo anterior conserva apertura y autoridad"
+      ],
+      "output": "OK Dos dispositivos concurrentes: 20000000 / 30000000\nOK Dos dispositivos concurrentes: 20000000 / 20000000\nOK Dos pestañas con la misma IndexedDB convergen\nOK Reintento con importe distinto recupera la apertura, sin reescribirla\nOK Sin conexión: no se crea apertura local ni operación pendiente\nOK Red caída aunque navigator diga online: lectura del servidor rechazada\nOK Respuesta perdida tras commit real: el reintento recupera una sola apertura\nOK Fallo atómico local después del commit remoto: recuperación sin duplicación\nOK Réplica y cola obsoletas se reconcilian con auditoría; otro movimiento queda intacto\nOK Respaldo anterior conserva la apertura remota; importe incompatible se rechaza\nOK Apertura legacy se vincula sin alterar ningún movimiento\nOK Duplicados anteriores o apertura eliminada: bloqueo sin conversión\nOK PWA antigua no puede crear apertura sin autoridad ni sobrescribir la ganadora\nOK Autoridad inmutable, no puede crearse sin movimiento ni reiniciarse la cuenta protegida\nOK Aislamiento de usuarios y permisos financieros restantes conservados\nOK La cola local rechaza altas nuevas de SALDO_INICIAL\nOK Push de cola vieja recupera autoridad, sin batch de apertura\nOK Cola pendiente sin autoridad nunca abre Caja automáticamente\nOK Publicación de restauración omite apertura y su tombstone, preservando otros registros\nOK Interfaz: sin éxito ni cierre del formulario antes de confirmación autoritativa\nOK Restauración incompatible se rechaza antes de escribir stores locales\nOK Intento legacy pendiente sin servidor muestra la opción de confirmar explícitamente\nOK Cambio de sesión durante la confirmación no escribe en otra cuenta local\nOK Cuenta anterior con reset completado: adopta solo su apertura activa sin cambiar movimientos\nOK Restauración completa real en IndexedDB de un respaldo anterior conserva apertura y autoridad\n{\n  \"passed\": 25,\n  \"project\": \"demo-prestcontrol-apertura\",\n  \"backend\": \"Firestore Emulator 127.0.0.1:8089\",\n  \"local\": \"fake-indexeddb en memoria\"\n}\n",
+      "error": null
+    },
+    {
+      "suite": "tests/despliegue-v71.test.cjs",
+      "exitCode": 0,
+      "passed": 11,
+      "durationMs": 5131,
+      "assertions": [
+        "v70/reglas v70: préstamo, cobro completo, parcial y renovación normales",
+        "RIESGO frontend primero: v71 crea autoridad, v70 crea otra apertura con reglas viejas",
+        "RIESGO reglas viejas: autoridad y apertura v71 todavía se pueden sobrescribir",
+        "v70/v71 con reglas nuevas y Caja existente: préstamos, cobros, parciales y renovación permitidos",
+        "RIESGO reglas primero: batch v70 mixto rechazado entero, cola conservada",
+        "RIESGO v71: apertura no confirmada impide publicar el resto de la cola",
+        "Cola normal v70/v71 con Caja existente sigue publicándose con reglas nuevas",
+        "RIESGO restauración v70 grande: movimiento sobrescrito antes de rechazar apertura",
+        "RIESGO reset antiguo sin autoridad: barrera preparing y cambios anteriores al rechazo",
+        "RIESGO residual: reglas nuevas no hacen inmutables los demás movimientos financieros",
+        "RIESGO rollback a reglas v70: permite otra apertura aun existiendo autoridad"
+      ],
+      "output": "OK v70/reglas v70: préstamo, cobro completo, parcial y renovación normales\nOK RIESGO frontend primero: v71 crea autoridad, v70 crea otra apertura con reglas viejas\nOK RIESGO reglas viejas: autoridad y apertura v71 todavía se pueden sobrescribir\nOK v70/v71 con reglas nuevas y Caja existente: préstamos, cobros, parciales y renovación permitidos\nOK RIESGO reglas primero: batch v70 mixto rechazado entero, cola conservada\nOK RIESGO v71: apertura no confirmada impide publicar el resto de la cola\nOK Cola normal v70/v71 con Caja existente sigue publicándose con reglas nuevas\nOK RIESGO restauración v70 grande: movimiento sobrescrito antes de rechazar apertura\nOK RIESGO reset antiguo sin autoridad: barrera preparing y cambios anteriores al rechazo\nOK RIESGO residual: reglas nuevas no hacen inmutables los demás movimientos financieros\nOK RIESGO rollback a reglas v70: permite otra apertura aun existiendo autoridad\n{\n  \"passed\": 11,\n  \"scope\": \"Firestore Emulator demo; riesgos reproducidos, ninguna corrección aplicada\",\n  \"results\": [\n    \"v70/reglas v70: préstamo, cobro completo, parcial y renovación normales\",\n    \"RIESGO frontend primero: v71 crea autoridad, v70 crea otra apertura con reglas viejas\",\n    \"RIESGO reglas viejas: autoridad y apertura v71 todavía se pueden sobrescribir\",\n    \"v70/v71 con reglas nuevas y Caja existente: préstamos, cobros, parciales y renovación permitidos\",\n    \"RIESGO reglas primero: batch v70 mixto rechazado entero, cola conservada\",\n    \"RIESGO v71: apertura no confirmada impide publicar el resto de la cola\",\n    \"Cola normal v70/v71 con Caja existente sigue publicándose con reglas nuevas\",\n    \"RIESGO restauración v70 grande: movimiento sobrescrito antes de rechazar apertura\",\n    \"RIESGO reset antiguo sin autoridad: barrera preparing y cambios anteriores al rechazo\",\n    \"RIESGO residual: reglas nuevas no hacen inmutables los demás movimientos financieros\",\n    \"RIESGO rollback a reglas v70: permite otra apertura aun existiendo autoridad\"\n  ]\n}\n",
+      "error": null
+    },
+    {
+      "suite": "tests/revision-correcciones-v71.test.cjs",
+      "exitCode": 0,
+      "passed": 9,
+      "durationMs": 5948,
+      "assertions": [
+        "Borrador: capital, intereses, cuotas y vencimientos editables antes de confirmar",
+        "Préstamo confirmado sin pagos: no se sobrescribe; anular y recargar conserva original y no mueve Caja",
+        "Pago completo erróneo: negativa y borrado rechazados; corrector recupera deuda sin Caja",
+        "Parcial histórico sobrecargado: deshacer y recargar corrige sin dinero ficticio",
+        "Parcial subregistrado: solo puede agregarse la parte real faltante con otro evento",
+        "REGRESIÓN B1: anular hijo renovado se bloquea; corrector recupera deuda original",
+        "Después del corte: no reabre; el cambio de capital histórico no tiene desembolso original para editar",
+        "REGRESIÓN B2: reducir cuotas históricas se bloquea sin escritura ni falso éxito",
+        "REGRESIÓN B3: notas con parcial se confirman y replican sin usar cola"
+      ],
+      "output": "OK Borrador: capital, intereses, cuotas y vencimientos editables antes de confirmar\nOK Préstamo confirmado sin pagos: no se sobrescribe; anular y recargar conserva original y no mueve Caja\nOK Pago completo erróneo: negativa y borrado rechazados; corrector recupera deuda sin Caja\nOK Parcial histórico sobrecargado: deshacer y recargar corrige sin dinero ficticio\nOK Parcial subregistrado: solo puede agregarse la parte real faltante con otro evento\nOK REGRESIÓN B1: anular hijo renovado se bloquea; corrector recupera deuda original\nOK Después del corte: no reabre; el cambio de capital histórico no tiene desembolso original para editar\nOK REGRESIÓN B2: reducir cuotas históricas se bloquea sin escritura ni falso éxito\nOK REGRESIÓN B3: notas con parcial se confirman y replican sin usar cola\n{\n  \"passed\": 9,\n  \"scope\": \"Regresiones corregidas, Emulator e IndexedDB aislados; evidencia anterior conservada por separado\",\n  \"results\": [\n    \"Borrador: capital, intereses, cuotas y vencimientos editables antes de confirmar\",\n    \"Préstamo confirmado sin pagos: no se sobrescribe; anular y recargar conserva original y no mueve Caja\",\n    \"Pago completo erróneo: negativa y borrado rechazados; corrector recupera deuda sin Caja\",\n    \"Parcial histórico sobrecargado: deshacer y recargar corrige sin dinero ficticio\",\n    \"Parcial subregistrado: solo puede agregarse la parte real faltante con otro evento\",\n    \"REGRESIÓN B1: anular hijo renovado se bloquea; corrector recupera deuda original\",\n    \"Después del corte: no reabre; el cambio de capital histórico no tiene desembolso original para editar\",\n    \"REGRESIÓN B2: reducir cuotas históricas se bloquea sin escritura ni falso éxito\",\n    \"REGRESIÓN B3: notas con parcial se confirman y replican sin usar cola\"\n  ]\n}\n",
+      "error": null
+    },
+    {
+      "suite": "tests/correcciones-historicas.test.cjs",
+      "exitCode": 0,
+      "passed": 29,
+      "durationMs": 96720,
+      "assertions": [
+        "Capital/interés/vencimientos: deshacer alta y recargar conserva auditoría y clientes",
+        "Deshacer anulación simple recupera exactamente la deuda y el plan anterior",
+        "Cadena de renovaciones con parcial: solo se deshace en orden inverso",
+        "Renovación de capital/interés real: deshacer no convierte compensación en recuperación",
+        "Reglas bloquean anulación directa aun con evento y revisión nuevos",
+        "Verificador rechaza cadena rota aunque sus after-images coincidan con auditoría",
+        "Deshacer un pago parcial anterior se bloquea mientras exista otro pago posterior",
+        "Eventos de otra cadena no impiden corregir el último de la cadena elegida",
+        "Dos dispositivos deshacen simultáneamente: una sola corrección y revisión",
+        "Motivos distintos concurrentes no sobrescriben la corrección ya confirmada",
+        "Pérdida de respuesta tras commit: reintento recupera corrección sin duplicados",
+        "Respuesta sin confirmación con red deshabilitada: recuperación remota idempotente",
+        "Fallo de transporte antes del envío no crea eventos ni cambios financieros",
+        "Dos réplicas convergen a tombstones y saldo confirmado; ninguna cola histórica",
+        "Editor histórico sin red muestra error y conserva notas/cola sin éxito",
+        "Rechazo real de permisos: editor no cambia IndexedDB ni anuncia éxito",
+        "Notas legítimas tras cierre se confirman sobre dato remoto sin sobrescribir finanzas",
+        "Reglas rechazan condiciones/cuotas históricas después del corte y aceptan cobros normales",
+        "Respaldo tras corrección conserva eventos/tombstones y no reabre el corte",
+        "Edición normal de cuotas conserva cálculo/cola y el batch es aceptado por Firestore",
+        "Observaciones de clientes y préstamo normal con parcial siguen siendo legítimas",
+        "Confirmación remota y falla local se distinguen; consulta posterior recupera notas",
+        "Motivo obligatorio, evento inexistente, formato previo y reversión de corrección se bloquean",
+        "Carrera de pago y corrección solo confirma estados serializables, sin deuda perdida",
+        "Carrera de cierre y corrección conserva corte o exige volver a verificar",
+        "Renovación de 120 cuotas y su reversión son atómicas dentro de límites de reglas",
+        "Pantalla real: deshacer exige motivo, recupera cuota y conserva cliente/cola",
+        "Restore y publicación reales de respaldo idéntico conservan pagos revertidos y saldo inicial",
+        "Reglas rechazan una reversión que intenta cambiar el capital de la imagen anterior"
+      ],
+      "output": "OK Capital/interés/vencimientos: deshacer alta y recargar conserva auditoría y clientes\nOK Deshacer anulación simple recupera exactamente la deuda y el plan anterior\nOK Cadena de renovaciones con parcial: solo se deshace en orden inverso\nOK Renovación de capital/interés real: deshacer no convierte compensación en recuperación\nOK Reglas bloquean anulación directa aun con evento y revisión nuevos\nOK Verificador rechaza cadena rota aunque sus after-images coincidan con auditoría\nOK Deshacer un pago parcial anterior se bloquea mientras exista otro pago posterior\nOK Eventos de otra cadena no impiden corregir el último de la cadena elegida\nOK Dos dispositivos deshacen simultáneamente: una sola corrección y revisión\nOK Motivos distintos concurrentes no sobrescriben la corrección ya confirmada\nOK Pérdida de respuesta tras commit: reintento recupera corrección sin duplicados\nOK Respuesta sin confirmación con red deshabilitada: recuperación remota idempotente\nOK Fallo de transporte antes del envío no crea eventos ni cambios financieros\nOK Dos réplicas convergen a tombstones y saldo confirmado; ninguna cola histórica\nOK Editor histórico sin red muestra error y conserva notas/cola sin éxito\nOK Rechazo real de permisos: editor no cambia IndexedDB ni anuncia éxito\nOK Notas legítimas tras cierre se confirman sobre dato remoto sin sobrescribir finanzas\nOK Reglas rechazan condiciones/cuotas históricas después del corte y aceptan cobros normales\nOK Respaldo tras corrección conserva eventos/tombstones y no reabre el corte\nOK Edición normal de cuotas conserva cálculo/cola y el batch es aceptado por Firestore\nOK Observaciones de clientes y préstamo normal con parcial siguen siendo legítimas\nOK Confirmación remota y falla local se distinguen; consulta posterior recupera notas\nOK Motivo obligatorio, evento inexistente, formato previo y reversión de corrección se bloquean\nOK Carrera de pago y corrección solo confirma estados serializables, sin deuda perdida\nOK Carrera de cierre y corrección conserva corte o exige volver a verificar\nOK Renovación de 120 cuotas y su reversión son atómicas dentro de límites de reglas\nOK Pantalla real: deshacer exige motivo, recupera cuota y conserva cliente/cola\nOK Restore y publicación reales de respaldo idéntico conservan pagos revertidos y saldo inicial\nOK Reglas rechazan una reversión que intenta cambiar el capital de la imagen anterior\n{\n  \"passed\": 29,\n  \"scope\": \"Correcciones verificadas, no reproducciones contabilizadas como soluciones\",\n  \"results\": [\n    \"Capital/interés/vencimientos: deshacer alta y recargar conserva auditoría y clientes\",\n    \"Deshacer anulación simple recupera exactamente la deuda y el plan anterior\",\n    \"Cadena de renovaciones con parcial: solo se deshace en orden inverso\",\n    \"Renovación de capital/interés real: deshacer no convierte compensación en recuperación\",\n    \"Reglas bloquean anulación directa aun con evento y revisión nuevos\",\n    \"Verificador rechaza cadena rota aunque sus after-images coincidan con auditoría\",\n    \"Deshacer un pago parcial anterior se bloquea mientras exista otro pago posterior\",\n    \"Eventos de otra cadena no impiden corregir el último de la cadena elegida\",\n    \"Dos dispositivos deshacen simultáneamente: una sola corrección y revisión\",\n    \"Motivos distintos concurrentes no sobrescriben la corrección ya confirmada\",\n    \"Pérdida de respuesta tras commit: reintento recupera corrección sin duplicados\",\n    \"Respuesta sin confirmación con red deshabilitada: recuperación remota idempotente\",\n    \"Fallo de transporte antes del envío no crea eventos ni cambios financieros\",\n    \"Dos réplicas convergen a tombstones y saldo confirmado; ninguna cola histórica\",\n    \"Editor histórico sin red muestra error y conserva notas/cola sin éxito\",\n    \"Rechazo real de permisos: editor no cambia IndexedDB ni anuncia éxito\",\n    \"Notas legítimas tras cierre se confirman sobre dato remoto sin sobrescribir finanzas\",\n    \"Reglas rechazan condiciones/cuotas históricas después del corte y aceptan cobros normales\",\n    \"Respaldo tras corrección conserva eventos/tombstones y no reabre el corte\",\n    \"Edición normal de cuotas conserva cálculo/cola y el batch es aceptado por Firestore\",\n    \"Observaciones de clientes y préstamo normal con parcial siguen siendo legítimas\",\n    \"Confirmación remota y falla local se distinguen; consulta posterior recupera notas\",\n    \"Motivo obligatorio, evento inexistente, formato previo y reversión de corrección se bloquean\",\n    \"Carrera de pago y corrección solo confirma estados serializables, sin deuda perdida\",\n    \"Carrera de cierre y corrección conserva corte o exige volver a verificar\",\n    \"Renovación de 120 cuotas y su reversión son atómicas dentro de límites de reglas\",\n    \"Pantalla real: deshacer exige motivo, recupera cuota y conserva cliente/cola\",\n    \"Restore y publicación reales de respaldo idéntico conservan pagos revertidos y saldo inicial\",\n    \"Reglas rechazan una reversión que intenta cambiar el capital de la imagen anterior\"\n  ]\n}\n",
+      "error": null
+    }
+  ],
+  "productFiles": [
+    {
+      "path": "index.html",
+      "sha256": "9131f6e838f06a636e95588ae110e6ebb99d9df49d524c34ca0d74b009814ce9"
+    },
+    {
+      "path": "firestore.rules",
+      "sha256": "0be09e6f72b0b1a12e215b611a2be6ad5af812ebaa00394edc515836b7acb904"
+    },
+    {
+      "path": "services/CajaAperturaService.js",
+      "sha256": "b0a4b83b708d30671ca8a7f7c177d9b34385c29da3ac9988c733ffc4d26e7f23"
+    },
+    {
+      "path": "services/CargaHistoricaService.js",
+      "sha256": "dbe995cfc544ffc6c936803fba1c4c0f272a4d7fcbd76d31d7bb4714ba05f75e"
+    },
+    {
+      "path": "services/MetricasFinancierasService.js",
+      "sha256": "f888b3ec03a55e623655ea92b13f76f38b3ece67d5e260d2b17ee79eda1da1b0"
+    },
+    {
+      "path": "services/index.js",
+      "sha256": "d5fa27a0f99ab3d0dd0c0be87928046d2e5f6432c6421ff5cccfa199c9be8121"
+    },
+    {
+      "path": "ui/caja.js",
+      "sha256": "5af8ecaa62056d031021c7423557b009d80027c5c9ed460d3f9fe070659b7d88"
+    },
+    {
+      "path": "ui/carga-historica.js",
+      "sha256": "aec0279d9e8619d5b2d470cf336171c5e27a15bf1849e7da4192faf82c706666"
+    },
+    {
+      "path": "ui/clientes.js",
+      "sha256": "bb5297b995a9ca9e57cb13eadd1a1975c18a15de39d7a8cc537a2615c7b8ec1d"
+    },
+    {
+      "path": "ui/historial.js",
+      "sha256": "5efb4134ac4023084a5f03898371a89299dd714b4d3dcad5565b2ec265a28a7b"
+    },
+    {
+      "path": "ui/index.js",
+      "sha256": "10484bff951e5afa096b9b4c0ae29b0136faf7911c8c9b6034e1446cd62b3420"
+    },
+    {
+      "path": "ui/prestamos.js",
+      "sha256": "4ee76da7f3120e8782e3c4e6a85b8d11d14cd01f2878f7bdb809986cb4f5849f"
+    },
+    {
+      "path": "ui/prendas.js",
+      "sha256": "63829a421d1491371f64661ef9d6fb9548a12cb849b8a9117ceeccd7763aa8f8"
+    },
+    {
+      "path": "sw.js",
+      "sha256": "bbef6b1061d640818d1de2984e42138d785d50cfa263f15151a4d9e29bd453cf"
+    }
+  ],
+  "finishedAt": "2026-11-06T03:29:38.053Z",
+  "totalPassed": 120,
+  "deploymentRiskReproductions": 8,
+  "financialRegressionAssertions": 112
+}

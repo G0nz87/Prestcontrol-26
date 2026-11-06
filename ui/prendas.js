@@ -264,6 +264,7 @@ export function obtenerGarantiaNuevoPrestamo() {
 }
 
 export async function crearPrendaLocalParaPrestamo(clienteId, prestamoId, datos) {
+  await window.validarOperacionFinancieraNormal?.();
   if (await window.bloquearEscrituraPorRestorePending?.()) {
     throw new Error('Modo solo lectura por restauración pendiente');
   }
@@ -290,6 +291,7 @@ export async function crearPrendaLocalParaPrestamo(clienteId, prestamoId, datos)
 
 export async function openAgregarGarantiaPrestamo(prestamoId) {
   if (await window.bloquearEscrituraPorRestorePending?.()) return;
+  if (await window.bloquearFinanzasDuranteCargaHistorica?.()) return;
   const prestamo = await window.dbGet('prestamos', prestamoId);
   if (!prestamo || prestamo._deleted) return window.toast('Préstamo no encontrado');
   if (!['Activo', 'Atrasado'].includes(prestamo.estado)) {
@@ -376,6 +378,7 @@ export async function savePrenda() {
   if (!operacion) return;
   try {
   if (await window.bloquearEscrituraPorRestorePending?.()) return;
+  if (await window.bloquearFinanzasDuranteCargaHistorica?.()) return;
   const original = editId ? await window.dbGet('prendas', editId) : null;
   if (original?.estado === 'Vendida') return window.toast('La garantía vendida está cerrada y no admite modificaciones');
   const datos = datosFormularioPrenda();
@@ -552,6 +555,7 @@ function historialPrendaHTML(prenda) {
 
 export async function openPonerPrendaEnVenta(id) {
   if (await window.bloquearEscrituraPorRestorePending?.()) return;
+  if (await window.bloquearFinanzasDuranteCargaHistorica?.()) return;
   const prenda = await window.dbGet('prendas', id);
   if (!prenda || prenda._deleted || prenda.estado !== 'Ejecutada') {
     return window.toast('Solo una garantía ejecutada puede ponerse en venta');
@@ -573,6 +577,7 @@ export async function guardarPrendaEnVenta() {
   if (!operacion) return;
   try {
   if (await window.bloquearEscrituraPorRestorePending?.()) return;
+  if (await window.bloquearFinanzasDuranteCargaHistorica?.()) return;
   const prenda = await window.dbGet('prendas', id);
   if (!prenda || prenda._deleted || prenda.estado !== 'Ejecutada') return window.toast('Garantía no disponible para venta');
     const precioPublicado = numeroNoNegativo('pda-precio-publicado');
@@ -598,6 +603,7 @@ export async function guardarPrendaEnVenta() {
 
 export async function openRegistrarVentaPrenda(id) {
   if (await window.bloquearEscrituraPorRestorePending?.()) return;
+  if (await window.bloquearFinanzasDuranteCargaHistorica?.()) return;
   const prenda = await window.dbGet('prendas', id);
   if (!prenda || prenda._deleted || !['Ejecutada', 'En venta'].includes(prenda.estado)) {
     return window.toast('La garantía no está disponible para registrar una venta');
@@ -677,6 +683,7 @@ export async function guardarVentaPrenda() {
   // antes de iniciar las lecturas y escrituras asincronas de la venta.
   await new Promise(resolve => setTimeout(resolve, 0));
   if (await window.bloquearEscrituraPorRestorePending?.()) return;
+  if (await window.bloquearFinanzasDuranteCargaHistorica?.()) return;
   const prenda = await window.dbGet('prendas', id);
   if (!prenda || prenda._deleted || !['Ejecutada', 'En venta'].includes(prenda.estado)) return window.toast('Garantía no disponible para venta');
     const movimientosCaja = await window.dbAll('movimientos_caja');
@@ -785,6 +792,7 @@ export async function guardarVentaPrenda() {
 
 export async function openCorregirVentaPrenda(id) {
   if (await window.bloquearEscrituraPorRestorePending?.()) return;
+  if (await window.bloquearFinanzasDuranteCargaHistorica?.()) return;
   const prenda = await window.dbGet('prendas', id);
   if (!prenda || prenda._deleted || prenda.estado !== 'Vendida') return window.toast('Solo puede corregirse una garantía vendida');
   document.getElementById('pda-correccion-id').value = id;
@@ -806,6 +814,7 @@ export async function guardarCorreccionVentaPrenda() {
   try {
     await new Promise(resolve => setTimeout(resolve, 0));
     if (await window.bloquearEscrituraPorRestorePending?.()) return;
+    if (await window.bloquearFinanzasDuranteCargaHistorica?.()) return;
     const prenda = await window.dbGet('prendas', id);
     if (!prenda || prenda._deleted || prenda.estado !== 'Vendida') throw new Error('La venta ya no está disponible para corrección');
     if (!correctionId) throw new Error('La operación de corrección venció');
@@ -1123,6 +1132,7 @@ export async function openPrendaDetail(id, opciones = {}) {
 }
 
 export async function cambiarEstadoPrenda(id, nuevoEstado) {
+  if (await window.bloquearFinanzasDuranteCargaHistorica?.()) return;
   if (await window.bloquearEscrituraPorRestorePending?.()) {
     await openPrendaDetail(id, { push: false });
     return;
@@ -1146,6 +1156,7 @@ export async function borrarPrenda(id) {
   if (!operacion) return;
   try {
   if (await window.bloquearEscrituraPorRestorePending?.()) return;
+  if (await window.bloquearFinanzasDuranteCargaHistorica?.()) return;
   const prenda = await window.dbGet('prendas', id);
   if (!prenda || prenda._deleted) return;
   if (prenda.estado === 'Vendida') return window.toast('La garantía vendida está cerrada y no puede eliminarse');

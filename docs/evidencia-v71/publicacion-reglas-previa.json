@@ -1,0 +1,17 @@
+{
+  "checkedAt": "2026-11-06T04:05:17.858Z",
+  "userConfirmedOperationsPaused": true,
+  "project": "prestcontrol-5e965",
+  "beforeRuleset": "projects/prestcontrol-5e965/rulesets/f4b33485-8e2c-4c09-8d70-755ab88da6f6",
+  "beforeSha256": "ff33035e7cc439bf3a9504f9702433c2e4a6df938f65272afe4a01349bc6809e",
+  "approvedV71Sha256": "0be09e6f72b0b1a12e215b611a2be6ad5af812ebaa00394edc515836b7acb904",
+  "site": {
+    "id": "c8543976-1247-451c-9a04-1fefc3c692b1",
+    "url": "https://prestcontrol-26.netlify.app",
+    "repo": "https://github.com/G0nz87/Prestcontrol-26",
+    "branch": "main",
+    "previousDeployId": "6aed1a3de5cc29ddc9ca4d46",
+    "previousCommit": "3ed27bc7cd7a0f2f58bab439ee502c220d74c0bc"
+  },
+  "productionFinancialWrites": false
+}
