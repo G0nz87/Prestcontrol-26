@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'prestcontrol-';
-const CACHE_NAME = `${CACHE_PREFIX}shell-v71`;
+const CACHE_NAME = `${CACHE_PREFIX}shell-v71-clientes-v1`;
 
 const FIREBASE_SDK_OFFLINE = [
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
@@ -23,6 +23,7 @@ const APP_SHELL = [
   './repositories/PrestamoRepository.js',
   './services/index.js',
   './services/ClienteService.js',
+  './services/ImportacionClientesService.js',
   './services/PrestamoService.js',
   './services/AuthService.js',
   './services/MetricasFinancierasService.js',
@@ -33,6 +34,7 @@ const APP_SHELL = [
   './ui/historial.js',
   './ui/index.js',
   './ui/clientes.js',
+  './ui/importacion-clientes.js',
   './ui/prestamos.js',
   './ui/prendas.js',
   './ui/caja.js',

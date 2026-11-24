@@ -19,5 +19,9 @@ node_modules/
 # Backups locales
 *.bak
 
+# Planillas privadas de clientes: nunca forman parte del sitio ni del repositorio
+*.xlsx
+*.xls
+
 # Carpeta de staging local (no va al repo)
 para subia a gitbu/

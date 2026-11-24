@@ -328,6 +328,10 @@ input,select,textarea{font-family:'DM Sans',sans-serif}
 .overlay.on{opacity:1;pointer-events:all}
 .sheet{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-radius:20px 20px 0 0;z-index:400;transform:translateY(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);max-height:92vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:28px;border-top:1px solid var(--border);box-shadow:0 -8px 30px rgba(15,23,42,.3)}
 .sheet.on{transform:translateY(0)}
+.clientes-contador{display:flex;flex-wrap:wrap;gap:8px 20px;margin-bottom:12px;font-size:14px}
+.importar-cliente-fila{padding:12px 0;border-bottom:1px solid var(--border);font-size:14px;overflow-wrap:anywhere}
+.importar-cliente-fila input{min-width:20px;min-height:20px;vertical-align:middle}
+.importar-clientes-acciones{display:flex;flex-wrap:wrap;gap:8px}
 .sheet-handle{width:40px;height:4px;background:rgba(148,163,184,.25);border-radius:2px;margin:12px auto 0}
 .sheet-hdr{padding:16px 20px 0;display:flex;align-items:center;justify-content:space-between}
 #sh-pago .sheet-hdr{position:sticky;top:0;z-index:2;background:var(--bg2);padding-bottom:12px;border-bottom:1px solid var(--border)}
@@ -3065,6 +3069,63 @@ async function addToSyncQueueOrThrow(store, recordId, payload, operation = 'upse
 }
 window.addToSyncQueueOrThrow = addToSyncQueueOrThrow;
 
+// Importación de Clientes: alta y cola indivisibles. No altera la cola global,
+// los identificadores actuales ni los flujos de borrado/financieros.
+async function dbImportarClienteAtomic(candidato, contexto, conocidos = [], permitirPosible = false) {
+  const verificarSesion = () => {
+    if (!appDesbloqueada || !contexto?.uid || _fbUser?.uid !== contexto.uid || DB !== contexto.local) {
+      throw new Error('La sesión cambió. No se importó en otra cuenta.');
+    }
+  };
+  verificarSesion();
+  if (await hayRestauracionLocalPendiente()) throw new Error('Hay una restauración pendiente; no se importaron clientes.');
+  await window.clienteService.validarDatosCliente({ nombre: candidato.nombre, telefono: candidato.telefono });
+  verificarSesion();
+  if (!/^[a-f0-9]{64}$/.test(candidato.clave)) throw new Error('Procedencia de fila inválida. Volvé a leer el Excel.');
+  const resultado = await new Promise((resolve, reject) => {
+    const tx = contexto.local.transaction(['clientes', 'sync_queue', 'config'], 'readwrite');
+    let resultadoLocal, motivo;
+    const abortar = error => { motivo = error; try { tx.abort(); } catch (_) {} };
+    tx.oncomplete = () => resolve(resultadoLocal);
+    tx.onerror = tx.onabort = () => reject(motivo || tx.error || new Error('No se confirmó la fila; cliente y cola se conservaron sin cambios.'));
+    const req = tx.objectStore('clientes').getAll();
+    const restore = tx.objectStore('config').get('restorePending');
+    let clientes, restoreLeido = false;
+    const guardar = () => {
+      if (!clientes || !restoreLeido) return;
+      try {
+        verificarSesion();
+        if (restore.result?.value?.active) throw new Error('Hay una restauración pendiente; no se importó la fila.');
+        const todos = [...clientes, ...conocidos];
+        const exacto = todos.find(c => c.importacionExcel?.version === 1 && c.importacionExcel.clave === candidato.clave);
+        if (exacto) { resultadoLocal = { cliente: exacto, repetido: true }; return; }
+        const coincidencias = window.coincidenciasClienteExcel(candidato, todos, window.normalizarTelefonoWA);
+        const idsRevisados = new Set((candidato.coincidencias || []).map(c => c.id));
+        if (coincidencias.some(c => !idsRevisados.has(c.id))) throw new Error('Apareció una coincidencia nueva. Volvé a revisar la vista previa.');
+        if ((coincidencias.length || candidato.posible) && !permitirPosible) throw new Error('Posible duplicado sin confirmación explícita.');
+        const ahora = new Date().toISOString();
+        const id = nextId('CL', todos); // Incluye tombstones y IDs remotos todavía no replicados.
+        const cliente = { id, nombre: candidato.nombre, telefono: candidato.telefono || '', dni: '', direccion: '',
+          notas: candidato.notas || '', estado: 'Activo', _deleted: false, deletedAt: null,
+          creadoEn: ahora, createdAt: ahora, updatedAt: ahora,
+          importacionExcel: { version: 1, clave: candidato.clave, uid: contexto.uid } };
+        const entry = { opId: 'sq_import_' + id + '_' + candidato.clave, store: 'clientes', recordId: id,
+          payload: cliente, operation: 'upsert', createdAt: ahora, updatedAt: ahora,
+          estado: 'pending', retryCount: 0, lastError: null };
+        // add() impide sobrescribir un cliente existente aunque haya una carrera local.
+        tx.objectStore('clientes').add(cliente);
+        tx.objectStore('sync_queue').add(entry);
+        resultadoLocal = { cliente, repetido: false };
+      } catch (error) { abortar(error); }
+    };
+    req.onsuccess = () => { clientes = req.result; guardar(); };
+    restore.onsuccess = () => { restoreLeido = true; guardar(); };
+  });
+  // Un fallo del indicador no cambia el resultado de una transacción ya confirmada.
+  try { await updateSyncPendingBadge(); } catch (_) {}
+  return resultado;
+}
+
 async function dbSoftDeleteAndQueue(store, recordId) {
   await dbSoftDelete(store, recordId);
   const deleted = await dbGet(store, recordId);
@@ -3076,6 +3137,9 @@ async function dbSoftDeleteAndQueue(store, recordId) {
     _deleted: true,
     deletedAt: deleted.deletedAt,
     updatedAt: deleted.updatedAt,
+    // IMPORTACION_CLIENTES_TOMBSTONE_INICIO
+    ...(store === 'clientes' && deleted.importacionExcel ? { importacionExcel: deleted.importacionExcel } : {}),
+    // IMPORTACION_CLIENTES_TOMBSTONE_FIN
     _restoreAuthority: deleted._restoreAuthority || null
   };
   const queued = await addToSyncQueue(store, recordId, payload, 'delete');
@@ -5311,12 +5375,15 @@ async function renderClientes() {
     String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity:'base' })
   );
 
+  const contador = window.contadorClientesHTML(clientes);
+  el._data = lista;
   if (!lista.length) {
-    el.innerHTML = emptyHTML('👤','Sin clientes','Tocá ＋ para agregar tu primer cliente.');
+    el.innerHTML = contador + emptyHTML('👤','Sin clientes','Tocá ＋ para agregar tu primer cliente.');
     return;
   }
 
   el.innerHTML = `<div class="fadeIn">
+    ${contador}
     <input class="srch" placeholder="Buscar cliente..." oninput="filterClientes(this.value)">
     <div id="cli-list">${lista.map(cliItemHTML).join('')}</div>
   </div>`;
@@ -6224,7 +6291,7 @@ async function renderConfig() {
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
       <button class="btn btn-ghost" onclick="exportarPDF()">📄 PDF Reporte</button>
-      <button class="btn btn-ghost" onclick="document.getElementById('imp-excel-file').click()">📥 Importar Excel</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('imp-excel-file').click()">📥 Importar clientes desde Excel</button>
     </div>
     <button class="btn btn-grn btn-full" style="margin-top:10px" onclick="exportarGoogleSheets()">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><rect x="3" y="3" width="18" height="18" rx="2" fill="#0F9D58"/><path d="M7 8h10M7 12h10M7 16h6" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -10521,113 +10588,12 @@ async function _exportarXLSX(subirASheets = false) {
    EXCEL — IMPORTAR
 ===================================================== */
 async function importarExcel(input) {
-  const file = input.files[0];
-  if (!file) return;
-  if (typeof XLSX === 'undefined') { toast('⚠️ SheetJS no disponible'); return; }
-
-  const reader = new FileReader();
-  reader.onload = async e => {
-    try {
-      const wb = XLSX.read(e.target.result, { type: 'array' });
-
-      // Validar hojas mínimas
-      const tieneClientes  = wb.SheetNames.some(n => n.toLowerCase().includes('cliente'));
-      const tienePrestamos = wb.SheetNames.some(n => n.toLowerCase().includes('pr'));
-      if (!tieneClientes && !tienePrestamos) {
-        toast('❌ El Excel no tiene hojas reconocibles (Clientes / Préstamos)'); return;
-      }
-
-      let importados = { clientes: 0, prestamos: 0, cuotas: 0 };
-
-      // Importar Clientes
-      const sheetCli = wb.SheetNames.find(n => n.toLowerCase().includes('cliente'));
-      if (sheetCli) {
-        const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetCli]);
-        for (const row of rows) {
-          const id = String(row['ID'] || row['id'] || '').trim();
-          if (!id) continue;
-          const existing = await dbGet('clientes', id).catch(() => null);
-          const cli = {
-            id,
-            nombre:    String(row['Nombre'] || row['nombre'] || '').trim(),
-            telefono:  String(row['Teléfono'] || row['telefono'] || ''),
-            direccion: String(row['Dirección'] || row['direccion'] || ''),
-            riesgo:    String(row['Riesgo'] || row['riesgo'] || 'Bajo'),
-            estado:    String(row['Estado'] || row['estado'] || 'Activo'),
-            notas:     String(row['Notas'] || row['notas'] || ''),
-            ...(existing || {})  // mantiene campos existentes no mapeados
-          };
-          if (!cli.nombre) continue;
-          await dbPut('clientes', cli);
-          importados.clientes++;
-        }
-      }
-
-      // Importar Préstamos
-      const sheetPre = wb.SheetNames.find(n => /pr[eé]/i.test(n));
-      if (sheetPre) {
-        const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetPre]);
-        for (const row of rows) {
-          const id = String(row['ID'] || row['id'] || '').trim();
-          if (!id) continue;
-          const existing = await dbGet('prestamos', id).catch(() => null);
-          if (existing) continue; // No sobreescribir préstamos existentes
-          const pre = {
-            id,
-            clienteNombre: String(row['Cliente'] || ''),
-            clienteId:     String(row['ClienteID'] || row['clienteId'] || ''),
-            fecha:         row['Fecha'] || new Date().toISOString(),
-            monto:         Number(row['Monto ($)'] || row['monto'] || 0),
-            interes:       Number(row['Interés (%)'] || row['interes'] || 0) / 100,
-            nCuotas:       Number(row['Cuotas'] || row['nCuotas'] || 1),
-            tipo:          String(row['Tipo'] || 'Mensual'),
-            total:         Number(row['Total ($)'] || row['total'] || 0),
-            cuota:         Number(row['Cuota ($)'] || row['cuota'] || 0),
-            ganancia:      Number(row['Ganancia ($)'] || row['ganancia'] || 0),
-            estado:        String(row['Estado'] || 'Activo'),
-            notas:         String(row['Notas'] || '')
-          };
-          await dbPut('prestamos', pre);
-          importados.prestamos++;
-        }
-      }
-
-      // Importar Cuotas
-      const sheetCuo = wb.SheetNames.find(n => /cuota/i.test(n));
-      if (sheetCuo) {
-        const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetCuo]);
-        for (const row of rows) {
-          const id = String(row['ID'] || row['id'] || '').trim();
-          if (!id) continue;
-          const existing = await dbGet('cuotas', id).catch(() => null);
-          if (existing) continue;
-          const cuo = {
-            id,
-            prestamoId:    String(row['Préstamo'] || row['prestamoId'] || ''),
-            clienteId:     String(row['ClienteID'] || row['clienteId'] || ''),
-            clienteNombre: String(row['Cliente'] || ''),
-            nro:           Number(row['N° Cuota'] || row['nro'] || 0),
-            monto:         Number(row['Monto ($)'] || row['monto'] || 0),
-            fechaVenc:     row['Vencimiento'] || '',
-            estado:        String(row['Estado'] || 'Pendiente'),
-            fechaPago:     row['Fecha Pago'] || null,
-            metodo:        String(row['Método Pago'] || '')
-          };
-          await dbPut('cuotas', cuo);
-          importados.cuotas++;
-        }
-      }
-
-      toast(`✅ Importado: ${importados.clientes} clientes, ${importados.prestamos} préstamos, ${importados.cuotas} cuotas`);
-      await renderPage('dashboard');
-      await updateBadges();
-    } catch(err) {
-      console.error(err);
-      toast('❌ Error al leer el Excel. Verificá el formato.');
-    }
+  if (!window.importarClientesExcel) {
+    toast('⚠️ El importador de clientes todavía no está disponible. Volvé a abrir la aplicación.');
     input.value = '';
-  };
-  reader.readAsArrayBuffer(file);
+    return;
+  }
+  return window.importarClientesExcel(input);
 }
 
 /* =====================================================
@@ -11922,6 +11888,10 @@ async function _pushToFirebaseSinLock() {
 
     for (const group of pendingGroups) {
       const op = group.op;
+      // IMPORTACION_CLIENTES_SESION_INICIO
+      const contextoClienteImportado = op.store === 'clientes' && op.payload?.importacionExcel?.version === 1
+        ? { uid: op.payload.importacionExcel.uid, local: DB, firebase: _fbDb } : null;
+      // IMPORTACION_CLIENTES_SESION_FIN
       try {
         // Obtener el dato actualizado del IndexedDB (por si cambió después de encolarse)
         // Para operaciones de borrado, usamos el payload guardado
@@ -12079,6 +12049,51 @@ async function _pushToFirebaseSinLock() {
           continue;
         }
 
+        // IMPORTACION_CLIENTES_GUARD_INICIO
+        // Los CL secuenciales también pueden ser reservados en otro dispositivo.
+        // Solo los clientes con procedencia Excel usan una transacción adicional:
+        // nunca sobrescribir una identidad diferente por colisión de ID.
+        if (op.store === 'clientes' && (data?.importacionExcel?.version === 1 || op.payload?.importacionExcel?.version === 1)) {
+          const origen = op.payload?.importacionExcel || data.importacionExcel;
+          const dbImportacion = contextoClienteImportado?.local || DB, firebaseImportacion = contextoClienteImportado?.firebase || _fbDb;
+          const sesionImportacionValida = () => _fbUser?.uid === origen.uid && DB === dbImportacion && _fbDb === firebaseImportacion;
+          if (!sesionImportacionValida() || data.importacionExcel?.clave !== origen.clave) throw new Error('La sesión o la identidad del cliente importado cambió; requiere revisión.');
+          if (opsInBatch > 0) {
+            await batch.commit();
+            for (const opId of processedOps) await markSyncOpDone(opId);
+            processedOps.length = 0;
+            batch = firebaseImportacion.batch();
+            opsInBatch = 0;
+          }
+          await firebaseImportacion.runTransaction(async transaction => {
+            if (!sesionImportacionValida()) throw new Error('La sesión cambió antes de sincronizar el cliente importado.');
+            const actual = await transaction.get(ref);
+            if (!sesionImportacionValida()) throw new Error('La sesión cambió durante la sincronización del cliente importado.');
+            if (actual.exists && actual.data().importacionExcel?.clave !== origen.clave) {
+              throw new Error(`Colisión de ID ${op.recordId}: el cliente remoto es otra persona. Alta local conservada y sincronización detenida para revisión.`);
+            }
+            if (actual.exists) {
+              const vigente = normalizarUpdatedAtRemoto({ id: actual.id, ...actual.data() });
+              if (String(vigente.updatedAt || '') !== String(remote?.updatedAt || '')) throw new Error('El cliente remoto cambió durante la sincronización; reintentá.');
+              const altaPendiente = group.opIds.some(id => id.startsWith('sq_import_'));
+              if (altaPendiente && new Date(vigente.updatedAt || 0).getTime() >= new Date(data.updatedAt || 0).getTime()) {
+                const campos = ['nombre','telefono','dni','direccion','notas','estado','_deleted'];
+                if (campos.some(campo => String(vigente[campo] ?? '') !== String(data[campo] ?? ''))) {
+                  throw new Error('El cliente ya importado tiene cambios remotos más recientes. Se conservó el remoto y el pendiente local requiere revisión.');
+                }
+                return;
+              }
+            }
+            transaction.set(ref, { ...data, userId: origen.uid, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+          });
+          for (const opId of group.opIds) {
+            if (!sesionImportacionValida()) throw new Error('La sesión cambió; se conservó la operación pendiente en la cuenta original.');
+            await markSyncOpDone(opId);
+          }
+          continue;
+        }
+        // IMPORTACION_CLIENTES_GUARD_FIN
+
         batch.set(ref, {
           ...data,
           userId: _fbUser.uid,
@@ -12098,6 +12113,9 @@ async function _pushToFirebaseSinLock() {
           opsInBatch = 0;
         }
       } catch(e) {
+        // IMPORTACION_CLIENTES_ERROR_SESION_INICIO
+        if (contextoClienteImportado && (_fbUser?.uid !== contextoClienteImportado.uid || DB !== contextoClienteImportado.local || _fbDb !== contextoClienteImportado.firebase)) return false;
+        // IMPORTACION_CLIENTES_ERROR_SESION_FIN
         syncDebugLog('push_group_error', {
           store: op?.store, recordId: op?.recordId, code: e?.code, message: e?.message
         });

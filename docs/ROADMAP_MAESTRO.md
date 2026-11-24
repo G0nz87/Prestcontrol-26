@@ -823,3 +823,24 @@ PrestControl V1 queda **CERRADO LOCALMENTE**, con pruebas finales aprobadas y pe
 - Este commit contiene la implementación, pruebas y documentación v71 para publicación automática por Netlify después de la propagación de reglas. Su publicación efectiva se comprueba contra el commit y los archivos servidos, sin deploy manual.
 - Tras publicar, el operador debe verificar en PC la recarga efectiva, clientes conservados, ausencia de errores y acceso a Carga histórica antes de activarla. La comprobación física en celulares sigue pendiente; no operar desde ventanas v70. Cierre histórico y apertura de Caja se realizan únicamente al terminar toda la cartera.
 - Commit asociado: el que incorpora esta entrada. No se ejecutan restauraciones, resets, borrado de IndexedDB/colas ni rollback a reglas permisivas.
+
+## POST-V1 — Contador e importación Excel de clientes (24/11/2026, local)
+
+- Contador visible de total/con teléfono/sin teléfono, basado en el mismo listado y réplica activa, excluyendo tombstones; actualización mediante los renders y listener existentes.
+- Entrada Excel activa reemplazada por revisión exclusiva de `Para PrestControl`: estructura validada, selección por fila, advertencias, coincidencias y confirmación expresa de posibles duplicados. Sin importar hojas financieras o de menciones.
+- Altas con IDs actuales, reserva local atómica de cliente/cola y huellas de procedencia que evitan repetir filas ya importadas, incluso tras su eliminación. Conservación de clientes existentes y familiares independientes.
+- Protección acotada de clientes Excel en el envío de la cola: transacción contra colisiones de CL y preservación de procedencia en tombstones. No se renumera ni se modifica arquitectura financiera, reglas o protecciones de borrado.
+- Excel privado inspeccionado solo por estructura: 13 columnas y 240 candidatos. Original fuera del repositorio, sin copias ni datos personales en pruebas/código; cero planillas dentro del checkout o bajo seguimiento.
+- Pruebas aisladas: 24/24 nuevas de Clientes; seis suites existentes completadas (25 apertura, 33 histórica, 13 interfaz histórica, 29 correcciones históricas, 9 revisión v71 y 11 despliegue). Algunas pruebas previas conservan reproducciones deliberadas de versiones/riesgos anteriores. Sintaxis y diff verificados.
+- Informe, archivos, límites y uso: `docs/CLIENTES_CONTADOR_IMPORTACION_V1.md`.
+- Estado: **IMPLEMENTADO Y VALIDADO LOCALMENTE / PENDIENTE REVISIÓN Y PUBLICACIÓN**. Falta validación visual en PC/celular. Sin importaciones productivas, datos reales modificados, staging, commit, push, Netlify ni deploy de reglas. HEAD conservado `936a06b`; sin commit asociado a esta mejora. V2 y sus cambios estructurales siguen reservados.
+- Verificación final solicitada (24/11/2026): 8/8 comprobaciones acotadas de conservación de exportaciones/respaldos/restauración, cola normal/mixta y ciclo PWA. Retiro explícitamente documentado del importador Excel genérico de clientes/préstamos/cuotas. Shell corregido a `prestcontrol-shell-v71-clientes-v1` y texto del aviso de importador corregido. **APTO técnicamente para el alcance Clientes**, pendiente autorización de publicación y comprobación física posterior. Sin repetir auditorías financieras aprobadas ni tocar datos reales. Detalle en sección K del informe.
+
+## POST-V1 — Publicación controlada autorizada de Clientes (24/11/2026)
+
+- Autorización expresa del operador: commit de la mejora, push normal a `main` y publicación automática por Netlify. Retirada del importador Excel genérico aceptada; historia y pagos anteriores se cargarán manualmente con Carga histórica.
+- Base previa verificada: HEAD, `origin/main`, GitHub y commit productivo Netlify coinciden en `936a06bd74b32100df1ecff5f3d3701364d8197b`. Sitio correcto `prestcontrol-26`; sin avance remoto inesperado.
+- Alcance limitado a contador, importador seguro de clientes, protección CL, precache y documentación. Shell `prestcontrol-shell-v71-clientes-v1`; ocho verificaciones finales acotadas correctas, sin repetir auditorías financieras.
+- Reglas, módulos financieros y datos reales conservados. Excel privado fuera del checkout y de Git, sin contactos reales en código/pruebas. No se importan clientes, no se inicia Caja, no se restaura ni se borra almacenamiento.
+- Este commit incorpora el código aprobado y la autorización. Su publicación efectiva se verifica después del push contra el commit de producción y el contenido servido; sin despliegues manuales ni reglas Firebase. Resultado definitivo entregado al operador al finalizar.
+- Validación física de PC/celulares e importación real quedan a cargo del operador después de publicar. Sin cambios estructurales de V2. Procedimiento en sección L de `docs/CLIENTES_CONTADOR_IMPORTACION_V1.md`.

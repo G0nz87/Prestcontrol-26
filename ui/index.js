@@ -3,6 +3,8 @@
 // Cada sub-step de Step 5 agrega un import + bridge.
 import * as historica from './carga-historica.js';
 Object.assign(window, historica);
+import * as importacionClientes from './importacion-clientes.js';
+Object.assign(window, importacionClientes);
 
 import {
   openSheetCliente,
