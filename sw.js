@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'prestcontrol-';
-const CACHE_NAME = `${CACHE_PREFIX}shell-v71-buscadores-v1`;
+const CACHE_NAME = `${CACHE_PREFIX}shell-v71-busqueda-unificada-voz-v1`;
 
 const FIREBASE_SDK_OFFLINE = [
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
@@ -16,6 +16,7 @@ const APP_SHELL = [
   './core/firebase.js',
   './core/helpers.js',
   './core/busqueda.js',
+  './core/busqueda-voz.js',
   './core/ui-state.js',
   './core/dom-helpers.js',
   './repositories/index.js',
@@ -37,6 +38,8 @@ const APP_SHELL = [
   './ui/clientes.js',
   './ui/importacion-clientes.js',
   './ui/buscadores.js',
+  './ui/selectores-clientes.js',
+  './ui/busqueda-voz.js',
   './ui/prestamos.js',
   './ui/prendas.js',
   './ui/caja.js',

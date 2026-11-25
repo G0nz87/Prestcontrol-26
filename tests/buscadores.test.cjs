@@ -118,11 +118,12 @@ async function harness(){
   });
   await test('Importación, contadores, finanzas, reglas y sincronización no cambian',()=>{
     const unchanged=['ui/importacion-clientes.js','services/ImportacionClientesService.js','ui/clientes.js','ui/prestamos.js','ui/caja.js','ui/carga-historica.js','core/helpers.js','firestore.rules',...fs.readdirSync(path.join(root,'services')).filter(f=>f.endsWith('.js')).map(f=>'services/'+f)];
-    for(const file of new Set(unchanged))assert.equal(read(file).replace(/\r\n/g,'\n'),execFileSync('git',['show',BASE+':'+file],{cwd:root,encoding:'utf8',maxBuffer:5e6}).replace(/\r\n/g,'\n'),file);
+    const {funcionesBusqueda,sinGanchoVisual,assertModuloProtegido}=require('./busqueda-alcance.cjs');
+    for(const file of new Set(unchanged))assertModuloProtegido(file,read(file),execFileSync('git',['show',BASE+':'+file],{cwd:root,encoding:'utf8',maxBuffer:5e6}));
     const old=execFileSync('git',['show',BASE+':index.html'],{cwd:root,encoding:'utf8',maxBuffer:5e6});
-    const allowed=['renderClientes','filterClientes','renderPrestamos','filtrarPrestamos'];
+    const allowed=funcionesBusqueda;
     for(const m of old.matchAll(/^(?:async )?function (\w+)\(/gm))if(!allowed.includes(m[1])){
-      const re=new RegExp('(?:async )?function '+m[1]+'\\([^]*?\\n}');assert.equal(read('index.html').match(re)?.[0]?.replace(/\r\n/g,'\n'),old.match(re)?.[0]?.replace(/\r\n/g,'\n'),m[1]);
+      const re=new RegExp('(?:async )?function '+m[1]+'\\([^]*?\\n}');assert.equal(sinGanchoVisual(read('index.html').match(re)?.[0]),sinGanchoVisual(old.match(re)?.[0]),m[1]);
     }
     assert(read('index.html').includes("'prestamos':       ['prestamos','cuotas','prendas','clientes']"));
   });

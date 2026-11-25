@@ -37,6 +37,9 @@ function movimientoCajaCompatible(existente, esperado) {
 }
 
 export function openSheetPrestamo(clientePreseleccionadoId = null) {
+  const contextoBusqueda = window.contextoBuscadores();
+  window._acClientes = [];
+  window.prepararSelectorClientes(document.getElementById('pre-cliente-drop'), []);
   ['pre-monto','pre-interes','pre-ncuotas','pre-notas','pre-prenda'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('pre-tipo').value = 'Mensual';
   document.getElementById('pre-medio-entrega').value = 'Efectivo';
@@ -46,14 +49,17 @@ export function openSheetPrestamo(clientePreseleccionadoId = null) {
   window.limpiarClienteAC();
 
   window.dbAll('clientes').then(lista => {
-    window._acClientes = lista.filter(c => ['Activo', 'Bloqueado'].includes(c.estado));
+    if (!window.mismoContextoBuscadores(contextoBusqueda)) return;
+    window._acClientes = lista.filter(c => !c._deleted && ['Activo', 'Bloqueado'].includes(c.estado));
+    window.prepararSelectorClientes(document.getElementById('pre-cliente-drop'), window._acClientes);
     if (!window._acClientes.length) {
       document.getElementById('pre-cliente-search').placeholder = 'Sin clientes disponibles';
       document.getElementById('pre-cliente-search').disabled = true;
     } else {
-      document.getElementById('pre-cliente-search').placeholder = 'Buscar cliente por nombre…';
+      document.getElementById('pre-cliente-search').placeholder = 'Nombre, alias, teléfono o DNI…';
       document.getElementById('pre-cliente-search').disabled = false;
     }
+    if (document.activeElement === document.getElementById('pre-cliente-search')) window.filtrarClientesAC(document.getElementById('pre-cliente-search').value);
     if (clientePreseleccionadoId) {
       const cliente = window._acClientes.find(c => c.id === clientePreseleccionadoId);
       if (cliente && cliente.estado !== 'Bloqueado') {

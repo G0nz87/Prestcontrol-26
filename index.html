@@ -432,6 +432,10 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 .srch{width:100%;padding:10px 14px 10px 36px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--txt);font-size:14px;outline:none;margin-bottom:12px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2394A3B8' viewBox='0 0 20 20'%3E%3Cpath fill-rule='evenodd' d='M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-size:16px;background-position:11px center}
 .srch:focus{border-color:var(--accent)}
 .busqueda-resumen{font-size:14px;color:var(--muted);line-height:1.5;margin:0 0 12px;overflow-wrap:anywhere}
+.ac-opcion{display:block;width:100%;border:0;background:transparent;color:var(--txt);text-align:left;font:inherit;overflow-wrap:anywhere;white-space:normal}
+.voz-busqueda-cuerpo{padding:4px 16px 22px;overflow-wrap:anywhere}
+.voz-cliente-opcion{display:flex;flex-direction:column;align-items:flex-start;width:100%;white-space:normal;text-align:left;margin-bottom:8px;min-height:48px;overflow-wrap:anywhere}
+.voz-cliente-tipo{font-size:14px;font-weight:400;color:var(--muted)}
 
 /* METHOD GRID */
 .mgrid{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
@@ -4658,15 +4662,31 @@ function entrarInicio() {
 
 async function renderDashboard() {
   const el = document.getElementById('pg-dashboard');
+  const contexto = window.contextoBuscadores();
+  const dropAnterior = document.getElementById('dash-cli-drop');
+  const inputAnterior = document.getElementById('dash-cli-search');
+  const conservarBusqueda = dropAnterior && window.mismoContextoBuscadores(dropAnterior._selectorClientes?.contexto)
+    && dropAnterior._clienteSeleccionado === dashClienteId;
+  const busquedaAnterior = conservarBusqueda ? { consulta: inputAnterior.value, foco: document.activeElement === inputAnterior,
+    inicio: inputAnterior.selectionStart, fin: inputAnterior.selectionEnd, abierto: dropAnterior.classList.contains('on') } : null;
   el.innerHTML = '<div class="loader"><div class="spin"></div></div>';
   // Usamos dbAllIncludeDeleted para que el balance histórico incluya préstamos eliminados
   const [cuotas, clientes, prestamos] = await Promise.all([
     dbAllIncludeDeleted('cuotas'), dbAllIncludeDeleted('clientes'), dbAllIncludeDeleted('prestamos')
   ]);
+  if (!window.mismoContextoBuscadores(contexto)) return;
   if (dashTab === 'global') {
     el.innerHTML = buildDashGlobal(cuotas, clientes, prestamos);
   } else if (dashTab === 'cliente') {
     el.innerHTML = buildDashCliente(cuotas, clientes, prestamos);
+    const drop = document.getElementById('dash-cli-drop'), input = document.getElementById('dash-cli-search');
+    window.prepararSelectorClientes(drop, clientes.filter(c => !c._deleted && c.estado === 'Activo'));
+    drop._clienteSeleccionado = dashClienteId;
+    if (busquedaAnterior) {
+      input.value = busquedaAnterior.consulta;
+      if (busquedaAnterior.foco) { input.focus({ preventScroll: true }); input.setSelectionRange(busquedaAnterior.inicio, busquedaAnterior.fin); }
+      if (busquedaAnterior.abierto || busquedaAnterior.foco) filtrarDashCliente(input.value);
+    }
   } else if (dashTab === 'graficos') {
     await renderGraficos();
   }
@@ -4927,11 +4947,6 @@ function buildDashCliente(cuotas, clientes, prestamos) {
         </div>
       </section>`;
   }
-  // Build autocomplete options for dash client search
-  const acOpts = activos.map(c =>
-    `<div class="ac-item" onclick="switchDashCliente('${esc(c.id)}')" data-id="${esc(c.id)}">${esc(c.nombre)}</div>`
-  ).join('');
-
   return `<div class="fadeIn dash-client">
     <div class="dtabs">
       <button class="dtab" onclick="switchDashTab('global')">🌐 Global</button>
@@ -4941,12 +4956,12 @@ function buildDashCliente(cuotas, clientes, prestamos) {
     <div class="field" style="margin-bottom:12px">
       <label class="lbl">Buscar Cliente</label>
       <div class="ac-wrap">
-        <input class="inp" id="dash-cli-search" placeholder="Escribí el nombre del cliente…"
+        <input class="inp" id="dash-cli-search" placeholder="Nombre, alias, teléfono o DNI…" aria-label="Buscar cliente en Inicio"
           value="${selCli ? esc(selCli.nombre) : ''}"
           autocomplete="off"
           oninput="filtrarDashCliente(this.value)"
           onfocus="filtrarDashCliente(this.value)">
-        <div class="ac-drop" id="dash-cli-drop">${acOpts}</div>
+        <div class="ac-drop" id="dash-cli-drop"></div>
       </div>
     </div>
     ${body}
@@ -5428,12 +5443,15 @@ function setVoiceListening(active) {
   btn.title = active ? 'Escuchando… Tocá para cancelar' : 'Comando por voz';
 }
 
-function detenerComandosVoz() {
-  if (voiceRecognition && voiceListening) {
-    try { voiceRecognition.abort(); } catch (error) {}
-  }
+function detenerComandosVoz(invalidar = true) {
+  // La revisión compartida llama con false para detener solo el micrófono.
+  if (invalidar && window.cancelarBusquedaVoz) { window.cancelarBusquedaVoz(); return; }
+  const recognition = voiceRecognition;
   voiceRecognition = null;
   setVoiceListening(false);
+  if (recognition) {
+    try { recognition.abort(); } catch (error) {}
+  }
 }
 
 function iniciarComandoVoz() {
@@ -5450,6 +5468,8 @@ function iniciarComandoVoz() {
     return;
   }
 
+  const contextoVoz = window.contextoBuscadores();
+  const cicloVoz = window.iniciarCicloVoz(contextoVoz);
   const recognition = new SpeechRecognitionAPI();
   voiceRecognition = recognition;
   recognition.lang = 'es-AR';
@@ -5458,22 +5478,28 @@ function iniciarComandoVoz() {
   recognition.maxAlternatives = 1;
 
   recognition.onstart = () => {
+    if (voiceRecognition !== recognition || !appDesbloqueada || !window.comandoVozVigente(cicloVoz)) {
+      try { recognition.abort(); } catch (error) {}
+      return;
+    }
     setVoiceListening(true);
     toast('🎙️ Escuchando un comando…');
   };
   recognition.onresult = event => {
+    if (voiceRecognition !== recognition || !appDesbloqueada || !window.comandoVozVigente(cicloVoz)) return;
     const transcript = event.results?.[0]?.[0]?.transcript?.trim() || '';
     if (!transcript) {
       toast('⚠️ No se entendió el comando');
       return;
     }
-    console.info('[Voz] Reconocido:', transcript);
-    procesarComandoVoz(transcript).catch(error => {
+    procesarComandoVoz(transcript, contextoVoz, cicloVoz).catch(error => {
+      if (!window.comandoVozVigente(cicloVoz)) return;
       console.error('[Voz] Error al procesar el comando:', error);
       toast('❌ No se pudo ejecutar el comando de voz');
     });
   };
   recognition.onerror = event => {
+    if (voiceRecognition !== recognition || !window.comandoVozVigente(cicloVoz)) return;
     if (event.error === 'aborted') return;
     const mensajes = {
       'not-allowed': '⚠️ Permiso de micrófono rechazado',
@@ -5488,13 +5514,14 @@ function iniciarComandoVoz() {
   recognition.onend = () => {
     if (voiceRecognition === recognition) {
       voiceRecognition = null;
-      setVoiceListening(false);
+      if (window.comandoVozVigente(cicloVoz)) setVoiceListening(false);
     }
   };
 
   try {
     recognition.start();
   } catch (error) {
+    if (voiceRecognition !== recognition || !window.comandoVozVigente(cicloVoz)) return;
     voiceRecognition = null;
     setVoiceListening(false);
     console.error('[Voz] No se pudo iniciar:', error);
@@ -5502,34 +5529,16 @@ function iniciarComandoVoz() {
   }
 }
 
-async function buscarCoincidenciasClienteVoz(nombre) {
-  const buscado = normalizarTextoVoz(nombre);
-  if (!buscado) return [];
-  const clientes = await dbAll('clientes');
-  return clientes.filter(cliente => normalizarTextoVoz(cliente.nombre).includes(buscado));
+async function buscarCoincidenciasClienteVoz(nombre, contexto = window.contextoBuscadores(), ciclo = null) {
+  return window.coincidenciasClienteVoz(nombre, contexto, ciclo);
 }
 
-async function mostrarBusquedaClienteVoz(nombre, coincidencias = null) {
-  await goPage('clientes');
-  const input = document.querySelector('#pg-clientes .srch');
-  if (input) input.value = nombre;
-  filterClientes(nombre);
-
-  return coincidencias || buscarCoincidenciasClienteVoz(nombre);
+async function mostrarBusquedaClienteVoz(nombre, coincidencias = null, ciclo = null) {
+  return window.resolverBusquedaClienteVoz(nombre, { soloMostrar: true, ciclo });
 }
 
-async function resolverClienteVoz(nombre) {
-  const coincidencias = await buscarCoincidenciasClienteVoz(nombre);
-  if (coincidencias.length === 1) {
-    await openClienteDetail(coincidencias[0].id);
-    return { accion: 'abrir-cliente', clienteId: coincidencias[0].id };
-  }
-
-  await mostrarBusquedaClienteVoz(nombre, coincidencias);
-  toast(coincidencias.length
-    ? `⚠️ Hay ${coincidencias.length} coincidencias; elegí el cliente manualmente`
-    : '⚠️ Cliente no encontrado');
-  return { accion: coincidencias.length ? 'cliente-ambiguo' : 'cliente-no-encontrado', coincidencias: coincidencias.length };
+async function resolverClienteVoz(nombre, transcript = nombre, contexto = window.contextoBuscadores(), ciclo = null) {
+  return window.resolverBusquedaClienteVoz(nombre, { transcript, contexto, ciclo });
 }
 
 function limpiarIntencionNavegacionVoz(comando) {
@@ -5541,7 +5550,7 @@ function limpiarIntencionNavegacionVoz(comando) {
   return comando.split(' ').filter(palabra => !relleno.has(palabra)).join(' ').trim();
 }
 
-function extraerNombreClienteVoz(comando) {
+function extraerNombreClienteVoz(comando, original = comando) {
   const frase = comando.replace(/^por favor\s+/, '').replace(/\s+por favor$/, '').trim();
   const patrones = [
     /^(?:quiero|quisiera)\s+(?:buscar|encontrar|ver|abrir|mostrar)\s+(?:(?:a la|al|a)\s+)?(?:cliente\s+)?(.+)$/,
@@ -5550,7 +5559,11 @@ function extraerNombreClienteVoz(comando) {
   ];
   for (const patron of patrones) {
     const match = frase.match(patron);
-    if (match?.[1]) return match[1].trim();
+    if (match?.[1]) {
+      const palabras = String(original).match(/[\p{L}\p{N}]+/gu) || [];
+      if (palabras.slice(-2).join(' ').toLowerCase() === 'por favor') palabras.splice(-2);
+      return palabras.slice(-match[1].trim().split(' ').length).join(' ');
+    }
   }
   return '';
 }
@@ -5565,7 +5578,11 @@ function comandoVozRequiereConfirmacion(comando) {
     /\bcambiar\b.*\b(?:importe|monto|estado)\b/.test(comando);
 }
 
-async function procesarComandoVoz(transcript) {
+async function procesarComandoVoz(transcript, contexto = window.contextoBuscadores(), ciclo = null) {
+  if (!window.mismoContextoBuscadores(contexto)) return { accion: 'voz-descartada' };
+  ciclo = ciclo || window.iniciarCicloVoz(contexto);
+  const vigente = () => window.comandoVozVigente(ciclo);
+  if (!vigente()) return { accion: 'voz-descartada' };
   const comando = normalizarTextoVoz(transcript);
   if (!comando) {
     toast('⚠️ No se entendió el comando');
@@ -5574,6 +5591,7 @@ async function procesarComandoVoz(transcript) {
 
   if (/^(?:crear(?: un)?|nuevo) cliente$/.test(comando)) {
     await goPage('clientes');
+    if (!vigente()) return { accion: 'voz-descartada' };
     openSheetCliente();
     toast('✅ Formulario de nuevo cliente abierto');
     return { accion: 'crear-cliente' };
@@ -5628,6 +5646,7 @@ async function procesarComandoVoz(transcript) {
 
   if (/^prestamos? activos?$/.test(comandoSimple)) {
     await goPage('prestamos');
+    if (!vigente()) return { accion: 'voz-descartada' };
     const btnActivos = document.querySelector('#prest-filtros .pf-btn');
     filtrarPrestamos('activos', btnActivos);
     toast('✅ Mostrando préstamos activos');
@@ -5636,18 +5655,21 @@ async function procesarComandoVoz(transcript) {
 
   if (/^cobros?(?: de)? hoy$/.test(comandoSimple)) {
     await goPage('cobros');
+    if (!vigente()) return { accion: 'voz-descartada' };
     toast('✅ Abriendo Cobros de hoy');
     return { accion: 'navegar', page: 'cobros' };
   }
 
   if (/^(?:cuotas? )?(?:atrasos?|atrasadas?|atrasados?|vencidas?)$/.test(comandoSimple)) {
     await goPage('atrasadas');
+    if (!vigente()) return { accion: 'voz-descartada' };
     toast('✅ Abriendo cuotas atrasadas');
     return { accion: 'navegar', page: 'atrasadas' };
   }
 
   if (/^(?:cuotas? )?vencen hoy$/.test(comandoSimple)) {
     await goPage('hoy');
+    if (!vigente()) return { accion: 'voz-descartada' };
     toast('✅ Abriendo cuotas que vencen hoy');
     return { accion: 'navegar', page: 'hoy' };
   }
@@ -5655,6 +5677,7 @@ async function procesarComandoVoz(transcript) {
   if (/^(?:graficos?|estadisticas?|numeros?)$/.test(comandoSimple)) {
     dashTab = 'graficos';
     await goPage('dashboard');
+    if (!vigente()) return { accion: 'voz-descartada' };
     toast('✅ Abriendo gráficos');
     return { accion: 'navegar-dashboard', page: 'dashboard', tab: 'graficos' };
   }
@@ -5662,6 +5685,7 @@ async function procesarComandoVoz(transcript) {
   if (/^(?:resumen|dashboard|inicio|principal)$/.test(comandoSimple)) {
     dashTab = 'global';
     await goPage('dashboard');
+    if (!vigente()) return { accion: 'voz-descartada' };
     toast('✅ Abriendo Inicio');
     return { accion: 'navegar-dashboard', page: 'dashboard', tab: 'global' };
   }
@@ -5669,21 +5693,23 @@ async function procesarComandoVoz(transcript) {
   if (destinos[comandoSimple]) {
     const [page, label] = destinos[comandoSimple];
     await goPage(page);
+    if (!vigente()) return { accion: 'voz-descartada' };
     toast(`✅ Abriendo ${label}`);
     return { accion: 'navegar', page };
   }
 
-  const nombreCliente = extraerNombreClienteVoz(comando);
+  const nombreCliente = extraerNombreClienteVoz(comando, transcript);
   if (nombreCliente) {
-    return resolverClienteVoz(nombreCliente);
+    return resolverClienteVoz(nombreCliente, transcript, contexto, ciclo);
   }
 
-  const coincidenciasDirectas = await buscarCoincidenciasClienteVoz(comando);
+  const coincidenciasDirectas = await buscarCoincidenciasClienteVoz(transcript, contexto, ciclo);
+  if (!vigente()) return { accion: 'voz-descartada' };
   if (coincidenciasDirectas.length) {
-    return resolverClienteVoz(comando);
+    return resolverClienteVoz(transcript, transcript, contexto, ciclo);
   }
 
-  toast('⚠️ No reconocí el comando. Probá con un nombre, clientes, cobros o préstamos.');
+  toast('⚠️ No reconocí el comando ni encontré un cliente. Probá con un nombre, clientes, cobros o préstamos.');
   return { accion: 'no-reconocido' };
 }
 
@@ -6496,6 +6522,7 @@ async function renderConfig() {
    CLIENTE DETAIL
 ===================================================== */
 async function openClienteDetail(id, opciones = {}) {
+  if (opciones?.vigenteVoz && !opciones.vigenteVoz()) return;
   document.getElementById('pg-cliente-detail').innerHTML = '<div class="loader"><div class="spin"></div></div>';
   const opts = opciones || {};
   if (opts.push !== false) clientePrestamoExpanded = null;
@@ -6505,6 +6532,7 @@ async function openClienteDetail(id, opciones = {}) {
   const [cliente, prestamos, cuotas] = await Promise.all([
     dbGet('clientes', id), dbAll('prestamos'), dbAll('cuotas')
   ]);
+  if (opts.vigenteVoz && !opts.vigenteVoz()) return;
 
   if (!cliente) { toast('Cliente no encontrado'); goBack(); return; }
 
@@ -6541,6 +6569,7 @@ async function openClienteDetail(id, opciones = {}) {
   }))).filter(Boolean));
 
   const el = document.getElementById('pg-cliente-detail');
+  if (opts.vigenteVoz && !opts.vigenteVoz()) return;
   const waBtn = cliente.telefono
     ? `<button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="abrirWACliente('${esc(id)}')">💬 WhatsApp</button>`
     : '';
@@ -7326,17 +7355,8 @@ function filtrarClientesAC(q) {
   const selected = document.getElementById('pre-cliente').value;
   if (selected) return; // ya seleccionado, no abrir
 
-  const r = q.trim().toLowerCase();
-  const lista = r
-    ? _acClientes.filter(c => c.nombre.toLowerCase().includes(r) || (c.telefono||'').includes(r))
-    : _acClientes;
-
-  if (!lista.length) {
-    drop.innerHTML = `<div class="ac-item" style="color:var(--muted);cursor:default">Sin resultados</div>`;
-  } else {
-    drop.innerHTML = lista.slice(0, 8).map(c => clienteACItemHTML(c, r)).join('');
-  }
-  drop.classList.add('on');
+  window.pintarSelectorClientes(drop, q, c => seleccionarClienteAC(c.id, c.nombre),
+    { limite: 8, mostrarVacio: true, bloqueados: true });
 }
 
 function clienteACItemHTML(c, r) {
@@ -9711,17 +9731,7 @@ async function updateBadges() {
 ===================================================== */
 function filtrarDashCliente(q) {
   const drop = document.getElementById('dash-cli-drop');
-  if (!drop) return;
-  const items = drop.querySelectorAll('.ac-item');
-  const ql = q.trim().toLowerCase();
-  let visible = 0;
-  items.forEach(it => {
-    const name = it.textContent.toLowerCase();
-    const match = !ql || name.includes(ql);
-    it.style.display = match ? '' : 'none';
-    if (match) visible++;
-  });
-  drop.classList.toggle('on', visible > 0);
+  window.pintarSelectorClientes(drop, q, c => switchDashCliente(c.id));
 }
 
 // Close dash autocomplete when clicking outside
@@ -12962,6 +12972,7 @@ function iniciarSyncRealtime() {
           // durante los awaits quedan reservados para el siguiente render.
           const storesDelCiclo = new Set(_stoChangedStores);
           storesDelCiclo.forEach(store => _stoChangedStores.delete(store));
+          if (storesDelCiclo.has('clientes')) await Promise.resolve(window.actualizarSelectoresClientesAbiertos?.()).catch(error => console.warn('[BUSQUEDA] No se pudieron actualizar los selectores', error));
 
           await autoUpdateEstados();
           await updateBadges();

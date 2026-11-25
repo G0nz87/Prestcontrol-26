@@ -271,19 +271,19 @@ async function harness() {
     h.ui.seleccionarClientesExcel(false); assert.match(h.document.getElementById('importar-clientes-resumen').textContent,/incorporar: 0/);
     h.ui.seleccionarClientesExcel(true); assert.match(h.document.getElementById('importar-clientes-resumen').textContent,/incorporar: 2/);
   });
-  await test('Finanzas y borrado intactos; el único cambio de sync es la protección de clientes Excel', async () => {
+  await test('Finanzas y borrado intactos; sync conserva protección Excel y solo añade aviso visual de búsqueda', async () => {
     const {execFileSync}=require('node:child_process');
     const original=execFileSync('git',['show',BASE_CLIENTES+':index.html'],{cwd:root,encoding:'utf8',maxBuffer:5e6});
-    // Quitar solo las tres funciones del alcance y los textos/estilos visibles añadidos.
+    const {funcionesBusqueda,sinGanchoVisual,assertModuloProtegido}=require('./busqueda-alcance.cjs');
     const funcs=s=>[...s.matchAll(/^(?:async )?function (\w+)\(/gm)].map(m=>m[1]);
-    for(const name of funcs(original).filter(n=>!['renderClientes','filterClientes','renderPrestamos','filtrarPrestamos','importarExcel'].includes(n))) {
+    for(const name of funcs(original).filter(n=>![...funcionesBusqueda,'importarExcel'].includes(n))) {
       const re=new RegExp('(?:async )?function '+name+'\\([^]*?\\n}');
       const normalizar=s=>s?.replace(/\r\n/g,'\n').replace('📥 Importar clientes desde Excel','📥 Importar Excel')
         .replace(/^ *\/\/ IMPORTACION_CLIENTES_(?:GUARD|SESION|ERROR_SESION|TOMBSTONE)_INICIO\n[^]*?^ *\/\/ IMPORTACION_CLIENTES_(?:GUARD|SESION|ERROR_SESION|TOMBSTONE)_FIN\n\n?/gm,'');
-      assert.equal(normalizar(html.match(re)?.[0]),normalizar(original.match(re)?.[0]),name);
+      assert.equal(sinGanchoVisual(normalizar(html.match(re)?.[0])),sinGanchoVisual(normalizar(original.match(re)?.[0])),name);
     }
     for(const p of ['ui/clientes.js','ui/prestamos.js','ui/caja.js','ui/prendas.js','services/PrestamoService.js','services/MetricasFinancierasService.js','services/CargaHistoricaService.js','firestore.rules']) {
-      assert.equal(read(p).replace(/\r\n/g,'\n'),execFileSync('git',['show',BASE_CLIENTES+':'+p],{cwd:root,encoding:'utf8'}).replace(/\r\n/g,'\n'),p);
+      assertModuloProtegido(p,read(p),execFileSync('git',['show',BASE_CLIENTES+':'+p],{cwd:root,encoding:'utf8'}));
     }
   });
   if (process.argv.includes('--emulator')) {

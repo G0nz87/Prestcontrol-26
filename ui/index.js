@@ -7,6 +7,10 @@ import * as importacionClientes from './importacion-clientes.js';
 Object.assign(window, importacionClientes);
 import * as buscadores from './buscadores.js';
 Object.assign(window, buscadores);
+import * as selectoresClientes from './selectores-clientes.js';
+Object.assign(window, selectoresClientes);
+import * as busquedaVoz from './busqueda-voz.js';
+Object.assign(window, busquedaVoz);
 
 import {
   openSheetCliente,

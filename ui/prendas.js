@@ -1,4 +1,5 @@
 // Inventario de Prendas — sincronizado mediante la cola oficial de PrestControl.
+import { crearIndicePrendas, buscarEnIndice } from '../core/busqueda.js';
 
 const ESTADOS_PRENDA = [
   'En garantía',
@@ -133,10 +134,12 @@ export async function actualizarPrestamosPrenda(prestamoSeleccionado = '') {
 }
 
 export async function openSheetPrenda(editId = '') {
+  const contextoBusqueda = window.contextoBuscadores();
   const [clientes, prenda] = await Promise.all([
     window.dbAll('clientes'),
     editId ? window.dbGet('prendas', editId) : Promise.resolve(null)
   ]);
+  if (!window.mismoContextoBuscadores(contextoBusqueda)) return;
   if (editId && (!prenda || prenda._deleted)) {
     window.toast('Prenda no encontrada');
     return;
@@ -157,6 +160,7 @@ export async function openSheetPrenda(editId = '') {
   clienteSelect.innerHTML = '<option value="">Seleccionar cliente</option>' + clientes.map(cliente =>
     `<option value="${window.esc(cliente.id)}">${window.esc(cliente.nombre)} · ${window.esc(cliente.id)}</option>`
   ).join('');
+  window.prepararFiltroClientesSelect(clienteSelect, clientes);
 
   const campos = {
     'pda-descripcion': prenda?.descripcion,
@@ -899,22 +903,23 @@ export async function guardarCorreccionVentaPrenda() {
 export async function renderPrendas() {
   const el = document.getElementById('pg-prendas');
   if (!el) return;
+  const contextoBusqueda = window.contextoBuscadores();
   const textoPrevio = document.getElementById('pda-filtro-texto')?.value || '';
+  const busquedaClientePrevia = document.getElementById('pda-filtro-cliente-busqueda')?.value || '';
+  const inputAnterior = document.activeElement;
+  const focoPrevio = ['pda-filtro-texto', 'pda-filtro-cliente-busqueda'].includes(inputAnterior?.id)
+    ? { id: inputAnterior.id, inicio: inputAnterior.selectionStart, fin: inputAnterior.selectionEnd } : null;
   const estadoPrevio = document.getElementById('pda-filtro-estado')?.value || '';
   const clientePrevio = document.getElementById('pda-filtro-cliente')?.value || '';
   const ordenPrevio = document.getElementById('pda-orden')?.value || 'prioridad';
   el.innerHTML = '<div class="loader"><div class="spin"></div></div>';
 
   const { prendas, clientes, clientesMap, prestamosMap } = await contextoPrendas();
-  const texto = textoPrevio.trim().toLowerCase();
-  const filtradas = ordenarPrendas(prendas.filter(prenda => {
-    const cliente = clientesMap.get(prenda.clienteId);
-    const bolsa = [prenda.id, prenda.descripcion, prenda.categoria, prenda.marca, prenda.modelo, prenda.numeroSerie, prenda.imei, cliente?.nombre, prenda.prestamoId]
-      .join(' ').toLowerCase();
-    return (!texto || bolsa.includes(texto)) &&
-      (!estadoPrevio || prenda.estado === estadoPrevio) &&
-      (!clientePrevio || prenda.clienteId === clientePrevio);
-  }), ordenPrevio);
+  if (!window.mismoContextoBuscadores(contextoBusqueda)) return;
+  const filtradas = buscarEnIndice(crearIndicePrendas(ordenarPrendas(prendas.filter(prenda =>
+    (!estadoPrevio || prenda.estado === estadoPrevio) &&
+    (!clientePrevio || prenda.clienteId === clientePrevio)
+  ), ordenPrevio), clientes), textoPrevio);
 
   const enGarantia = prendas.filter(prenda => prenda.estado === 'En garantía');
   const ejecutadas = prendas.filter(prenda => prenda.estado === 'Ejecutada');
@@ -1016,6 +1021,11 @@ export async function renderPrendas() {
     <div class="sec-hdr"><div class="sec-title">Prendas (${filtradas.length})</div></div>
     ${filtradas.length ? gruposHTML : window.emptyHTML('🏷️', 'Sin prendas', 'Creá la primera prenda vinculada a un préstamo.')}
   </div>`;
+  window.prepararFiltroClientesSelect(document.getElementById('pda-filtro-cliente'), clientes, busquedaClientePrevia);
+  if (focoPrevio) {
+    const input = document.getElementById(focoPrevio.id);
+    input?.focus({ preventScroll: true }); input?.setSelectionRange(focoPrevio.inicio, focoPrevio.fin);
+  }
 }
 
 export async function openPrendaDetail(id, opciones = {}) {

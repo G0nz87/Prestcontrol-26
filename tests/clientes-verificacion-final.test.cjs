@@ -55,7 +55,7 @@ async function pushScenario(source, mode) {
 
 function workerHarness(source, failInstall = false) {
   const base = 'https://prestcontrol.example/';
-  const oldName = 'prestcontrol-shell-v71-clientes-v1', foreignName = 'otra-app';
+  const oldName = 'prestcontrol-shell-v71-buscadores-v1', foreignName = 'otra-app';
   const storage = new Map([[oldName,new Map([[base+'index.html','HTML-ANTERIOR']])],[foreignName,new Map()]]);
   const events = {}, messages = [];
   let skipped = 0, claimed = 0, offline = false;
@@ -102,10 +102,11 @@ function workerHarness(source, failInstall = false) {
     assert(!/prestamoService|cajaService|movimientos_caja|dbPut\(/.test(ui));
     assert(read('services/ImportacionClientesService.js').includes("const hoja = 'Para PrestControl'"));
   });
-  await test('Sincronización general idéntica salvo los bloques exclusivos de Clientes Excel',async()=>{
+  await test('Sincronización financiera idéntica; se conserva únicamente el aviso visual a selectores',async()=>{
+    const {sinGanchoVisual}=require('./busqueda-alcance.cjs');
     const quitar=s=>s.replace(/^ *\/\/ IMPORTACION_CLIENTES_(?:GUARD|SESION|ERROR_SESION)_INICIO\n[^]*?^ *\/\/ IMPORTACION_CLIENTES_(?:GUARD|SESION|ERROR_SESION)_FIN\n\n?/gm,'');
     assert.equal(quitar(extract(html,'_pushToFirebaseSinLock')),extract(oldHtml,'_pushToFirebaseSinLock'));
-    for(const name of ['_pushCompletoAFirebase','iniciarSyncRealtime','consolidateSyncOperations']) assert.equal(extract(html,name),extract(oldHtml,name),name);
+    for(const name of ['_pushCompletoAFirebase','iniciarSyncRealtime','consolidateSyncOperations']) assert.equal(sinGanchoVisual(extract(html,name)),extract(oldHtml,name),name);
   });
   await test('Cola normal: préstamo, cuota, Caja y cliente mantienen el resultado anterior sin transacciones Excel',async()=>{
     const antes=await pushScenario(oldHtml),despues=await pushScenario(html);
@@ -121,14 +122,14 @@ function workerHarness(source, failInstall = false) {
     for(const key of ['prestamos/PR-FICTICIO','cuotas/CU-FICTICIA','movimientos_caja/MC-FICTICIO']) assert.deepEqual(bad.remote.get(key),ok.remote.get(key),key);
   });
   await test('Shell nuevo: caché versionada, dependencias completas, activación y disponibilidad offline',async()=>{
-    const w=workerHarness(sw);assert.equal(w.name,'prestcontrol-shell-v71-buscadores-v1');assert.notEqual(w.name,w.oldName);
+    const w=workerHarness(sw);assert.equal(w.name,'prestcontrol-shell-v71-busqueda-unificada-voz-v1');assert.notEqual(w.name,w.oldName);
     assert.notEqual(sw,original('sw.js'));
     for(const asset of w.assets) assert(fs.existsSync(path.join(root,asset)),asset);
-    for(const asset of ['./ui/importacion-clientes.js','./services/ImportacionClientesService.js','./ui/buscadores.js','./core/busqueda.js']) assert(w.assets.includes(asset));
+    for(const asset of ['./ui/importacion-clientes.js','./services/ImportacionClientesService.js','./ui/buscadores.js','./core/busqueda.js','./core/busqueda-voz.js','./ui/selectores-clientes.js','./ui/busqueda-voz.js']) assert(w.assets.includes(asset));
     await w.dispatch('install');assert(w.storage.has(w.oldName));assert.equal(w.skipped,1);
     await w.dispatch('activate');assert(!w.storage.has(w.oldName));assert(w.storage.has(w.foreignName));assert.equal(w.claimed,1);
     assert.equal(w.messages[0].type,'PRESTCONTROL_SHELL_READY');assert.equal(w.messages[0].cacheName,w.name);
-    for(const asset of ['./index.html','./ui/importacion-clientes.js','./services/ImportacionClientesService.js','./ui/buscadores.js','./core/busqueda.js']) assert.match(await w.fetchOffline(asset),/^NUEVO:/);
+    for(const asset of ['./index.html','./ui/importacion-clientes.js','./services/ImportacionClientesService.js','./ui/buscadores.js','./core/busqueda.js','./core/busqueda-voz.js','./ui/selectores-clientes.js','./ui/busqueda-voz.js']) assert.match(await w.fetchOffline(asset),/^NUEVO:/);
   });
   await test('Instalación fallida conserva íntegra la caché v71 anterior y no activa el nuevo worker',async()=>{
     const w=workerHarness(sw,true);await assert.rejects(w.dispatch('install'),/Fallo sintético/);
@@ -140,7 +141,7 @@ function workerHarness(source, failInstall = false) {
       window:{__prestcontrolOperationLocks:new Set(['clientes:importar'])},document:{querySelector:()=>null},
       hayRestauracionLocalPendiente:async()=>false,location:{reload:()=>{reloads++;}},toast:()=>{},setTimeout:()=>1,clearTimeout:()=>{},Set};
     for(const name of ['programarReintentoActualizacionPwa','hayOperacionSensibleParaActualizacionPwa','intentarAplicarActualizacionPwaPendiente','recibirActualizacionPwa']) scope[name]=compile(html,name,scope);
-    await scope.recibirActualizacionPwa({data:{type:'PRESTCONTROL_SHELL_READY',cacheName:'prestcontrol-shell-v71-buscadores-v1'}});
+    await scope.recibirActualizacionPwa({data:{type:'PRESTCONTROL_SHELL_READY',cacheName:'prestcontrol-shell-v71-busqueda-unificada-voz-v1'}});
     assert.equal(reloads,0);assert(scope.actualizacionPwaPendiente);
     scope.window.__prestcontrolOperationLocks.clear();scope.activeSheet='sh-importar-clientes';await scope.intentarAplicarActualizacionPwaPendiente();assert.equal(reloads,0);
     scope.activeSheet=null;await scope.intentarAplicarActualizacionPwaPendiente();assert.equal(reloads,1);await scope.intentarAplicarActualizacionPwaPendiente();assert.equal(reloads,1);

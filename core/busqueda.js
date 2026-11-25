@@ -4,7 +4,7 @@ export function normalizarBusqueda(valor) {
     .toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function aliasRegistrados(cliente) {
+export function aliasRegistrados(cliente) {
   return [cliente?.alias, cliente?.apodo,
     ...(Array.isArray(cliente?.aliases) ? cliente.aliases : [cliente?.aliases]),
     ...(Array.isArray(cliente?.apodos) ? cliente.apodos : [cliente?.apodos])].filter(Boolean);
@@ -39,6 +39,17 @@ export function crearIndicePrestamos(prestamos, clientes) {
     const cliente = porId.get(String(p.clienteId));
     return { principales: [p.clienteNombre, cliente?.nombre, p.id, String(p.id || '').replace(/[^a-z0-9]/gi, '')],
       otros: aliasRegistrados(cliente) };
+  });
+}
+
+export function crearIndicePrendas(prendas, clientes) {
+  const porId = new Map(clientes.filter(c => !c._deleted).map(c => [String(c.id), c]));
+  return crearIndice(prendas, p => {
+    const cliente = porId.get(String(p.clienteId));
+    return { principales: [cliente?.nombre, p.id, p.descripcion],
+      otros: [...aliasRegistrados(cliente), cliente?.telefono, cliente?.dni,
+        String(cliente?.telefono || '').replace(/\D/g, ''), String(cliente?.dni || '').replace(/\D/g, ''),
+        p.categoria, p.marca, p.modelo, p.numeroSerie, p.imei, p.prestamoId] };
   });
 }
 
