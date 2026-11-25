@@ -431,6 +431,7 @@ select.inp{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 /* SEARCH */
 .srch{width:100%;padding:10px 14px 10px 36px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--txt);font-size:14px;outline:none;margin-bottom:12px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2394A3B8' viewBox='0 0 20 20'%3E%3Cpath fill-rule='evenodd' d='M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-size:16px;background-position:11px center}
 .srch:focus{border-color:var(--accent)}
+.busqueda-resumen{font-size:14px;color:var(--muted);line-height:1.5;margin:0 0 12px;overflow-wrap:anywhere}
 
 /* METHOD GRID */
 .mgrid{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
@@ -5360,9 +5361,12 @@ function situacionCrediticiaCliente(cliente, prestamos, cuotas, mapaPrestamos, h
 
 async function renderClientes() {
   const el = document.getElementById('pg-clientes');
+  const contexto = window.contextoBuscadores();
   const [clientes, prestamos, cuotas] = await Promise.all([
     dbAll('clientes'), dbAll('prestamos'), dbAll('cuotas')
   ]);
+  if (!window.mismoContextoBuscadores(contexto)) return;
+  const busqueda = window.capturarBusqueda('clientes', contexto);
   const mapaPrestamos = prestamosMap(prestamos);
   const hoy = today();
   const lista = clientes.map(cliente => ({
@@ -5377,30 +5381,19 @@ async function renderClientes() {
 
   const contador = window.contadorClientesHTML(clientes);
   el._data = lista;
-  if (!lista.length) {
-    el.innerHTML = contador + emptyHTML('👤','Sin clientes','Tocá ＋ para agregar tu primer cliente.');
-    return;
-  }
-
   el.innerHTML = `<div class="fadeIn">
     ${contador}
-    <input class="srch" placeholder="Buscar cliente..." oninput="filterClientes(this.value)">
-    <div id="cli-list">${lista.map(cliItemHTML).join('')}</div>
+    <label class="lbl" for="clientes-busqueda">Buscar clientes</label>
+    <input class="srch" type="search" id="clientes-busqueda" placeholder="Nombre, alias, teléfono, DNI o dirección..." autocomplete="off" oninput="filterClientes(this.value)" aria-describedby="clientes-resultados">
+    <p class="busqueda-resumen" id="clientes-resultados" role="status" aria-live="polite"></p>
+    <div id="cli-list"></div>
   </div>`;
-  el._data = lista;
+  window.prepararBuscador('clientes', contexto, lista, [], busqueda);
+  filterClientes(busqueda.consulta);
 }
 
 function filterClientes(q) {
-  const el = document.getElementById('pg-clientes');
-  const ql = normalizarTextoVoz(q);
-  const lista = (el._data||[]).filter(c =>
-    normalizarTextoVoz(c.nombre).includes(ql) ||
-    (c.dni||'').includes(q) ||
-    (c.telefono||'').includes(q) ||
-    normalizarTextoVoz(c.direccion||'').includes(ql)
-  );
-  const ct = document.getElementById('cli-list');
-  if (ct) ct.innerHTML = lista.length ? lista.map(cliItemHTML).join('') : emptyHTML('🔍','Sin resultados','');
+  window.aplicarBusquedaClientes(q);
 }
 
 /* =====================================================
@@ -5768,7 +5761,9 @@ function esPrestamoTipoVisible(p) {
 
 async function renderPrestamos() {
   const el = document.getElementById('pg-prestamos');
-  const [listaCompleta, todasCuotas, todasPrendas] = await Promise.all([dbAll('prestamos'), dbAll('cuotas'), dbAllIncludeDeleted('prendas')]);
+  const contexto = window.contextoBuscadores();
+  const [listaCompleta, todasCuotas, todasPrendas, clientes] = await Promise.all([dbAll('prestamos'), dbAll('cuotas'), dbAllIncludeDeleted('prendas'), dbAll('clientes')]);
+  if (!window.mismoContextoBuscadores(contexto)) return;
   listaCompleta.sort(ordenarPrestamosPorPrioridad);
   const elegibilidadRenovacionCapital = new Set((await Promise.all(listaCompleta.map(async prestamo => {
     if (typeof window.evaluarCobroInteresRenovacionCapital !== 'function') return null;
@@ -5780,10 +5775,8 @@ async function renderPrestamos() {
     }
   }))).filter(Boolean));
 
-  if (!listaCompleta.length) {
-    el.innerHTML = emptyHTML('📋','Sin préstamos','Tocá ＋ para crear el primer préstamo.');
-    return;
-  }
+  if (!window.mismoContextoBuscadores(contexto)) return;
+  const busqueda = window.capturarBusqueda('prestamos', contexto);
 
   // Por defecto NO mostramos Pagados ni Cancelados en la vista principal
   // (se ven en el Historial). Pero quedan contabilizados en los badges.
@@ -5799,64 +5792,73 @@ async function renderPrestamos() {
   const mensuales  = listaCompleta.filter(p=>p.tipo==='Mensual' && esPrestamoTipoVisible(p)).length;
 
   el.innerHTML = `<div class="fadeIn">
+    <label class="lbl" for="prestamos-busqueda">Buscar préstamos</label>
+    <input class="srch" type="search" id="prestamos-busqueda" placeholder="Nombre, alias o código del préstamo..." autocomplete="off" oninput="buscarPrestamos()" aria-describedby="prestamos-resultados">
+    <p class="busqueda-resumen" id="prestamos-resultados" role="status" aria-live="polite"></p>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px" id="prest-filtros">
-      <button class="pf-btn on" onclick="filtrarPrestamos('activos',this)">
+      <button class="pf-btn on" data-prest-filtro="activos" onclick="filtrarPrestamos('activos',this)">
         <span style="font-size:15px">📋</span>
         <div style="font-size:11px;font-weight:700">Activos</div>
         <div style="font-size:16px;font-weight:900;color:var(--txt)">${lista.length}</div>
       </button>
-      <button class="pf-btn" onclick="filtrarPrestamos('Activo',this)" style="--pf:var(--money)">
+      <button class="pf-btn" data-prest-filtro="Activo" onclick="filtrarPrestamos('Activo',this)" style="--pf:var(--money)">
         <span style="font-size:15px">⚡</span>
         <div style="font-size:11px;font-weight:700">Al día</div>
         <div style="font-size:16px;font-weight:900;color:var(--money)">${activos}</div>
       </button>
-      <button class="pf-btn" onclick="filtrarPrestamos('Atrasado',this)" style="--pf:var(--red)">
+      <button class="pf-btn" data-prest-filtro="Atrasado" onclick="filtrarPrestamos('Atrasado',this)" style="--pf:var(--red)">
         <span style="font-size:15px">⚠️</span>
         <div style="font-size:11px;font-weight:700">Atrasados</div>
         <div style="font-size:16px;font-weight:900;color:var(--red)">${atrasados}</div>
       </button>
-      <button class="pf-btn" onclick="filtrarPrestamos('Pagado',this)" style="--pf:var(--grn)">
+      <button class="pf-btn" data-prest-filtro="Pagado" onclick="filtrarPrestamos('Pagado',this)" style="--pf:var(--grn)">
         <span style="font-size:15px">✅</span>
         <div style="font-size:11px;font-weight:700">Pagados</div>
         <div style="font-size:16px;font-weight:900;color:var(--grn)">${pagados}</div>
       </button>
-      <button class="pf-btn" onclick="filtrarPrestamos('Renovado',this)" style="--pf:var(--accent)">
+      <button class="pf-btn" data-prest-filtro="Renovado" onclick="filtrarPrestamos('Renovado',this)" style="--pf:var(--accent)">
         <span style="font-size:15px">🔄</span>
         <div style="font-size:11px;font-weight:700">Renovados</div>
         <div style="font-size:16px;font-weight:900;color:var(--accent)">${renovados}</div>
       </button>
-      <button class="pf-btn" onclick="filtrarPrestamos('Ejecutado',this)" style="--pf:var(--red)">
+      <button class="pf-btn" data-prest-filtro="Ejecutado" onclick="filtrarPrestamos('Ejecutado',this)" style="--pf:var(--red)">
         <span style="font-size:15px">🔒</span>
         <div style="font-size:11px;font-weight:700">Ejecutados</div>
         <div style="font-size:16px;font-weight:900;color:var(--red)">${ejecutados}</div>
       </button>
-      <button class="pf-btn" onclick="filtrarPrestamos('Semanal',this)" style="--pf:var(--gold)">
+      <button class="pf-btn" data-prest-filtro="Semanal" onclick="filtrarPrestamos('Semanal',this)" style="--pf:var(--gold)">
         <span style="font-size:15px">📆</span>
         <div style="font-size:11px;font-weight:700">Semanales</div>
         <div style="font-size:16px;font-weight:900;color:var(--gold)">${semanales}</div>
       </button>
-      <button class="pf-btn" onclick="filtrarPrestamos('Mensual',this)" style="--pf:var(--gold)">
+      <button class="pf-btn" data-prest-filtro="Mensual" onclick="filtrarPrestamos('Mensual',this)" style="--pf:var(--gold)">
         <span style="font-size:15px">📅</span>
         <div style="font-size:11px;font-weight:700">Mensuales</div>
         <div style="font-size:16px;font-weight:900;color:var(--gold)">${mensuales}</div>
       </button>
+      <button class="pf-btn" data-prest-filtro="todos" onclick="filtrarPrestamos('todos',this)">
+        <span style="font-size:15px">🔎</span>
+        <div style="font-size:11px;font-weight:700">Todos</div>
+        <div style="font-size:16px;font-weight:900;color:var(--txt)">${listaCompleta.length}</div>
+      </button>
     </div>
     ${pagados + renovados > 0 ? `<div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:10px">💡 Pagados y renovados permanecen disponibles en sus filtros y en <b onclick="goPage('historial')" style="color:var(--gold);cursor:pointer;text-decoration:underline">Historial</b></div>` : ''}
-    <div id="prest-list">${lista.length ? lista.map(p => loanItemHTML(p, todasCuotas, todasPrendas, elegibilidadRenovacionCapital.has(p.id))).join('') : emptyHTML('🎉','Sin préstamos activos','Todos al día.')}</div>
+    <div id="prest-list"></div>
   </div>`;
   el._data = listaCompleta;
   el._cuotas = todasCuotas;
   el._prendas = todasPrendas;
   el._renovacionCapitalElegibles = elegibilidadRenovacionCapital;
+  window.prepararBuscador('prestamos', contexto, listaCompleta, clientes, busqueda);
+  filtrarPrestamos(busqueda.filtro);
 }
 
 function filtrarPrestamos(filtro, btn) {
   const el = document.getElementById('pg-prestamos');
   document.querySelectorAll('#prest-filtros .pf-btn').forEach(b => b.classList.remove('on'));
-  if (btn) btn.classList.add('on');
+  const seleccionado = btn || [...document.querySelectorAll('#prest-filtros .pf-btn')].find(b => b.dataset.prestFiltro === filtro);
+  if (seleccionado) seleccionado.classList.add('on');
   const lista = (el._data||[]);
-  const cuotas = (el._cuotas||[]);
-  const prendas = (el._prendas||[]);
   let filtrada;
   if (filtro === 'activos') filtrada = lista.filter(p => p.estado !== 'Pagado' && p.estado !== 'Cancelado' && p.estado !== 'Ejecutado');
   else if (filtro === 'todos') filtrada = lista;
@@ -5865,10 +5867,7 @@ function filtrarPrestamos(filtro, btn) {
   else if (filtro === 'Pagado') filtrada = lista.filter(p => p.estado === 'Pagado' && !['renovacion','renovacion_capital'].includes(p.cerradoPor));
   else filtrada = lista.filter(p => p.estado === filtro);
   filtrada.sort(ordenarPrestamosPorPrioridad);
-  const listEl = document.getElementById('prest-list');
-  if (listEl) listEl.innerHTML = filtrada.length
-    ? filtrada.map(p => loanItemHTML(p, cuotas, prendas, el._renovacionCapitalElegibles?.has(p.id) === true)).join('')
-    : emptyHTML('🔍','Sin resultados','');
+  window.aplicarBusquedaPrestamos(filtrada, filtro);
 }
 
 function toggleLoan(id) {
@@ -12905,7 +12904,7 @@ const PAGE_DEPS = {
   'hoy':             ['cuotas','pagos_cuota'],
   'atrasadas':       ['cuotas','pagos_cuota'],
   'clientes':        ['clientes'],
-  'prestamos':       ['prestamos','cuotas','prendas'],
+  'prestamos':       ['prestamos','cuotas','prendas','clientes'],
   'prendas':         ['prendas','clientes','prestamos'],
   'cuotas':          ['cuotas','prestamos','pagos_cuota'],
   'calendario':      ['cuotas'],

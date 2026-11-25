@@ -51,7 +51,7 @@ async function put(local, s, data) {
 }
 async function harness() {
   const local = await db();
-  const dom = new JSDOM('<body><div id="pg-clientes"></div><input id="imp-excel-file" type="file"></body>', { url: 'http://localhost/aislado' });
+  const dom = new JSDOM('<body><div id="pg-clientes"></div><input id="imp-excel-file" type="file"></body>', { url: 'http://localhost/aislado', pretendToBeVisual: true });
   doms.push(dom);
   const window = dom.window, document = window.document;
   const mensajes = [], remote = [];
@@ -87,6 +87,13 @@ async function harness() {
   const ui = new Function('window','document','navigator', ...Object.keys(model), src + '\nreturn {' + names.join(',') + ',getPreview:()=>preview};')
     (window, document, window.navigator, ...Object.values(model));
   Object.assign(window, ui);
+  // El listado ahora utiliza los helpers de búsqueda; la importación permanece igual.
+  const searchModel = new Function(read('core/busqueda.js').replace(/^export /gm, '') + '\nreturn {normalizarBusqueda,crearIndiceClientes,crearIndicePrestamos,buscarEnIndice};')();
+  const searchSource = read('ui/buscadores.js');
+  const searchNames = [...searchSource.matchAll(/export function (\w+)/g)].map(m=>m[1]);
+  Object.assign(window, new Function('window','document',...Object.keys(searchModel), searchSource.replace(/^import .*;\r?$/gm,'').replace(/^export /gm,'')+'\nreturn {'+searchNames.join(',')+'};')
+    (window,document,...Object.values(searchModel)), {cliItemHTML:scope.cliItemHTML,emptyHTML:scope.emptyHTML});
+  window.filterClientes = scope.filterClientes = compile('filterClientes',scope);
   async function select(rows) {
     const data = XLSX.write(workbook(rows), { type: 'buffer', bookType: 'xlsx' });
     const input = { files: [{ name: 'Contactos-FICTICIOS.xlsx', size: data.length, arrayBuffer: async () => data }], value: 'elegido' };
@@ -269,7 +276,7 @@ async function harness() {
     const original=execFileSync('git',['show',BASE_CLIENTES+':index.html'],{cwd:root,encoding:'utf8',maxBuffer:5e6});
     // Quitar solo las tres funciones del alcance y los textos/estilos visibles añadidos.
     const funcs=s=>[...s.matchAll(/^(?:async )?function (\w+)\(/gm)].map(m=>m[1]);
-    for(const name of funcs(original).filter(n=>!['renderClientes','importarExcel'].includes(n))) {
+    for(const name of funcs(original).filter(n=>!['renderClientes','filterClientes','renderPrestamos','filtrarPrestamos','importarExcel'].includes(n))) {
       const re=new RegExp('(?:async )?function '+name+'\\([^]*?\\n}');
       const normalizar=s=>s?.replace(/\r\n/g,'\n').replace('📥 Importar clientes desde Excel','📥 Importar Excel')
         .replace(/^ *\/\/ IMPORTACION_CLIENTES_(?:GUARD|SESION|ERROR_SESION|TOMBSTONE)_INICIO\n[^]*?^ *\/\/ IMPORTACION_CLIENTES_(?:GUARD|SESION|ERROR_SESION|TOMBSTONE)_FIN\n\n?/gm,'');

@@ -5,6 +5,8 @@ import * as historica from './carga-historica.js';
 Object.assign(window, historica);
 import * as importacionClientes from './importacion-clientes.js';
 Object.assign(window, importacionClientes);
+import * as buscadores from './buscadores.js';
+Object.assign(window, buscadores);
 
 import {
   openSheetCliente,
