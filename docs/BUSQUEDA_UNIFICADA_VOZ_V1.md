@@ -2,7 +2,7 @@
 
 Fecha: 25/11/2026. Base publicada: `49821abe2d62d4cb24a3ce81a9b6b31f11e7de5d`, `G0nz87/Prestcontrol-26`, rama `main`.
 
-Estado: **APTO PARA PUBLICACIÓN — IMPLEMENTACIÓN Y AUDITORÍA CERRADAS**. La reauditoría independiente comunicada por el usuario aprobó la corrección de cancelación y cerró el hallazgo bloqueante de la primera auditoría. Commit, push normal a `main` y publicación automática por Netlify expresamente autorizados para estos 19 archivos; controles y condiciones en la sección 10. **Aceptación funcional en dispositivos reales y micrófono pendientes**. El usuario informó que verificó previamente en producción el buscador de Clientes, el contador de 254 clientes y el estado Sincronizado. Ese dato se registra como comprobación del usuario, sin acceder a su cuenta ni usar sus clientes en pruebas; no equivale a validar esta actualización, Préstamos o todos los dispositivos.
+Estado: **IMPLEMENTACIÓN, AUDITORÍA Y PUBLICACIÓN CERRADAS — ACEPTADO FUNCIONALMENTE PARA V1 CON LIMITACIONES DE VOZ**. El usuario comprobó la versión publicada del commit `b7b49271a9e33b6ca21667b38a9daa06b6dc2848`: búsqueda escrita e identificación de clientes por voz satisfactorias según su experiencia, suficientes para el uso diario. Probó navegación hacia Clientes, Inicio, Historial y Configuración; Caja y Cobros no quedaron confirmados. No se declara validación exhaustiva de todos los comandos ni dispositivos. La reauditoría y publicación se conservan como antecedentes en la sección 10; la decisión funcional y sus límites se registran en la sección 11.
 
 ## 1. Diagnóstico
 
@@ -110,14 +110,15 @@ Se reutiliza el runtime temporal `prestcontrol-caja-test-runtime` con JSDOM, fak
 
 La entrega inicial al auditor quedó registrada, fuera del repositorio, en `%TEMP%\prestcontrol-busqueda-unificada-auditoria-hashes.json`, con HEAD base, estado de Git y SHA-256 de los archivos versionados y nuevos no ignorados. No contiene registros de clientes ni credenciales. Aquella entrega comprendía 18 archivos sin preparar para commit; la corrección agregó la suite de cancelación, para un total autorizado de 19. El manifiesto vigente y su comprobación se describen en las secciones 9 y 10; capturas y evidencias temporales no se incluyen en Git.
 
-## 8. Limitaciones y aceptación funcional pendiente
+## 8. Limitaciones y alcance de la aceptación funcional
 
-- **Reconocimiento de audio real NO validado.** Se probaron cadenas/transcripciones y callbacks de una API de reconocimiento simulada, no grabaciones ni micrófono físico. Ruido, acento, permisos, disponibilidad de la API, conexión y vocabulario del navegador pueden producir otra frase o impedir reconocer audio. No se asegura reconocer cualquier apodo.
-- Reauditoría independiente aprobada: **APTO PARA PUBLICACIÓN**. Tras publicar, el usuario debe comprobar búsquedas, navegación y selección por voz con micrófono en PC y cada celular, incluyendo nombres parecidos, cancelación y casos sin resultados. La verificación técnica del deploy no cierra esa aceptación funcional.
+- **Cobertura de voz limitada.** Las pruebas automatizadas utilizaron transcripciones y callbacks simulados, sin micrófono físico. Posteriormente, el usuario comprobó satisfactoriamente la identificación de clientes mediante voz en la versión publicada. Esa experiencia permite la aceptación diaria de V1, sin acreditar todos los comandos, dispositivos o condiciones de audio. Ruido, acento, permisos, disponibilidad de la API, conexión y vocabulario del navegador pueden producir otra frase o impedir reconocer audio. No se asegura reconocer cualquier apodo.
+- Reauditoría independiente aprobada y publicación técnica cerrada. El usuario acepta funcionalmente la actualización con los límites de la sección 11. Caja y Cobros no quedaron confirmados; no se extrapola la navegación comprobada hacia Clientes, Inicio, Historial y Configuración a todos los comandos ni dispositivos.
 - Alias solo se reconocen si están registrados o si el texto coincide con un fragmento real del nombre; no se crean relaciones de identidad ni se modifica lo almacenado.
 - La aproximación puede omitir nombres difíciles o proponer personas distintas. Las opciones están rotuladas y necesitan selección; no constituyen una autorización financiera.
 - Carrera preexistente de Clientes/Préstamos pendiente de V2. Persisten también los costes previos de carga inicial e inventario de Prendas descritos arriba.
-- Publicación autorizada desde `main`, base `49821ab`, mediante commit de los 19 archivos y push sin fuerza. Debe verificarse que Netlify publique exactamente ese commit en estado `ready`, con el nuevo shell y archivos estáticos idénticos; el resultado externo se informa después del push.
+- Publicación realizada desde `main`, base `49821ab`, mediante el commit `b7b49271a9e33b6ca21667b38a9daa06b6dc2848` de los 19 archivos y push sin fuerza. Su verificación técnica quedó informada al publicar; este cierre funcional solo actualiza documentación local, sin nuevas verificaciones de producción ni publicación.
+- Mejoras adicionales de búsqueda y voz reservadas para V2, salvo defectos que afecten realmente la operación diaria. La aceptación de V1 no exige completar ahora una validación exhaustiva.
 
 ## 9. Hallazgo bloqueante y corrección acotada de cancelación (25/11/2026)
 
@@ -168,7 +169,7 @@ Las **88/88 verificaciones anteriores** se reejecutaron satisfactoriamente (24 +
 
 Evidencias fuera de Git: `%TEMP%\prestcontrol-voz-cancelacion-despues-node.json`, `%TEMP%\prestcontrol-voz-cancelacion-despues-chrome-es.json` y `%TEMP%\prestcontrol-voz-cancelacion-auditoria-hashes.json` para el nuevo estado. El manifiesto de la entrega previa se conserva sin sobrescribir.
 
-La reauditoría posterior cerró el hallazgo bloqueante según la sección 10. Se mantiene pendiente **la validación con micrófono real**. Los callbacks y transcripciones son simulados también en Chrome; cargar módulos ES reales no valida audio, permisos físicos ni calidad de transcripción.
+La reauditoría posterior cerró el hallazgo bloqueante según la sección 10. Al finalizar esa corrección permanecía pendiente la validación con micrófono real. Los callbacks y transcripciones son simulados también en Chrome; cargar módulos ES reales no valida audio, permisos físicos ni calidad de transcripción. La comprobación funcional posterior comunicada por el usuario se registra en la sección 11, sin ampliar la cobertura de estas pruebas automatizadas.
 
 ## 10. Reauditoría aprobada y publicación autorizada (25/11/2026)
 
@@ -180,4 +181,14 @@ Se autoriza preparar exclusivamente esos 19 archivos y crear el commit `feat(bus
 
 El cierre técnico de publicación queda condicionado a comprobar por lectura que Netlify está `ready` en producción para el commit generado, verificar SHA-256 de los archivos estáticos publicados contra los blobs de ese commit, confirmar el shell y dejar Git limpio con `main = origin/main`. El identificador del deploy, commit completo y resultados efectivos se entregan en el informe posterior al push, fuera de este commit para evitar modificar el artefacto publicado.
 
-La aceptación funcional en PC/celulares reales permanece **PENDIENTE DEL USUARIO**, especialmente el reconocimiento con micrófono. La carrera preexistente de Clientes/Préstamos permanece reservada para V2, sin intervención. No se modifican datos productivos, Firebase/reglas, operaciones financieras, Caja, Carga histórica, importación Excel, identificadores, contadores, IndexedDB ni colas; las comprobaciones de publicación solo requieren lecturas estáticas.
+Al publicar permanecía pendiente la aceptación funcional del usuario; su decisión posterior se registra en la sección 11. La carrera preexistente de Clientes/Préstamos permanece reservada para V2, sin intervención. No se modifican datos productivos, Firebase/reglas, operaciones financieras, Caja, Carga histórica, importación Excel, identificadores, contadores, IndexedDB ni colas; las comprobaciones de publicación solo requieren lecturas estáticas.
+
+## 11. Cierre funcional de buscadores V1 (25/11/2026)
+
+El usuario confirmó que comprobó la versión publicada correspondiente al commit `b7b49271a9e33b6ca21667b38a9daa06b6dc2848`. Según su experiencia, la búsqueda escrita y la identificación de clientes mediante voz funcionan satisfactoriamente. Probó comandos de navegación hacia **Clientes, Inicio, Historial y Configuración**. Los comandos de **Caja y Cobros no quedaron confirmados**; esto se registra como cobertura incompleta, sin afirmar un defecto ni un resultado satisfactorio para esos comandos. No se especifica una matriz de dispositivos ni se declara validación exhaustiva de todos los comandos y dispositivos.
+
+El usuario considera suficiente el funcionamiento actual para la utilización diaria y **ACEPTA FUNCIONALMENTE la actualización de buscadores V1 con estas limitaciones de voz**. Implementación, auditoría, publicación y aceptación funcional para ese alcance quedan cerradas. Se registra la experiencia comunicada por el usuario, sin acceder a su cuenta ni realizar nuevas pruebas o auditorías.
+
+Las mejoras adicionales de búsqueda y voz quedan reservadas para **V2**, salvo defectos que afecten realmente la operación diaria. Se conserva también para V2 la condición de carrera preexistente de Clientes/Préstamos; no se interviene en este cierre.
+
+Esta decisión se incorpora únicamente a este informe y `docs/ROADMAP_MAESTRO.md` como documentación local, sin staging, commit, push ni despliegue. No se modifica código, pruebas, Firebase, shell PWA ni datos reales.
